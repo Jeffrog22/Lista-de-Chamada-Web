@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+SQLAlchemy
+pandas
+openpyxl
+psycopg2-binary
+python-dotenv
+python-multipart
+requests
+alembic
+passlib[bcrypt]
+python-jose[cryptography]
+bcrypt==3.2.2
