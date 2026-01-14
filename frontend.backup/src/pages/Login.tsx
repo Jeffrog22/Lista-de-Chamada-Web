@@ -1,17 +1,20 @@
 import React, { useState } from "react";
-import { login } from "../api";
+import axios from "axios";
 
 export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("senha");
+  const [password, setPassword] = useState("123456");
   const [error, setError] = useState<string | null>(null);
 
   const doLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      const res = await login(username, password);
-      const token = res.data?.access_token;
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("password", password);
+      const res = await axios.post("http://localhost:8000/token", formData);
+      const token = res.data.access_token;
       if (token) {
         onLogin(token);
       } else {

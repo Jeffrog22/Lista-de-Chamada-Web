@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getAttendance } from "../api";
+import axios from "axios";
 
 export const Attendance: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -8,8 +8,11 @@ export const Attendance: React.FC = () => {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await getAttendance();
-      setItems(r.data || []);
+      const token = localStorage.getItem("access_token");
+      const response = await axios.get("http://localhost:8000/attendance", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setItems(response.data || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -20,6 +23,12 @@ export const Attendance: React.FC = () => {
   useEffect(() => {
     load();
   }, []);
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split("-");
+    return `${day}/${month}/${year}`;
+  };
 
   return (
     <div>
@@ -32,7 +41,7 @@ export const Attendance: React.FC = () => {
         <ul>
           {items.map((a) => (
             <li key={a.id}>
-              {a.id} — {a.student_name || a.student_id} — {a.class_name || a.class_id} — {a.data || ""} — {a.status || ""}
+              {a.id} - {a.student_name || a.student_id} - {a.class_name || a.class_id} - {formatDate(a.data)} - {a.status || ""}
             </li>
           ))}
         </ul>
