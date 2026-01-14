@@ -8,8 +8,22 @@ from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Lista-de-Chamada - API")
+
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 def on_startup():
@@ -50,6 +64,15 @@ def list_students(limit: int = 100, session: Session = Depends(get_session)):
 @app.post("/students", response_model=models.Student)
 def add_student(student: models.Student, session: Session = Depends(get_session)):
     return crud.create_student(session, student)
+
+@app.delete("/students/{student_id}")
+def delete_student(student_id: int, session: Session = Depends(get_session)):
+    student = session.get(models.Student, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    session.delete(student)
+    session.commit()
+    return {"ok": True}
 
 @app.get("/classes", response_model=List[models.ClassModel])
 def list_classes(session: Session = Depends(get_session)):
