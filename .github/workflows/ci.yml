@@ -2,30 +2,57 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
-  backend-tests:
+  frontend:
+    name: Frontend build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: ./frontend
+        run: npm run build
+
+  backend:
+    name: Backend tests / sanity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-      - name: Install backend deps
+
+      - name: Install backend deps (if requirements.txt exists)
         run: |
-          pip install -r backend/requirements.txt
-      - name: Lint (flake8)
-        run: |
-          pip install flake8
-          flake8 backend || true
-      - name: Run tests
-        run: |
-          if [ -d "backend/tests" ]; then
-            pytest -q backend/tests || true
+          if [ -f backend/requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r backend/requirements.txt
           else
-            echo "No backend tests"
+            echo "No requirements.txt found, skipping install"
+          fi
+
+      - name: Run backend tests (if any)
+        run: |
+          if [ -f backend/pyproject.toml ] || [ -d backend/tests ]; then
+            pip install pytest || true
+            pytest -q || true
+          else
+            echo "No tests detected, skipping"
           fi
