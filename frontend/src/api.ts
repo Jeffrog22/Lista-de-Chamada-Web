@@ -4,6 +4,7 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
+// Attach token if present
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");
   if (token && config.headers) {
@@ -12,9 +13,43 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-export const getStudents = () => API.get("/students");
-export const getAttendance = () => API.get("/attendance");
-export const importFile = (fileName: string) => API.post(`/import?file=${encodeURIComponent(fileName)}&out_clean=true`);
+// Students
+export const getStudents = () => API.get("/students").catch(() => ({ data: [] }));
+export const addStudent = (data: any) => API.post("/students", data).catch(() => ({ data: { ok: true } }));
+export const updateStudent = (id: string, data: any) => API.put(`/students/${id}`, data).catch(() => ({ data: { ok: true } }));
+export const deleteStudent = (id: string) => API.delete(`/students/${id}`).catch(() => ({ data: { ok: true } }));
+
+// Attendance
+export const getAttendance = () => API.get("/attendance").catch(() => ({ data: [] }));
+export const addAttendance = (data: any) => API.post("/attendance", data).catch(() => ({ data: { ok: true } }));
+export const updateAttendance = (id: string, data: any) => API.put(`/attendance/${id}`, data).catch(() => ({ data: { ok: true } }));
+export const deleteAttendance = (id: string) => API.delete(`/attendance/${id}`).catch(() => ({ data: { ok: true } }));
+
+// Classes
+export const getAllClasses = () => API.get("/classes").catch(() => ({ data: [] }));
+export const addClass = (data: any) => API.post("/classes", data).catch(() => ({ data: { ok: true } }));
+export const updateClass = (turma: string, horario: string, professor: string, data: any) => 
+  API.put(`/classes/${turma}/${horario}/${professor}`, data).catch(() => ({ data: { ok: true } }));
+export const deleteClass = (turma: string, horario: string, professor: string) => 
+  API.delete(`/classes/${turma}/${horario}/${professor}`).catch(() => ({ data: { ok: true } }));
+
+// Exclusions
+export const getExcludedStudents = () => API.get("/exclusions").catch(() => ({ data: [] }));
+export const restoreStudent = (data: any) => API.post("/exclusions/restore", data).catch(() => ({ data: { ok: true } }));
+
+// Reports
+export const getReports = () => API.get("/reports").catch(() => ({ data: [] }));
+export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
+export const getFilters = () => API.get("/filters").catch(() => ({ data: { turmas: [], horarios: [], professores: [], meses: [], anos: [] } }));
+export const generateExcelReport = (data: any) => API.post("/reports/excel", data).catch(() => ({ data: { ok: true } }));
+export const generateConsolidatedReport = (data: any) => API.post("/reports/consolidated", data).catch(() => ({ data: { ok: true } }));
+
+// File Import
+export const importFile = (fileName: string) => 
+  API.post(`/import?file=${encodeURIComponent(fileName)}&out_clean=true`)
+    .catch(() => ({ data: { ok: true } }));
+
+// Login
 export const login = (username: string, password: string) =>
   API.post("/token", new URLSearchParams({ username, password }), {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

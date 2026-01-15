@@ -1,0 +1,132 @@
+.exclusions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.exclusions-header {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.exclusions-header h2 {
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.btn-secondary {
+  padding: 10px 20px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background-color: #545b62;
+}
+
+.btn-secondary:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.info-message {
+  padding: 12px 16px;
+  background-color: #d1ecf1;
+  color: #0c5460;
+  border: 1px solid #bee5eb;
+  border-radius: 4px;
+}
+
+/* Table */
+.exclusions-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.exclusions-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+}
+
+.exclusions-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.exclusions-table th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  border-right: 1px solid #dee2e6;
+}
+
+.exclusions-table tbody tr {
+  border-bottom: 1px solid #dee2e6;
+  transition: background-color 0.1s;
+}
+
+.exclusions-table tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.exclusions-table td {
+  padding: 12px 8px;
+  text-align: left;
+  border-right: 1px solid #dee2e6;
+  font-size: 14px;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.btn-restore {
+  padding: 6px 12px;
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  transition: opacity 0.2s;
+}
+
+.btn-restore:hover {
+  opacity: 0.8;
+}
+
+.no-data-message {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
