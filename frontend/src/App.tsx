@@ -69,73 +69,92 @@ export default function App() {
       <div className="main-layout">
         {/* SIDEBAR */}
         <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
-          <nav className="main-menu">
-            <h2>📌 Menu</h2>
-            <ul>
-              <li>
-                <button className="menu-item-btn" onClick={() => showView("attendance")}>
-                  📝 Chamada
-                </button>
-              </li>
-              <li>
-                <button className="menu-item-btn" onClick={() => showView("students")}>
-                  👥 Alunos
-                </button>
-              </li>
-              <li>
-                <button className="menu-item-btn" onClick={() => showView("classes")}>
-                  📚 Turmas
-                </button>
-              </li>
-              <li>
-                <button className="menu-item-btn" onClick={() => showView("exclusions")}>
-                  ❌ Exclusões
-                </button>
-              </li>
-              <li>
-                <button className="menu-item-btn" onClick={() => showView("reports")}>
-                  📊 Relatórios
-                </button>
-              </li>
-            </ul>
+          {/* MENU PRINCIPAL - NEON TECH */}
+          <nav className="primary-menu">
+            <div className="menu-title">Menu Principal</div>
+            <div className="primary-buttons">
+              <button 
+                className={`neon-btn ${currentView === "attendance" ? "active" : ""}`} 
+                onClick={() => showView("attendance")}
+              >
+                Chamada
+              </button>
+              <button 
+                className={`neon-btn ${currentView === "students" ? "active" : ""}`} 
+                onClick={() => showView("students")}
+              >
+                Alunos
+              </button>
+              <button 
+                className={`neon-btn ${currentView === "classes" ? "active" : ""}`} 
+                onClick={() => showView("classes")}
+              >
+                Turmas
+              </button>
+            </div>
+          </nav>
+
+          {/* MENU SECUNDÁRIO */}
+          <nav className="secondary-menu">
+            <div className="menu-title secondary-title">Mais Opções</div>
+            <div className="secondary-buttons">
+              <button 
+                className={`neon-btn-secondary ${currentView === "exclusions" ? "active" : ""}`} 
+                onClick={() => showView("exclusions")}
+              >
+                ❌ Exclusões
+              </button>
+              <button 
+                className={`neon-btn-secondary ${currentView === "reports" ? "active" : ""}`} 
+                onClick={() => showView("reports")}
+              >
+                📊 Relatórios
+              </button>
+            </div>
           </nav>
         </aside>
 
         {/* CONTENT AREA */}
         <main className="content-area">
-          <div className="welcome-screen">
-            <div className="welcome-card">
-              <h1>🎯 Bem-vindo!</h1>
-              <p>Sistema de Chamadas - Modo Demo</p>
-              <div className="features-grid">
-                <div className="feature-card">
-                  <span className="feature-icon">📝</span>
-                  <h3>Chamada</h3>
-                  <p>Registre presenças</p>
-                </div>
-                <div className="feature-card">
-                  <span className="feature-icon">👥</span>
-                  <h3>Alunos</h3>
-                  <p>Gerenciar alunos</p>
-                </div>
-                <div className="feature-card">
-                  <span className="feature-icon">📚</span>
-                  <h3>Turmas</h3>
-                  <p>Configurar turmas</p>
-                </div>
-                <div className="feature-card">
-                  <span className="feature-icon">❌</span>
-                  <h3>Exclusões</h3>
-                  <p>Alunos excluídos</p>
-                </div>
-                <div className="feature-card">
-                  <span className="feature-icon">📊</span>
-                  <h3>Relatórios</h3>
-                  <p>Gerar relatórios</p>
-                </div>
+          {currentView === "main" ? (
+            <div className="welcome-screen">
+              <div className="feature-card">
+                <span className="feature-icon">📝</span>
+                <h3>Chamada</h3>
+                <p>Registre e acompanhe as presenças dos alunos em tempo real</p>
+              </div>
+              <div className="feature-card">
+                <span className="feature-icon">👥</span>
+                <h3>Alunos</h3>
+                <p>Gerencie informações dos alunos de forma rápida</p>
+              </div>
+              <div className="feature-card">
+                <span className="feature-icon">📚</span>
+                <h3>Turmas</h3>
+                <p>Configure e organize as turmas facilmente</p>
+              </div>
+              <div className="feature-card">
+                <span className="feature-icon">❌</span>
+                <h3>Exclusões</h3>
+                <p>Consulte alunos excluídos e restaure se necessário</p>
+              </div>
+              <div className="feature-card">
+                <span className="feature-icon">📊</span>
+                <h3>Relatórios</h3>
+                <p>Gere relatórios de frequência e consolidados</p>
               </div>
             </div>
-          </div>
+          ) : currentView === "attendance" ? (
+            <Attendance />
+          ) : currentView === "students" ? (
+            <Students />
+          ) : currentView === "classes" ? (
+            <Classes />
+          ) : currentView === "exclusions" ? (
+            <Exclusions />
+          ) : currentView === "reports" ? (
+            <Reports />
+          ) : null}
         </main>
       </div>
     </div>
