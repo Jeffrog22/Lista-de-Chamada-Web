@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { getAllClasses, addClass, updateClass, deleteClass } from "../api";
+import React, { useState } from "react";
 import "./Classes.css";
 
 interface Class {
@@ -8,33 +7,22 @@ interface Class {
   Professor: string;
   Nivel?: string;
   Atalho?: string;
-  DataInicio?: string;
 }
 
 export const Classes: React.FC = () => {
-  const [classes, setClasses] = useState<Class[]>([]);
-  const [loading, setLoading] = useState(false);
+  // MOCK DATA - Baseado em chamadaBelaVista.xlsx
+  const [classes] = useState<Class[]>([
+    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", Atalho: "1A" },
+    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", Atalho: "1B" },
+    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", Atalho: "2A" },
+    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", Atalho: "2B" },
+  ]);
+  
+  const [loading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [formData, setFormData] = useState<Partial<Class>>({});
   const [searchTerm, setSearchTerm] = useState("");
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const r = await getAllClasses();
-      setClasses(r.data || []);
-    } catch (err) {
-      console.error("Erro ao carregar turmas:", err);
-      alert("Erro ao carregar turmas");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const filteredClasses = classes.filter(
     (c) =>
@@ -69,7 +57,6 @@ export const Classes: React.FC = () => {
         alert("Turma adicionada com sucesso!");
       }
       setShowForm(false);
-      await load();
     } catch (err) {
       console.error("Erro ao salvar turma:", err);
       alert("Erro ao salvar turma");
@@ -81,7 +68,6 @@ export const Classes: React.FC = () => {
       try {
         await deleteClass(classData.Turma, classData.Horario, classData.Professor);
         alert("Turma excluída com sucesso!");
-        await load();
       } catch (err) {
         console.error("Erro ao excluir turma:", err);
         alert("Erro ao excluir turma");
@@ -95,137 +81,170 @@ export const Classes: React.FC = () => {
   };
 
   return (
-    <div className="classes-container">
-      <div className="classes-header">
-        <h2>Gerenciar Turmas</h2>
-        <div className="header-actions">
-          <input
-            type="text"
-            placeholder="Buscar turma..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
-          <button onClick={handleAddClick} className="btn-primary">
-            ? Adicionar Turma
-          </button>
-          <button onClick={load} disabled={loading} className="btn-secondary">
-            {loading ? "Atualizando..." : "Atualizar"}
-          </button>
-        </div>
+    <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
+      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
+        <input
+          type="text"
+          placeholder="Buscar turma..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{
+            flex: 1,
+            padding: "10px",
+            border: "1px solid #ddd",
+            borderRadius: "8px",
+            fontSize: "14px",
+          }}
+        />
+        <button
+          onClick={handleAddClick}
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: "14px",
+            transition: "all 0.2s ease",
+          }}
+        >
+          ➕ Nova Turma
+        </button>
       </div>
 
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
-            <form className="class-form">
-              <div className="form-group">
-                <label>Nome da Turma:</label>
-                <input
-                  type="text"
-                  name="Turma"
-                  value={formData.Turma || ""}
-                  onChange={handleFormChange}
-                  disabled={!!editingClass}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Horário:</label>
-                <input
-                  type="text"
-                  name="Horario"
-                  value={formData.Horario || ""}
-                  onChange={handleFormChange}
-                  placeholder="HH:MM"
-                  disabled={!!editingClass}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Professor:</label>
-                <input
-                  type="text"
-                  name="Professor"
-                  value={formData.Professor || ""}
-                  onChange={handleFormChange}
-                  disabled={!!editingClass}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Nível:</label>
-                <input
-                  type="text"
-                  name="Nivel"
-                  value={formData.Nivel || ""}
-                  onChange={handleFormChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Atalho:</label>
-                <input
-                  type="text"
-                  name="Atalho"
-                  value={formData.Atalho || ""}
-                  onChange={handleFormChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Data de Início:</label>
-                <input
-                  type="date"
-                  name="DataInicio"
-                  value={formData.DataInicio || ""}
-                  onChange={handleFormChange}
-                />
-              </div>
-
-              <div className="form-actions">
-                <button type="button" onClick={handleSave} className="btn-success">
-                  Salvar
-                </button>
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">
-                  Cancelar
-                </button>
-              </div>
-            </form>
+        <div style={{ background: "#f9f9f9", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
+          <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
+            <input
+              type="text"
+              name="Turma"
+              placeholder="Turma"
+              value={formData.Turma || ""}
+              onChange={handleFormChange}
+              disabled={!!editingClass}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+            <input
+              type="text"
+              name="Horario"
+              placeholder="Horário (HH:MM)"
+              value={formData.Horario || ""}
+              onChange={handleFormChange}
+              disabled={!!editingClass}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+            <input
+              type="text"
+              name="Professor"
+              placeholder="Professor"
+              value={formData.Professor || ""}
+              onChange={handleFormChange}
+              disabled={!!editingClass}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+            <input
+              type="text"
+              name="Nivel"
+              placeholder="Nível"
+              value={formData.Nivel || ""}
+              onChange={handleFormChange}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+            <input
+              type="text"
+              name="Atalho"
+              placeholder="Atalho"
+              value={formData.Atalho || ""}
+              onChange={handleFormChange}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
+            <button
+              onClick={handleSave}
+              style={{
+                background: "#28a745",
+                color: "white",
+                border: "none",
+                padding: "10px 20px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              ✓ Salvar
+            </button>
+            <button
+              onClick={() => setShowForm(false)}
+              style={{
+                background: "#6c757d",
+                color: "white",
+                border: "none",
+                padding: "10px 20px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              ✕ Cancelar
+            </button>
           </div>
         </div>
       )}
 
-      <div className="classes-table-wrapper">
-        <table className="classes-table">
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr>
-              <th>Turma</th>
-              <th>Horário</th>
-              <th>Professor</th>
-              <th>Nível</th>
-              <th>Data de Início</th>
-              <th>Ações</th>
+            <tr style={{ background: "#667eea", color: "white" }}>
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Turma</th>
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Horário</th>
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Professor</th>
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Nível</th>
+              <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Ações</th>
             </tr>
           </thead>
           <tbody>
             {filteredClasses.map((classData, idx) => (
-              <tr key={idx}>
-                <td>{classData.Turma}</td>
-                <td>{classData.Horario}</td>
-                <td>{classData.Professor}</td>
-                <td>{classData.Nivel || "-"}</td>
-                <td>{classData.DataInicio || "-"}</td>
-                <td className="actions-cell">
-                  <button onClick={() => handleEditClick(classData)} className="btn-edit">
-                    ?? Editar
+              <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
+                <td style={{ padding: "12px" }}>{classData.Turma}</td>
+                <td style={{ padding: "12px" }}>{classData.Horario}</td>
+                <td style={{ padding: "12px" }}>{classData.Professor}</td>
+                <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
+                <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={() => handleEditClick(classData)}
+                    style={{
+                      background: "#667eea",
+                      color: "white",
+                      border: "none",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    ✎ Editar
                   </button>
-                  <button onClick={() => handleDelete(classData)} className="btn-delete">
-                    ??? Deletar
+                  <button
+                    onClick={() => handleDelete(classData)}
+                    style={{
+                      background: "#dc3545",
+                      color: "white",
+                      border: "none",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    🗑 Deletar
                   </button>
                 </td>
               </tr>
@@ -235,8 +254,12 @@ export const Classes: React.FC = () => {
       </div>
 
       {filteredClasses.length === 0 && !loading && (
-        <div className="no-data-message">Nenhuma turma encontrada</div>
+        <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+          Nenhuma turma encontrada
+        </div>
       )}
     </div>
   );
 };
+
+export default Classes;

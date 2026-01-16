@@ -37,7 +37,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       <h2>Sistema de Chamadas - Login</h2>
       <form onSubmit={doLogin} style={{ display: "grid", gap: 12, marginBottom: 20 }}>
         <label style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontWeight: "bold", marginBottom: 4 }}>Usuário</span>
+          <span style={{ fontWeight: "bold", marginBottom: 4 }}>Usuï¿½rio</span>
           <input 
             value={username} 
             onChange={(e) => setUsername(e.target.value)}
