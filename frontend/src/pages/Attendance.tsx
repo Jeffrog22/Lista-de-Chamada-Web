@@ -13,6 +13,7 @@ interface AttendanceRecord {
   aluno: string;
   attendance: { [date: string]: "Presente" | "Falta" | "Justificado" | "" };
   justifications?: { [date: string]: string };
+  notes?: string[];
 }
 
 type AttendanceHistory = AttendanceRecord[];
@@ -69,8 +70,11 @@ export const Attendance: React.FC = () => {
             (d) => dayMap[d] === dayOfWeek || d === dayName
           )
         ) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, "0");
+          const dayStr = String(date.getDate()).padStart(2, "0");
           dates.push(
-            date.toISOString().split("T")[0] +
+            `${year}-${month}-${dayStr}` +
               ` (${dayName.substring(0, 3)})`
           );
         }
@@ -105,6 +109,51 @@ export const Attendance: React.FC = () => {
   const [justificationStudentId, setJustificationStudentId] = useState<number | null>(null);
   const [justificationDay, setJustificationDay] = useState("");
   const [justificationReason, setJustificationReason] = useState("");
+
+  // Estados para o Modal de Anotações do Aluno
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [studentModalId, setStudentModalId] = useState<number | null>(null);
+  const [newNote, setNewNote] = useState("");
+
+  const handleOpenStudentModal = (id: number) => {
+    setStudentModalId(id);
+    setNewNote("");
+    setStudentModalOpen(true);
+  };
+
+  const handleAddNote = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && newNote.trim() && studentModalId !== null) {
+      setAttendance((prev) =>
+        prev.map((item) => {
+          if (item.id === studentModalId) {
+            return {
+              ...item,
+              notes: [...(item.notes || []), newNote.trim()],
+            };
+          }
+          return item;
+        })
+      );
+      setNewNote("");
+    }
+  };
+
+  const handleDeleteNote = (noteIndex: number) => {
+    if (studentModalId !== null) {
+      setAttendance((prev) =>
+        prev.map((item) => {
+          if (item.id === studentModalId) {
+            const updatedNotes = [...(item.notes || [])];
+            updatedNotes.splice(noteIndex, 1);
+            return { ...item, notes: updatedNotes };
+          }
+          return item;
+        })
+      );
+    }
+  };
+
+  const activeStudentForNotes = attendance.find((s) => s.id === studentModalId);
 
   // Formato: mmm/aaaa (ex: jan/2026)
   const currentMonthFormatted = (() => {
@@ -403,8 +452,7 @@ export const Attendance: React.FC = () => {
                   Aluno
                 </th>
                 {dateDates.map((date) => {
-                  const d = new Date(date);
-                  const dayNum = String(d.getDate()).padStart(2, "0");
+                  const dayNum = date.split("-")[2];
                   return (
                     <th
                       key={date}
@@ -438,7 +486,13 @@ export const Attendance: React.FC = () => {
                     background: idx % 2 === 0 ? "#ffffff" : "#f9f9f9",
                   }}
                 >
-                  <td style={{ padding: "12px", fontWeight: 500 }}>{item.aluno}</td>
+                  <td 
+                    style={{ padding: "12px", fontWeight: 500, cursor: "pointer" }}
+                    onClick={() => handleOpenStudentModal(item.id)}
+                    title="Clique para ver/adicionar anotações"
+                  >
+                    <span style={{ borderBottom: "1px dashed #ccc" }}>{item.aluno}</span>
+                  </td>
                   {dateDates.map((date) => {
                     const status = item.attendance[date];
                     let buttonLabel = "-";
@@ -662,6 +716,104 @@ export const Attendance: React.FC = () => {
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button onClick={() => setShowJustificationModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}>Cancelar</button>
               <button onClick={salvarJustificativa} style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "#28a745", color: "white", cursor: "pointer", fontWeight: 600 }}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ANOTAÇÕES DO ALUNO */}
+      {studentModalOpen && activeStudentForNotes && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1100,
+          }}
+          onClick={() => setStudentModalOpen(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              width: "320px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+              overflow: "hidden",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ background: "#667eea", padding: "15px", color: "white" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold" }}>{activeStudentForNotes.aluno}</h3>
+              <p style={{ margin: "4px 0 0", fontSize: "12px", opacity: 0.9 }}>Anotações</p>
+            </div>
+            
+            <div style={{ padding: "20px" }}>
+              <input
+                type="text"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={handleAddNote}
+                placeholder="Escreva e tecle Enter..."
+                autoFocus
+                style={{
+                  width: "100%",
+                  padding: "10px 5px",
+                  border: "none",
+                  borderBottom: "2px solid #eee",
+                  outline: "none",
+                  fontSize: "14px",
+                  marginBottom: "15px",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => (e.target.style.borderBottomColor = "#667eea")}
+                onBlur={(e) => (e.target.style.borderBottomColor = "#eee")}
+              />
+
+              <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                {(!activeStudentForNotes.notes || activeStudentForNotes.notes.length === 0) && (
+                  <div style={{ color: "#aaa", fontSize: "13px", textAlign: "center", padding: "10px" }}>
+                    Nenhuma anotação registrada.
+                  </div>
+                )}
+                {activeStudentForNotes.notes?.map((note, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 0",
+                      borderBottom: "1px solid #f0f0f0",
+                      fontSize: "13px",
+                      color: "#444",
+                    }}
+                  >
+                    <span style={{ flex: 1, paddingRight: "10px" }}>{note}</span>
+                    <button
+                      onClick={() => handleDeleteNote(idx)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc3545",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                      }}
+                      title="Excluir anotação"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
