@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState } from "react";
 
 interface ClassOption {
   turma: string;
@@ -12,6 +12,7 @@ interface AttendanceRecord {
   id: number;
   aluno: string;
   attendance: { [date: string]: "Presente" | "Falta" | "Justificado" | "" };
+  justifications?: { [date: string]: string };
 }
 
 type AttendanceHistory = AttendanceRecord[];
@@ -35,9 +36,6 @@ export const Attendance: React.FC = () => {
   // STATE
   const [selectedClass, setSelectedClass] = useState<ClassOption>(classOptions[0]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const prevAttendanceRef = useRef<AttendanceRecord[] | null>(null);
-  const isFirstRenderRef = useRef<boolean>(true);
-  const isUndoingRef = useRef<boolean>(false);
 
   // Gerar datas pré-determinadas baseadas no dia da semana (DEFINIR ANTES DO STATE)
   const generateDates = (daysOfWeek: string[]) => {
@@ -102,31 +100,11 @@ export const Attendance: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
 
-  // Monitorar mudanças reais no attendance e salvar histórico uma única vez
-  useEffect(() => {
-    // Na primeira renderização, apenas inicializa a referência
-    if (isFirstRenderRef.current) {
-      prevAttendanceRef.current = JSON.parse(JSON.stringify(attendance));
-      isFirstRenderRef.current = false;
-      return;
-    }
-
-    // Se estamos desfazendo, não salva histórico novamente
-    if (isUndoingRef.current) {
-      isUndoingRef.current = false;
-      prevAttendanceRef.current = JSON.parse(JSON.stringify(attendance));
-      return;
-    }
-
-    // Nas renderizações posteriores, detecta mudanças
-    const prevStr = JSON.stringify(prevAttendanceRef.current);
-    const currentStr = JSON.stringify(attendance);
-
-    if (prevStr !== currentStr) {
-      setHistory((h) => [prevAttendanceRef.current as AttendanceRecord[], ...h.slice(0, 9)]);
-      prevAttendanceRef.current = JSON.parse(JSON.stringify(attendance));
-    }
-  }, [attendance]);
+  // Estados para o Modal de Justificativa
+  const [showJustificationModal, setShowJustificationModal] = useState(false);
+  const [justificationStudentId, setJustificationStudentId] = useState<number | null>(null);
+  const [justificationDay, setJustificationDay] = useState("");
+  const [justificationReason, setJustificationReason] = useState("");
 
   // Formato: mmm/aaaa (ex: jan/2026)
   const currentMonthFormatted = (() => {
@@ -152,6 +130,10 @@ export const Attendance: React.FC = () => {
     const newClass = classOptions.find((c) => c.turma === turma) || selectedClass;
     setSelectedClass(newClass);
     const newDates = generateDates(newClass.diasSemana).map((d) => d.split(" ")[0]);
+
+    // Resetar histórico ao mudar de turma para evitar inconsistências
+    setHistory([]);
+
     setAttendance(
       studentsPerClass[newClass.turma].map((aluno, idx) => ({
         id: idx + 1,
@@ -174,7 +156,10 @@ export const Attendance: React.FC = () => {
     return cycle[nextIndex] as "Presente" | "Falta" | "Justificado" | "";
   };
 
-  const handleStatusChange = useCallback((id: number, date: string) => {
+  const handleStatusChange = (id: number, date: string) => {
+    // Salva o estado atual no histórico antes de modificar
+    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+
     setAttendance((prev) => {
       const newAttendance = prev.map((item) => {
         if (item.id === id) {
@@ -194,17 +179,18 @@ export const Attendance: React.FC = () => {
       });
       return newAttendance;
     });
-  }, []);
+  };
 
-  const handleUndo = useCallback(() => {
+  const handleUndo = () => {
     if (history.length > 0) {
-      isUndoingRef.current = true;
       setAttendance(history[0]);
       setHistory((h) => h.slice(1));
     }
-  }, [history]);
+  };
 
-  const handleClearAll = useCallback(() => {
+  const handleClearAll = () => {
+    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+
     setAttendance((prev) =>
       prev.map((item) => ({
         ...item,
@@ -217,7 +203,58 @@ export const Attendance: React.FC = () => {
         ),
       }))
     );
-  }, []);
+  };
+
+  // Função de Exclusão: Ativada quando o aluno tem 3 ou mais faltas
+  const excluirAluno = (id: number) => {
+    if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
+      setHistory((h) => [attendance, ...h.slice(0, 9)]);
+      setAttendance((prev) => prev.filter((student) => student.id !== id));
+    }
+  };
+
+  // Função de Justificativa: Abre o modal de notação
+  const adicionarJustificativa = (id: number) => {
+    setJustificationStudentId(id);
+    setJustificationDay("");
+    setJustificationReason("");
+    setShowJustificationModal(true);
+  };
+
+  const salvarJustificativa = () => {
+    if (!justificationStudentId || !justificationDay || !justificationReason) {
+      alert("Por favor, preencha o dia e o motivo.");
+      return;
+    }
+
+    // Tenta encontrar a data correspondente ao dia digitado (dd)
+    // dateDates está no formato YYYY-MM-DD
+    const targetDate = dateDates.find((d) => {
+      const dayPart = parseInt(d.split("-")[2], 10);
+      return dayPart === parseInt(justificationDay, 10);
+    });
+
+    if (!targetDate) {
+      alert("Dia não encontrado nas datas exibidas deste mês.");
+      return;
+    }
+
+    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+    setAttendance((prev) =>
+      prev.map((item) => {
+        if (item.id === justificationStudentId) {
+          return {
+            ...item,
+            attendance: { ...item.attendance, [targetDate]: "Justificado" },
+            justifications: { ...(item.justifications || {}), [targetDate]: justificationReason },
+          };
+        }
+        return item;
+      })
+    );
+
+    setShowJustificationModal(false);
+  };
 
   const handleSave = () => {
     console.log("Salvando chamada:", {
@@ -383,10 +420,17 @@ export const Attendance: React.FC = () => {
                     </th>
                   );
                 })}
+                <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold", minWidth: "100px" }}>
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody>
-              {attendance.map((item, idx) => (
+              {attendance.map((item, idx) => {
+                const absences = Object.values(item.attendance).filter((s) => s === "Falta").length;
+                const showNote = Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado");
+                const showDelete = absences >= 3;
+                return (
                 <tr
                   key={item.id}
                   style={{
@@ -448,8 +492,47 @@ export const Attendance: React.FC = () => {
                       </td>
                     );
                   })}
+                  <td style={{ padding: "8px", textAlign: "center", display: "flex", gap: "5px", justifyContent: "center" }}>
+                    <button
+                      onClick={() => adicionarJustificativa(item.id)}
+                      title="Adicionar Justificativa"
+                      disabled={!showNote}
+                      style={{
+                        background: "#17a2b8",
+                        color: "white",
+                        border: "none",
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        cursor: showNote ? "pointer" : "default",
+                        fontSize: "12px",
+                        visibility: showNote ? "visible" : "hidden",
+                        opacity: showNote ? 1 : 0,
+                      }}
+                    >
+                      📝
+                    </button>
+                    <button
+                      onClick={() => excluirAluno(item.id)}
+                      title="Excluir Aluno (Excesso de Faltas)"
+                      disabled={!showDelete}
+                      style={{
+                        background: "#dc3545",
+                        color: "white",
+                        border: "none",
+                        padding: "6px 10px",
+                        borderRadius: "6px",
+                        cursor: showDelete ? "pointer" : "default",
+                        fontSize: "12px",
+                        visibility: showDelete ? "visible" : "hidden",
+                        opacity: showDelete ? 1 : 0,
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -535,6 +618,54 @@ export const Attendance: React.FC = () => {
           💾 Salvar Chamada
         </button>
       </div>
+
+      {/* MODAL DE JUSTIFICATIVA */}
+      {showJustificationModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ background: "white", padding: "25px", borderRadius: "12px", width: "300px", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "15px", color: "#333" }}>Adicionar Justificativa</h3>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", fontWeight: 600 }}>Dia (dd):</label>
+              <input
+                type="number"
+                value={justificationDay}
+                onChange={(e) => setJustificationDay(e.target.value)}
+                placeholder="Ex: 14"
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
+              />
+            </div>
+            
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", fontWeight: 600 }}>Motivo:</label>
+              <textarea
+                value={justificationReason}
+                onChange={(e) => setJustificationReason(e.target.value)}
+                placeholder="Ex: Atestado médico"
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", minHeight: "80px" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button onClick={() => setShowJustificationModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}>Cancelar</button>
+              <button onClick={salvarJustificativa} style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "#28a745", color: "white", cursor: "pointer", fontWeight: 600 }}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
