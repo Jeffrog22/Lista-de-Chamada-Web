@@ -17,6 +17,39 @@ interface Student {
   dataAtestado?: string;
 }
 
+const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
+  const handleClick = () => {
+    const cleanNumber = phoneNumber.replace(/\D/g, "");
+    if (cleanNumber) {
+      window.open(`https://wa.me/55${cleanNumber}`, "_blank");
+    } else {
+      alert("Número inválido para WhatsApp");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      title="Abrir WhatsApp"
+      style={{
+        background: "#25D366",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        width: "42px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        fontSize: "20px",
+      }}
+    >
+      📱
+    </button>
+  );
+};
+
 export const Students: React.FC = () => {
   // Mock Data inicial expandido
   const [students, setStudents] = useState<Student[]>([
@@ -40,6 +73,7 @@ export const Students: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(true);
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -88,15 +122,26 @@ export const Students: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
+    let newValue: string | boolean = type === "checkbox" ? checked : value;
+
+    if (name === "horario" && typeof newValue === "string") {
+      const digits = newValue.replace(/\D/g, "").slice(0, 4);
+      if (digits.length >= 3) {
+        newValue = `${digits.slice(0, 2)}:${digits.slice(2)}`;
+      } else {
+        newValue = digits;
+      }
+    }
     
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value
+      [name]: newValue
     }));
   };
 
   const handleAddClick = () => {
     setEditingId(null);
+    setIsEditing(true);
     const sticky = localStorage.getItem("studentStickyData");
     const parsed = sticky ? JSON.parse(sticky) : {};
     
@@ -119,6 +164,7 @@ export const Students: React.FC = () => {
 
   const handleEditClick = (student: Student) => {
     setEditingId(student.id);
+    setIsEditing(false);
     setFormData({
       nome: student.nome,
       dataNascimento: student.dataNascimento,
@@ -333,9 +379,45 @@ export const Students: React.FC = () => {
           background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000
         }}>
           <div style={{ background: "white", padding: "25px", borderRadius: "12px", width: "500px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-            <h2 style={{ marginTop: 0, marginBottom: "20px", color: "#2c3e50", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
-              {editingId ? "Editar Aluno" : "Adicionar Novo Aluno"}
-            </h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
+              <h2 style={{ margin: 0, color: "#2c3e50" }}>
+                {editingId ? "Aluno" : "Adicionar Novo Aluno"}
+              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {editingId && !isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    style={{
+                      background: "#f39c12",
+                      color: "white",
+                      border: "none",
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                      fontSize: "13px"
+                    }}
+                  >
+                    ✏️ Editar
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowModal(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    fontSize: "20px",
+                    cursor: "pointer",
+                    color: "#666",
+                    padding: "0 5px",
+                    fontWeight: "bold"
+                  }}
+                  title="Fechar"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
             
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
               <div style={{ gridColumn: "1 / -1" }}>
@@ -344,6 +426,7 @@ export const Students: React.FC = () => {
                   name="nome"
                   value={formData.nome}
                   onChange={handleInputChange}
+                  disabled={!isEditing}
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                 />
               </div>
@@ -354,6 +437,7 @@ export const Students: React.FC = () => {
                   name="dataNascimento"
                   value={formData.dataNascimento}
                   onChange={handleInputChange}
+                  disabled={!isEditing}
                   placeholder="Ex: 10/05/2010"
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                 />
@@ -365,6 +449,7 @@ export const Students: React.FC = () => {
                   name="genero"
                   value={formData.genero}
                   onChange={handleInputChange}
+                  disabled={!isEditing}
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                 >
                   <option value="Masculino">Masculino</option>
@@ -375,13 +460,17 @@ export const Students: React.FC = () => {
 
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>WhatsApp</label>
-                <input
-                  name="whatsapp"
-                  value={formData.whatsapp}
-                  onChange={handleInputChange}
-                  placeholder="(##) # ####-####"
-                  style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
-                />
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    name="whatsapp"
+                    value={formData.whatsapp}
+                    onChange={handleInputChange}
+                    placeholder="(##) # ####-####"
+                    disabled={!isEditing}
+                    style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
+                  />
+                  <WhatsappButton phoneNumber={formData.whatsapp} />
+                </div>
               </div>
 
               {/* Campos Sticky */}
@@ -391,6 +480,7 @@ export const Students: React.FC = () => {
                   name="turma"
                   value={formData.turma}
                   onChange={handleInputChange}
+                  disabled={!isEditing}
                   placeholder="Ex: 1A"
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#fffbeb" }}
                 />
@@ -402,7 +492,8 @@ export const Students: React.FC = () => {
                   name="horario"
                   value={formData.horario}
                   onChange={handleInputChange}
-                  placeholder="Ex: 14:00"
+                  disabled={!isEditing}
+                  placeholder="00:00"
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#fffbeb" }}
                 />
               </div>
@@ -418,6 +509,7 @@ export const Students: React.FC = () => {
                         value={prof}
                         checked={formData.professor === prof}
                         onChange={handleInputChange}
+                        disabled={!isEditing}
                       />
                       {prof}
                     </label>
@@ -427,7 +519,7 @@ export const Students: React.FC = () => {
 
               <div>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Nível</label>
-                <select name="nivel" value={formData.nivel} onChange={handleInputChange} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
+                <select name="nivel" value={formData.nivel} onChange={handleInputChange} disabled={!isEditing} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
                   <option value="Iniciante">Iniciante</option>
                   <option value="Intermediario">Intermediário</option>
                   <option value="Avancado">Avançado</option>
@@ -436,7 +528,7 @@ export const Students: React.FC = () => {
 
               <div>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Categoria</label>
-                <select name="categoria" value={formData.categoria} onChange={handleInputChange} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
+                <select name="categoria" value={formData.categoria} onChange={handleInputChange} disabled={!isEditing} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
                   <option value="Infantil">Infantil</option>
                   <option value="Juvenil">Juvenil</option>
                   <option value="Adulto">Adulto</option>
@@ -447,10 +539,10 @@ export const Students: React.FC = () => {
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>ParQ (Apto para atividade física?)</label>
                 <div style={{ display: "flex", gap: "20px", background: "#fffbeb", padding: "10px", borderRadius: "6px" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer" }}>
-                    <input type="radio" name="parQ" value="Sim" checked={formData.parQ === "Sim"} onChange={handleInputChange} /> Sim
+                    <input type="radio" name="parQ" value="Sim" checked={formData.parQ === "Sim"} onChange={handleInputChange} disabled={!isEditing} /> Sim
                   </label>
                   <label style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer" }}>
-                    <input type="radio" name="parQ" value="Não" checked={formData.parQ === "Não"} onChange={handleInputChange} /> Não
+                    <input type="radio" name="parQ" value="Não" checked={formData.parQ === "Não"} onChange={handleInputChange} disabled={!isEditing} /> Não
                   </label>
                 </div>
               </div>
@@ -462,6 +554,7 @@ export const Students: React.FC = () => {
                     name="atestado"
                     checked={formData.atestado}
                     onChange={handleInputChange}
+                    disabled={!isEditing}
                     style={{ width: "16px", height: "16px" }}
                   />
                   Possui Atestado Médico?
@@ -472,6 +565,7 @@ export const Students: React.FC = () => {
                     name="dataAtestado"
                     value={formData.dataAtestado}
                     onChange={handleInputChange}
+                    disabled={!isEditing}
                     placeholder="Data do Atestado (dd/mm/aaaa)"
                     style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                   />
@@ -480,18 +574,14 @@ export const Students: React.FC = () => {
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "25px", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ background: "#6c757d", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                style={{ background: "#28a745", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
-              >
-                {editingId ? "Salvar Alterações" : "Salvar Aluno"}
-              </button>
+              {isEditing && (
+                <button
+                  onClick={handleSave}
+                  style={{ background: "#28a745", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
+                >
+                  {editingId ? "Salvar Alterações" : "Salvar Aluno"}
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -11,7 +11,7 @@ interface Class {
 
 export const Classes: React.FC = () => {
   // MOCK DATA - Baseado em chamadaBelaVista.xlsx
-  const [classes] = useState<Class[]>([
+  const [classes, setClasses] = useState<Class[]>([
     { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", Atalho: "1A" },
     { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", Atalho: "1B" },
     { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", Atalho: "2A" },
@@ -42,42 +42,51 @@ export const Classes: React.FC = () => {
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    try {
-      if (editingClass) {
-        await updateClass(
-          editingClass.Turma,
-          editingClass.Horario,
-          editingClass.Professor,
-          formData
-        );
-        alert("Turma atualizada com sucesso!");
-      } else {
-        await addClass(formData);
-        alert("Turma adicionada com sucesso!");
-      }
-      setShowForm(false);
-    } catch (err) {
-      console.error("Erro ao salvar turma:", err);
-      alert("Erro ao salvar turma");
+  const handleSave = () => {
+    if (editingClass) {
+      setClasses((prev) =>
+        prev.map((c) =>
+          c.Turma === editingClass.Turma && c.Horario === editingClass.Horario
+            ? ({ ...c, ...formData } as Class)
+            : c
+        )
+      );
+      alert("Turma atualizada com sucesso!");
+    } else {
+      setClasses((prev) => [...prev, formData as Class]);
+      alert("Turma adicionada com sucesso!");
+    }
+    setShowForm(false);
+  };
+
+  const handleDelete = (classData: Class) => {
+    if (confirm("Tem certeza que deseja deletar esta Turma? Certifique-se de que ela esteja vazia antes de excluir; Caso contrário os alunos ficaram perdidos, sem turma e não aparecerão mais nas chamadas")) {
+      setClasses((prev) =>
+        prev.filter(
+          (c) => c.Turma !== classData.Turma || c.Horario !== classData.Horario
+        )
+      );
+      alert("Turma excluída com sucesso!");
     }
   };
 
-  const handleDelete = async (classData: Class) => {
-    if (confirm(`Deseja excluir a turma ${classData.Turma} - ${classData.Horario}?`)) {
-      try {
-        await deleteClass(classData.Turma, classData.Horario, classData.Professor);
-        alert("Turma excluída com sucesso!");
-      } catch (err) {
-        console.error("Erro ao excluir turma:", err);
-        alert("Erro ao excluir turma");
-      }
-    }
+  const handleGoToAttendance = (turma: string) => {
+    alert(`Ir para chamada da turma ${turma}`);
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let newValue = value;
+
+    if (name === "Horario") {
+      const digits = value.replace(/\D/g, "").slice(0, 4);
+      if (digits.length >= 3) {
+        newValue = `${digits.slice(0, 2)}:${digits.slice(2)}`;
+      } else {
+        newValue = digits;
+      }
+    }
+    setFormData((prev) => ({ ...prev, [name]: newValue }));
   };
 
   return (
@@ -130,7 +139,7 @@ export const Classes: React.FC = () => {
             <input
               type="text"
               name="Horario"
-              placeholder="Horário (HH:MM)"
+              placeholder="00:00"
               value={formData.Horario || ""}
               onChange={handleFormChange}
               disabled={!!editingClass}
@@ -203,7 +212,7 @@ export const Classes: React.FC = () => {
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Horário</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Professor</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Nível</th>
-              <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Ações</th>
+              <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -213,7 +222,23 @@ export const Classes: React.FC = () => {
                 <td style={{ padding: "12px" }}>{classData.Horario}</td>
                 <td style={{ padding: "12px" }}>{classData.Professor}</td>
                 <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
-                <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px" }}>
+                <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => handleGoToAttendance(classData.Turma)}
+                    style={{
+                      background: "#28a745",
+                      color: "white",
+                      border: "none",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    📅 Chamada
+                  </button>
                   <button
                     onClick={() => handleEditClick(classData)}
                     style={{
@@ -244,7 +269,7 @@ export const Classes: React.FC = () => {
                       transition: "all 0.2s ease",
                     }}
                   >
-                    🗑 Deletar
+                    🗑️
                   </button>
                 </td>
               </tr>
