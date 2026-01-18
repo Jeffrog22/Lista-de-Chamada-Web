@@ -52,8 +52,8 @@ const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
 
 export const Students: React.FC = () => {
   // Mock Data inicial expandido
-  const [students, setStudents] = useState<Student[]>([
-    { 
+  const initialMockStudents: Student[] = [
+    {
       id: "1", nome: "João Silva", nivel: "Iniciante", idade: 15, categoria: "Juvenil", 
       turma: "1A", horario: "14:00", professor: "Joao Silva", whatsapp: "(11) 98765-4321",
       genero: "Masculino", dataNascimento: "10/05/2010", parQ: "Não", atestado: true, dataAtestado: "15/01/2025"
@@ -67,8 +67,17 @@ export const Students: React.FC = () => {
       id: "3", nome: "Carlos Oliveira", nivel: "Avancado", idade: 17, categoria: "Adulto", 
       turma: "2A", horario: "16:30", professor: "Carlos Oliveira", whatsapp: "(11) 98765-4323",
       genero: "Masculino", dataNascimento: "05/02/2008", parQ: "Não", atestado: false
-    },
-  ]);
+    }
+  ];
+
+  const [students, setStudents] = useState<Student[]>(() => {
+    const saved = localStorage.getItem("activeStudents");
+    return saved ? JSON.parse(saved) : initialMockStudents;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("activeStudents", JSON.stringify(students));
+  }, [students]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -243,7 +252,7 @@ export const Students: React.FC = () => {
       excludedStudents.push({ ...student, dataExclusao: new Date().toLocaleDateString() });
       localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
 
-      setStudents(students.filter((s) => s.id !== student.id));
+      setStudents((prev) => prev.filter((s) => s.id !== student.id));
       alert("Aluno movido para a lista de exclusão.");
     }
   };

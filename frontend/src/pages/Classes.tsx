@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./Classes.css";
 
 interface Class {
@@ -23,6 +23,24 @@ export const Classes: React.FC = () => {
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [formData, setFormData] = useState<Partial<Class>>({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [studentCounts, setStudentCounts] = useState<{ [key: string]: number }>({});
+
+  useEffect(() => {
+    const updateCounts = () => {
+      const studentsStr = localStorage.getItem("activeStudents");
+      if (studentsStr) {
+        const students = JSON.parse(studentsStr);
+        const counts: { [key: string]: number } = {};
+        students.forEach((s: any) => {
+          if (s.turma) {
+            counts[s.turma] = (counts[s.turma] || 0) + 1;
+          }
+        });
+        setStudentCounts(counts);
+      }
+    };
+    updateCounts();
+  }, []);
 
   const filteredClasses = classes.filter(
     (c) =>
@@ -212,6 +230,7 @@ export const Classes: React.FC = () => {
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Horário</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Professor</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Nível</th>
+              <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Qtd. Alunos</th>
               <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Ações</th>
             </tr>
           </thead>
@@ -222,6 +241,11 @@ export const Classes: React.FC = () => {
                 <td style={{ padding: "12px" }}>{classData.Horario}</td>
                 <td style={{ padding: "12px" }}>{classData.Professor}</td>
                 <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
+                <td style={{ padding: "12px", textAlign: "center" }}>
+                  <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "12px", fontWeight: "bold", fontSize: "12px" }}>
+                    {studentCounts[classData.Turma] || 0}
+                  </span>
+                </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                   <button
                     onClick={() => handleGoToAttendance(classData.Turma)}
