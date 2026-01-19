@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import "./Reports.css";
+import DashboardCharts from './DashboardCharts';
 
 interface StudentStats {
   id: string;
@@ -203,6 +204,7 @@ export const Reports: React.FC = () => {
   };
 
   return (
+    
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
       
       {/* HEADER & FILTROS */}
@@ -302,6 +304,9 @@ export const Reports: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* GRÁFICOS ESTATÍSTICOS */}
+      <DashboardCharts />
 
       {/* ÁREA DE EXPORTAÇÃO */}
       <div style={{ background: "#f1f3f5", padding: "25px", borderRadius: "12px", textAlign: "center" }}>
