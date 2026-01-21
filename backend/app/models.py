@@ -24,6 +24,7 @@ class ClassModel(SQLModel, table=True):
     local: Optional[str] = None
     instrutor: Optional[str] = None
     nivel: Optional[str] = None
+    capacidade_maxima: Optional[int] = None
 
 class Attendance(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

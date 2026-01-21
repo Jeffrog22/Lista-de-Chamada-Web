@@ -7,15 +7,16 @@ interface Class {
   Professor: string;
   Nivel?: string;
   Atalho?: string;
+  CapacidadeMaxima?: number;
 }
 
 export const Classes: React.FC = () => {
   // MOCK DATA - Baseado em chamadaBelaVista.xlsx
   const [classes, setClasses] = useState<Class[]>([
-    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", Atalho: "1A" },
-    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", Atalho: "1B" },
-    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", Atalho: "2A" },
-    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", Atalho: "2B" },
+    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", Atalho: "1A", CapacidadeMaxima: 20 },
+    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", Atalho: "1B", CapacidadeMaxima: 20 },
+    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", Atalho: "2A", CapacidadeMaxima: 15 },
+    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", Atalho: "2B", CapacidadeMaxima: 20 },
   ]);
   
   const [loading] = useState(false);
@@ -94,7 +95,7 @@ export const Classes: React.FC = () => {
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    let newValue = value;
+    let newValue: string | number = value;
 
     if (name === "Horario") {
       const digits = value.replace(/\D/g, "").slice(0, 4);
@@ -103,6 +104,8 @@ export const Classes: React.FC = () => {
       } else {
         newValue = digits;
       }
+    } else if (name === "CapacidadeMaxima") {
+      newValue = parseInt(value) || 0;
     }
     setFormData((prev) => ({ ...prev, [name]: newValue }));
   };
@@ -181,6 +184,14 @@ export const Classes: React.FC = () => {
               style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
             />
             <input
+              type="number"
+              name="CapacidadeMaxima"
+              placeholder="Capacidade Máxima *"
+              value={formData.CapacidadeMaxima || ""}
+              onChange={handleFormChange}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+            />
+            <input
               type="text"
               name="Atalho"
               placeholder="Atalho"
@@ -230,7 +241,7 @@ export const Classes: React.FC = () => {
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Horário</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Professor</th>
               <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold" }}>Nível</th>
-              <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Qtd. Alunos</th>
+              <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Lotação</th>
               <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Ações</th>
             </tr>
           </thead>
@@ -243,7 +254,7 @@ export const Classes: React.FC = () => {
                 <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
                 <td style={{ padding: "12px", textAlign: "center" }}>
                   <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "12px", fontWeight: "bold", fontSize: "12px" }}>
-                    {studentCounts[classData.Turma] || 0}
+                    {studentCounts[classData.Turma] || 0} / {classData.CapacidadeMaxima || 0}
                   </span>
                 </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>

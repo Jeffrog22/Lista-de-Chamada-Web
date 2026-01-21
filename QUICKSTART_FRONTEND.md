@@ -1,17 +1,17 @@
-# ?? Guia de Início Rápido - Frontend Adaptado
+# ?? Guia de In?cio R?pido - Frontend Adaptado
 
-Este é o frontend React/TypeScript/Vite para o projeto **Lista de Chamada Web**, completamente adaptado do repositório template.
+Este ? o frontend React/TypeScript/Vite para o projeto **Lista de Chamada Web**, completamente adaptado do reposit?rio template.
 
-## ? Início Rápido
+## ? In?cio R?pido
 
-### 1?? Instalação
+### 1?? Instala??o
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 2?? Configurar Variáveis de Ambiente
+### 2?? Configurar Vari?veis de Ambiente
 
 Crie um arquivo `.env.local` na pasta `frontend`:
 
@@ -27,11 +27,11 @@ Se a API estiver em outro local, ajuste a URL.
 npm run dev
 ```
 
-O frontend estará disponível em `http://localhost:5173` (porta padrão do Vite).
+O frontend estar? dispon?vel em `http://localhost:5173` (porta padr?o do Vite).
 
-### 4?? Certificar-se que o Backend está Rodando
+### 4?? Certificar-se que o Backend est? Rodando
 
-O backend deve estar rodando em `http://localhost:8000`. Veja as instruções em `backend/README.md`:
+O backend deve estar rodando em `http://localhost:8000`. Veja as instru??es em `backend/README.md`:
 
 ```bash
 cd backend
@@ -41,21 +41,21 @@ uvicorn app.main:app --reload
 
 ---
 
-## ?? Navegação
+## ?? Navega??o
 
-Após fazer login, você terá acesso a 5 abas principais:
+Ap?s fazer login, voc? ter? acesso a 5 abas principais:
 
 ### ?? **Chamada**
-- Registre presenças dos alunos
-- Filtros: Turma, Horário, Professor, Mês, Ano
+- Registre presen?as dos alunos
+- Filtros: Turma, Hor?rio, Professor, M?s, Ano
 - Status: Presente (?), Ausente (?), Justificado (??)
-- Botões: Salvar, Limpar
+- Bot?es: Salvar, Limpar
 
 ### ?? **Alunos**
 - Visualize todos os alunos
 - Adicione novos alunos
-- Edite informações de alunos
-- Delete alunos (move para exclusões)
+- Edite informa??es de alunos
+- Delete alunos (move para exclus?es)
 - Busca em tempo real
 
 ### ?? **Turmas**
@@ -63,36 +63,36 @@ Após fazer login, você terá acesso a 5 abas principais:
 - Adicione nova turma
 - Edite turma
 - Delete turma
-- Campos: Turma, Horário, Professor, Nível, Atalho, Data de Início
+- Campos: Turma, Horrio, Professor, Nvel, Atalho, Data de Incio, Capacidade M?xima
 
-### ?? **Relatórios**
-- Gere relatórios Excel
-- Selecione múltiplas turmas
-- Baixe relatório individual ou consolidado
-- Filtros: Turma, Horário, Professor, Mês, Ano
+### ?? **Relat?rios**
+- Gere relat?rios Excel
+- Selecione m?ltiplas turmas
+- Baixe relat?rio individual ou consolidado
+- Filtros: Turma, Hor?rio, Professor, M?s, Ano
 
-### ? **Exclusões**
-- Visualize alunos excluídos
-- Restaure alunos excluídos para a lista ativa
+### ? **Exclus?es**
+- Visualize alunos exclu?dos
+- Restaure alunos exclu?dos para a lista ativa
 - Busca por nome
 
 ---
 
 ## ?? Login
 
-Para fazer login, use as credenciais do seu backend FastAPI. O token será armazenado em `localStorage` automaticamente.
+Para fazer login, use as credenciais do seu backend FastAPI. O token ser? armazenado em `localStorage` automaticamente.
 
 ---
 
-## ?? Build para Produção
+## ?? Build para Produ??o
 
 ```bash
 npm run build
 ```
 
-Os arquivos compilados estarão na pasta `dist/`.
+Os arquivos compilados estar?o na pasta `dist/`.
 
-Para servir em produção:
+Para servir em produ??o:
 
 ```bash
 npm run preview
@@ -109,15 +109,15 @@ frontend/
 ?   ?   ??? Attendance.tsx  # Chamada
 ?   ?   ??? Students.tsx    # Alunos
 ?   ?   ??? Classes.tsx     # Turmas
-?   ?   ??? Reports.tsx     # Relatórios
-?   ?   ??? Exclusions.tsx  # Exclusões
+?   ?   ??? Reports.tsx     # Relat?rios
+?   ?   ??? Exclusions.tsx  # Exclus?es
 ?   ?   ??? Login.tsx       # Login
 ?   ??? api.ts              # Cliente API (axios)
 ?   ??? App.tsx             # Componente principal
 ?   ??? App.css
 ?   ??? main.tsx
 ?   ??? index.css
-??? public/                 # Assets estáticos
+??? public/                 # Assets est?ticos
 ??? package.json
 ??? vite.config.ts
 ??? tsconfig.json
@@ -127,19 +127,19 @@ frontend/
 
 ---
 
-## ??? Desenvolvedor - Comandos Úteis
+## ??? Desenvolvedor - Comandos ?teis
 
 ### Desenvolvimento
 ```bash
 npm run dev          # Inicia servidor de dev
-npm run build        # Build para produção
+npm run build        # Build para produ??o
 npm run preview      # Preview do build
 npm run lint         # Lint com ESLint
 ```
 
 ### Debugging
 - Abra DevTools (F12)
-- Check Network para requisições API
+- Check Network para requisi??es API
 - Check Console para erros
 - Check LocalStorage para token
 
@@ -147,31 +147,31 @@ npm run lint         # Lint com ESLint
 
 ## ?? Troubleshooting
 
-### Erro: "API não responde"
-- Verifique se o backend está rodando em `http://localhost:8000`
-- Verifique a variável `VITE_API_URL` em `.env.local`
+### Erro: "API n?o responde"
+- Verifique se o backend est? rodando em `http://localhost:8000`
+- Verifique a vari?vel `VITE_API_URL` em `.env.local`
 - Check CORS no backend
 
-### Erro: "Token inválido"
-- Faça logout e login novamente
+### Erro: "Token inv?lido"
+- Fa?a logout e login novamente
 - Limpe o localStorage: `localStorage.clear()`
 - Verifique credenciais no backend
 
-### Erro: "Módulo não encontrado"
+### Erro: "M?dulo n?o encontrado"
 ```bash
 rm -rf node_modules
 npm install
 npm run dev
 ```
 
-### Tabela de presença não carrega
-- Certifique-se de selecionar uma turma válida
-- Verifique se há alunos naquela turma
+### Tabela de presen?a n?o carrega
+- Certifique-se de selecionar uma turma v?lida
+- Verifique se h? alunos naquela turma
 - Check network tab para erros da API
 
 ---
 
-## ?? Customização
+## ?? Customiza??o
 
 ### Cores
 Edite as cores CSS em cada arquivo `.css` dos componentes:
@@ -198,7 +198,7 @@ font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Ari
 
 ---
 
-## ? Checklist de Configuração
+## ? Checklist de Configura??o
 
 - [ ] Backend rodando em `http://localhost:8000`
 - [ ] Frontend instalado com `npm install`
@@ -206,7 +206,7 @@ font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Ari
 - [ ] `npm run dev` iniciado
 - [ ] Browser aberto em `http://localhost:5173`
 - [ ] Login realizado com sucesso
-- [ ] Abas navegáveis
+- [ ] Abas naveg?veis
 - [ ] Dados carregando corretamente
 
 ---
@@ -216,14 +216,14 @@ font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Ari
 Para problemas:
 1. Verifique o console do browser (F12)
 2. Verifique o terminal do backend para erros da API
-3. Verifique a aba Network para requisições falhadas
-4. Consulte a documentação de cada API em `frontend/ADAPTACAO.md`
+3. Verifique a aba Network para requisi??es falhadas
+4. Consulte a documenta??o de cada API em `frontend/ADAPTACAO.md`
 
 ---
 
-**Última atualização**: 14 de Janeiro de 2026
-**Versão**: 1.0
-**Status**: ? Pronto para Produção
+**?ltima atualiza??o**: 14 de Janeiro de 2026
+**Vers?o**: 1.0
+**Status**: ? Pronto para Produ??o
 
 ---
 
