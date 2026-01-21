@@ -16,6 +16,27 @@ interface AttendanceRecord {
   notes?: string[];
 }
 
+// Interface para o Log da Piscina (logPiscina.xlsx)
+interface PoolLogEntry {
+  data: string;
+  clima1: string; // Estado (sol, chuvoso, etc)
+  clima2: string; // Sensação (calor, frio, etc)
+  statusAula: "normal" | "justificada" | "cancelada";
+  nota: "aula" | "feriado" | "ponte-feriado" | "reuniao" | "ocorrencia";
+  tipoOcorrencia: string;
+  colunaPiscina: string; // "26°C / Cloro: 1.5ppm"
+}
+
+// Opções de Clima para a Matriz de Decisão
+const WEATHER_ICONS = {
+  conditions: ["Sol", "Parcialmente Nublado", "Nublado", "Chuvoso", "Temporal"],
+  sensations: ["Calor", "Frio", "Vento", "Agradável"]
+};
+
+// Coordenadas fixas para API (simulação)
+// const LAT = "-23.049194";
+// const LON = "-47.007278";
+
 type AttendanceHistory = AttendanceRecord[];
 
 export const Attendance: React.FC = () => {
@@ -114,6 +135,148 @@ export const Attendance: React.FC = () => {
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [studentModalId, setStudentModalId] = useState<number | null>(null);
   const [newNote, setNewNote] = useState("");
+
+  // --- ESTADOS DO MÓDULO INTELIGENTE (DATA/CLIMA) ---
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [modalDate, setModalDate] = useState(""); // Data selecionada (YYYY-MM-DD)
+  const [modalStep, setModalStep] = useState<"select" | "aula" | "ocorrencia">("select");
+  
+  // Dados do Formulário do Modal
+  const [poolData, setPoolData] = useState({
+    tempExterna: "",
+    tempPiscina: "",
+    cloro: 1.5,
+    selectedIcons: [] as string[],
+    incidentType: "",
+    incidentNote: "",
+    personalType: "Medico" as "Medico" | "Particular",
+    logType: "aula" as PoolLogEntry["nota"]
+  });
+
+  // Simulação da API Climatempo
+  const fetchClimatempoData = async (date: string) => {
+    // Em produção, usaria axios.get com as coordenadas
+    // console.log(`Fetching weather for ${LAT}, ${LON} on ${date}`);
+    
+    return new Promise<{ temp: string, condition: string }>((resolve) => {
+      setTimeout(() => {
+        // Mock aleatório inteligente
+        const conditions = ["Céu Limpo", "Chuva Fraca", "Nublado", "Parcialmente Nublado"];
+        const randomCond = conditions[Math.floor(Math.random() * conditions.length)];
+        const randomTemp = Math.floor(Math.random() * (32 - 18) + 18).toString();
+        resolve({ temp: randomTemp, condition: randomCond });
+      }, 500);
+    });
+  };
+
+  const handleDateClick = async (date: string) => {
+    setModalDate(date);
+    setModalStep("select");
+    
+    // Resetar dados
+    setPoolData(prev => ({
+      ...prev,
+      tempPiscina: "",
+      cloro: 1.5,
+      selectedIcons: [],
+      incidentType: "",
+      incidentNote: "",
+      logType: "aula"
+    }));
+
+    // Pré-carregar dados da API
+    const apiData = await fetchClimatempoData(date);
+    
+    // Mapeamento Automático (API -> Ícones)
+    const autoIcons: string[] = [];
+    if (apiData.condition === "Céu Limpo") autoIcons.push("Sol");
+    if (apiData.condition === "Chuva Fraca") autoIcons.push("Chuvoso");
+    if (apiData.condition.includes("Nublado")) autoIcons.push("Nublado");
+    
+    // Inferência de sensação baseada na temperatura
+    const tempNum = parseInt(apiData.temp);
+    if (tempNum > 28) autoIcons.push("Calor");
+    else if (tempNum < 20) autoIcons.push("Frio");
+    else autoIcons.push("Agradável");
+
+    setPoolData(prev => ({
+      ...prev,
+      tempExterna: apiData.temp,
+      selectedIcons: autoIcons.slice(0, 2) // Limitar a 2 ícones iniciais
+    }));
+
+    setShowDateModal(true);
+  };
+
+  const toggleIcon = (icon: string) => {
+    setPoolData(prev => {
+      const exists = prev.selectedIcons.includes(icon);
+      if (exists) return { ...prev, selectedIcons: prev.selectedIcons.filter(i => i !== icon) };
+      if (prev.selectedIcons.length >= 3) return prev; // Limite de 3 para UI não quebrar
+      return { ...prev, selectedIcons: [...prev.selectedIcons, icon] };
+    });
+  };
+
+  // Matriz de Decisão
+  const getSuggestedStatus = (): "normal" | "justificada" => {
+    const { selectedIcons } = poolData;
+    const i = selectedIcons;
+    
+    // Regras de Justificativa (Prioridade)
+    const justifiedTriggers = ["Chuvoso", "Temporal", "Frio"];
+    if (i.some(icon => justifiedTriggers.includes(icon))) return "justificada";
+    
+    // Combinações específicas
+    if (i.includes("Sol") && i.includes("Chuvoso")) return "justificada";
+    if (i.includes("Parcialmente Nublado") && (i.includes("Chuvoso") || i.includes("Temporal") || i.includes("Vento"))) return "justificada";
+    if (i.includes("Nublado") || i.includes("Vento")) return "justificada";
+
+    return "normal";
+  };
+
+  const handleSaveLog = () => {
+    const statusSugerido = getSuggestedStatus();
+    
+    // Lógica para Feriado/Ponte/Justificada
+    if (["feriado", "ponte-feriado"].includes(poolData.logType) || (poolData.logType === "aula" && statusSugerido === "justificada")) {
+      // Aplicar justificativa em massa
+      setHistory((h) => [attendance, ...h.slice(0, 9)]);
+      setAttendance(prev => prev.map(student => ({
+        ...student,
+        attendance: { ...student.attendance, [modalDate]: "Justificado" },
+        justifications: { 
+          ...(student.justifications || {}), 
+          [modalDate]: poolData.logType === "aula" ? "Condições Climáticas" : poolData.logType 
+        }
+      })));
+    }
+
+    // Construção do Objeto de Log (Persistência)
+    const logEntry: PoolLogEntry = {
+      data: modalDate,
+      clima1: poolData.selectedIcons.filter(i => WEATHER_ICONS.conditions.includes(i)).join(", "),
+      clima2: poolData.selectedIcons.filter(i => WEATHER_ICONS.sensations.includes(i)).join(", "),
+      statusAula: poolData.logType === "aula" ? statusSugerido : "cancelada",
+      nota: poolData.logType,
+      tipoOcorrencia: poolData.logType === "ocorrencia" ? 
+        (poolData.incidentType || poolData.personalType) : "nenhuma",
+      colunaPiscina: poolData.logType === "aula" || poolData.logType === "ocorrencia" ? 
+        `${poolData.tempPiscina || "??"}°C / Cloro: ${poolData.cloro}ppm` : "-"
+    };
+
+    console.log(">>> APPENDING TO logPiscina.xlsx <<<");
+    console.table(logEntry);
+    alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}`);
+    setShowDateModal(false);
+  };
+
+  // Cor do Slider de Cloro
+  const getChlorineColor = (val: number) => {
+    if (val <= 1.0) return "#a0aec0"; // Transparente/Cinza
+    if (val <= 3.0) return "#ffc107"; // Amarelo (Ideal/Ok)
+    if (val <= 5.0) return "#fd7e14"; // Laranja
+    return "#dc3545"; // Vermelho/Laranja Intenso
+  };
 
   const handleOpenStudentModal = (id: number) => {
     setStudentModalId(id);
@@ -456,7 +619,9 @@ export const Attendance: React.FC = () => {
                   return (
                     <th
                       key={date}
+                      onClick={() => handleDateClick(date)}
                       style={{
+                        cursor: "pointer",
                         padding: "12px 8px",
                         textAlign: "center",
                         fontWeight: "bold",
@@ -464,6 +629,7 @@ export const Attendance: React.FC = () => {
                         minWidth: "60px",
                       }}
                     >
+                      <div style={{ fontSize: "10px", fontWeight: "normal", marginBottom: "2px" }}>📅</div>
                       {dayNum}
                     </th>
                   );
@@ -815,6 +981,174 @@ export const Attendance: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INTELIGENTE (DATA / CLIMA / OCORRÊNCIA) */}
+      {showDateModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1200
+        }}>
+          <div style={{ background: "white", padding: "25px", borderRadius: "16px", width: "450px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
+              <h3 style={{ margin: 0, color: "#2c3e50" }}>
+                {modalDate.split("-").reverse().join("/")}
+                {modalStep !== "select" && <span style={{ fontSize: "14px", color: "#666", marginLeft: "10px" }}>({poolData.logType.toUpperCase()})</span>}
+              </h3>
+              <button onClick={() => setShowDateModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
+            </div>
+
+            {/* NÍVEL 1: SELEÇÃO */}
+            {modalStep === "select" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <button className="btn-option" style={{ background: "#667eea", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => { setPoolData(p => ({...p, logType: "aula"})); setModalStep("aula"); }}>
+                  🏊 Aula
+                </button>
+                <button className="btn-option" style={{ background: "#ffc107", color: "#333", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => { setPoolData(p => ({...p, logType: "ocorrencia"})); setModalStep("ocorrencia"); }}>
+                  ⚠️ Ocorrência
+                </button>
+                <button className="btn-option" style={{ background: "#17a2b8", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => { setPoolData(p => ({...p, logType: "feriado"})); handleSaveLog(); }}>
+                  🎉 Feriado
+                </button>
+                <button className="btn-option" style={{ background: "#6c757d", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => { setPoolData(p => ({...p, logType: "ponte-feriado"})); handleSaveLog(); }}>
+                  🌉 Ponte
+                </button>
+                <button className="btn-option" style={{ gridColumn: "1 / -1", background: "#28a745", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => { setPoolData(p => ({...p, logType: "reuniao"})); handleSaveLog(); }}>
+                  🤝 Reunião
+                </button>
+              </div>
+            )}
+
+            {/* NÍVEL 2: AULA (CARD CLIMA) */}
+            {modalStep === "aula" && (
+              <div className="card-clima">
+                <h4 style={{ marginTop: 0, color: "#444" }}>🌤️ Clima e Sensação</h4>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "15px" }}>
+                  {[...WEATHER_ICONS.conditions, ...WEATHER_ICONS.sensations].map(icon => (
+                    <button
+                      key={icon}
+                      onClick={() => toggleIcon(icon)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "20px",
+                        border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
+                        background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
+                        color: poolData.selectedIcons.includes(icon) ? "#667eea" : "#666",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        fontWeight: 600
+                      }}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "20px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666" }}>Temp. Externa (°C)</label>
+                    <input 
+                      type="number" 
+                      value={poolData.tempExterna} 
+                      onChange={e => setPoolData({...poolData, tempExterna: e.target.value})}
+                      style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#f8f9fa" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666" }}>Temp. Piscina (°C)</label>
+                    <input 
+                      type="number" 
+                      value={poolData.tempPiscina} 
+                      onChange={e => setPoolData({...poolData, tempPiscina: e.target.value})}
+                      placeholder="00"
+                      style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "20px" }}>
+                  <label style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+                    <span>Cloro (ppm)</span>
+                    <span style={{ color: getChlorineColor(poolData.cloro) }}>{poolData.cloro.toFixed(1)}</span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="0" max="7" step="0.5" 
+                    value={poolData.cloro}
+                    onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})}
+                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro) }}
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#999" }}>
+                    <span>0.0</span><span>3.5</span><span>7.0</span>
+                  </div>
+                </div>
+
+                <div style={{ background: getSuggestedStatus() === "justificada" ? "#fff3cd" : "#d4edda", padding: "10px", borderRadius: "6px", marginBottom: "15px", fontSize: "13px", textAlign: "center", border: "1px solid rgba(0,0,0,0.1)" }}>
+                  Status Sugerido: <strong>{getSuggestedStatus() === "justificada" ? "AULA JUSTIFICADA" : "AULA NORMAL"}</strong>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button onClick={() => setModalStep("select")} style={{ flex: 1, padding: "10px", border: "1px solid #ccc", borderRadius: "6px", background: "white", cursor: "pointer" }}>Voltar</button>
+                  <button onClick={handleSaveLog} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#667eea", color: "white", fontWeight: "bold", cursor: "pointer" }}>Salvar Dados</button>
+                </div>
+              </div>
+            )}
+
+            {/* NÍVEL 2: OCORRÊNCIA (CARD BO) */}
+            {modalStep === "ocorrencia" && (
+              <div className="card-bo">
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>Tipo de Ocorrência</label>
+                  <select 
+                    value={poolData.incidentType} 
+                    onChange={e => setPoolData({...poolData, incidentType: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Manutencao">Manutenção / Incidente</option>
+                    <option value="Pessoal">Pessoal (Professor)</option>
+                  </select>
+                </div>
+
+                {poolData.incidentType === "Pessoal" && (
+                  <div style={{ marginBottom: "15px", display: "flex", gap: "15px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px" }}>
+                      <input type="radio" name="personalType" checked={poolData.personalType === "Medico"} onChange={() => setPoolData({...poolData, personalType: "Medico"})} /> Médico
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px" }}>
+                      <input type="radio" name="personalType" checked={poolData.personalType === "Particular"} onChange={() => setPoolData({...poolData, personalType: "Particular"})} /> Particular
+                    </label>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>Detalhes / Observações</label>
+                  <textarea 
+                    value={poolData.incidentNote}
+                    onChange={e => setPoolData({...poolData, incidentNote: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", minHeight: "80px" }}
+                  />
+                </div>
+
+                {/* Slider de Cloro também na Ocorrência para registros técnicos */}
+                <div style={{ marginBottom: "20px", borderTop: "1px solid #eee", paddingTop: "15px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>Registro Técnico (Cloro)</label>
+                  <input type="range" min="0" max="7" step="0.5" value={poolData.cloro} onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})} style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro) }} />
+                </div>
+
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button onClick={() => setModalStep("select")} style={{ flex: 1, padding: "10px", border: "1px solid #ccc", borderRadius: "6px", background: "white", cursor: "pointer" }}>Voltar</button>
+                  <button onClick={handleSaveLog} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#dc3545", color: "white", fontWeight: "bold", cursor: "pointer" }}>Registrar Ocorrência</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
