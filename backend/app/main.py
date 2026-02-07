@@ -4,6 +4,9 @@ from app.database import create_db_and_tables, get_session
 from app import crud, models
 from typing import List, Optional
 import os
+import pandas as pd
+import requests
+from pydantic import BaseModel
 from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
@@ -34,6 +37,142 @@ def on_startup():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+class PoolLogEntryModel(BaseModel):
+    data: str
+    clima1: str
+    clima2: str
+    statusAula: str
+    nota: str
+    tipoOcorrencia: str
+    tempExterna: Optional[str] = ""
+    tempPiscina: Optional[str] = ""
+    cloroPpm: Optional[float] = None
+
+@app.get("/weather")
+def get_weather(date: str):
+    token = os.getenv("CLIMATEMPO_TOKEN")
+    base_url = os.getenv("CLIMATEMPO_BASE_URL")
+    lat = os.getenv("CLIMATEMPO_LAT", "-23.049194")
+    lon = os.getenv("CLIMATEMPO_LON", "-47.007278")
+
+    if not token or not base_url:
+        return {"temp": "26", "condition": "Parcialmente Nublado"}
+
+    try:
+        resp = requests.get(
+            base_url,
+            params={"token": token, "lat": lat, "lon": lon, "date": date},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        temp = (
+            data.get("temp")
+            or data.get("temperature")
+            or data.get("data", {}).get("temperature")
+            or "26"
+        )
+        condition = (
+            data.get("condition")
+            or data.get("text")
+            or data.get("data", {}).get("condition")
+            or "Parcialmente Nublado"
+        )
+        return {"temp": str(temp), "condition": str(condition)}
+    except Exception:
+        return {"temp": "26", "condition": "Parcialmente Nublado"}
+
+@app.post("/pool-log")
+def append_pool_log(entry: PoolLogEntryModel):
+    try:
+        data_dir = os.path.join(os.getcwd(), "data")
+        os.makedirs(data_dir, exist_ok=True)
+        file_path = os.path.join(data_dir, "logPiscina.xlsx")
+
+        columns = [
+            "Data",
+            "Clima 1",
+            "Clima 2",
+            "Status_aula",
+            "Nota",
+            "Tipo_ocorrencia",
+            "Temp. (C)",
+            "Piscina (C)",
+            "Cloro (ppm)",
+        ]
+
+        if os.path.exists(file_path):
+            df = pd.read_excel(file_path)
+        else:
+            df = pd.DataFrame(columns=columns)
+
+        row = {
+            "Data": entry.data,
+            "Clima 1": entry.clima1,
+            "Clima 2": entry.clima2,
+            "Status_aula": entry.statusAula,
+            "Nota": entry.nota,
+            "Tipo_ocorrencia": entry.tipoOcorrencia,
+            "Temp. (C)": entry.tempExterna or "",
+            "Piscina (C)": entry.tempPiscina or "",
+            "Cloro (ppm)": "" if entry.cloroPpm is None else entry.cloroPpm,
+        }
+
+        if "Data" in df.columns and (df["Data"].astype(str) == entry.data).any():
+            df.loc[df["Data"].astype(str) == entry.data, columns] = [
+                row["Data"],
+                row["Clima 1"],
+                row["Clima 2"],
+                row["Status_aula"],
+                row["Nota"],
+                row["Tipo_ocorrencia"],
+                row["Temp. (C)"],
+                row["Piscina (C)"],
+                row["Cloro (ppm)"],
+            ]
+            action = "updated"
+        else:
+            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            action = "created"
+
+        df.to_excel(file_path, index=False)
+        return {"ok": True, "action": action, "file": file_path}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"pool-log error: {exc}")
+
+@app.get("/pool-log")
+def get_pool_log(date: str):
+    try:
+        data_dir = os.path.join(os.getcwd(), "data")
+        file_path = os.path.join(data_dir, "logPiscina.xlsx")
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="log not found")
+
+        df = pd.read_excel(file_path)
+        if "Data" not in df.columns:
+            raise HTTPException(status_code=404, detail="data column not found")
+
+        match = df[df["Data"].astype(str) == date]
+        if match.empty:
+            raise HTTPException(status_code=404, detail="entry not found")
+
+        row = match.iloc[0].to_dict()
+        return {
+            "data": str(row.get("Data", "")),
+            "clima1": str(row.get("Clima 1", "")),
+            "clima2": str(row.get("Clima 2", "")),
+            "statusAula": str(row.get("Status_aula", "")),
+            "nota": str(row.get("Nota", "")),
+            "tipoOcorrencia": str(row.get("Tipo_ocorrencia", "")),
+            "tempExterna": str(row.get("Temp. (C)", "")),
+            "tempPiscina": str(row.get("Piscina (C)", "")),
+            "cloroPpm": row.get("Cloro (ppm)", None),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"pool-log read error: {exc}")
 
 # Users endpoints (bootstrap)
 @app.post("/users/register")

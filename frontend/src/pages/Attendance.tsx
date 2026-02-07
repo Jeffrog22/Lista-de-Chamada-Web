@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getPoolLog, getWeather, savePoolLog } from "../api";
 
 interface ClassOption {
   turma: string;
@@ -24,13 +25,15 @@ interface PoolLogEntry {
   statusAula: "normal" | "justificada" | "cancelada";
   nota: "aula" | "feriado" | "ponte-feriado" | "reuniao" | "ocorrencia";
   tipoOcorrencia: string;
-  colunaPiscina: string; // "26°C / Cloro: 1.5ppm"
+  tempExterna: string;
+  tempPiscina: string;
+  cloroPpm: number;
 }
 
 // Opções de Clima para a Matriz de Decisão
 const WEATHER_ICONS = {
   conditions: ["Sol", "Parcialmente Nublado", "Nublado", "Chuvoso", "Temporal"],
-  sensations: ["Calor", "Frio", "Vento", "Agradável"]
+  sensations: ["Calor", "Frio", "Vento", "Agradavel"]
 };
 
 // Coordenadas fixas para API (simulação)
@@ -49,7 +52,7 @@ export const Attendance: React.FC = () => {
   ];
 
   const studentsPerClass: { [key: string]: string[] } = {
-    "1A": ["João Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa", "Pedro Ferreira"],
+    "1A": ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa", "Pedro Ferreira"],
     "1B": ["Roberto Alves", "Fernanda Lima", "Lucas Martins", "Beatriz Souza", "Diego Rocha"],
     "2A": ["Amanda Silva", "Felipe Santos", "Juliana Costa", "Marcos Oliveira", "Sophia Pereira"],
     "2B": ["Thiago Mendes", "Camila Silva", "Bruno Costa", "Larissa Santos", "Rafael Lima"],
@@ -155,18 +158,12 @@ export const Attendance: React.FC = () => {
 
   // Simulação da API Climatempo
   const fetchClimatempoData = async (date: string) => {
-    // Em produção, usaria axios.get com as coordenadas
-    // console.log(`Fetching weather for ${LAT}, ${LON} on ${date}`);
-    
-    return new Promise<{ temp: string, condition: string }>((resolve) => {
-      setTimeout(() => {
-        // Mock aleatório inteligente
-        const conditions = ["Céu Limpo", "Chuva Fraca", "Nublado", "Parcialmente Nublado"];
-        const randomCond = conditions[Math.floor(Math.random() * conditions.length)];
-        const randomTemp = Math.floor(Math.random() * (32 - 18) + 18).toString();
-        resolve({ temp: randomTemp, condition: randomCond });
-      }, 500);
-    });
+    try {
+      const response = await getWeather(date);
+      return response.data as { temp: string; condition: string };
+    } catch (error) {
+      return { temp: "26", condition: "Parcialmente Nublado" };
+    }
   };
 
   const handleDateClick = async (date: string) => {
@@ -184,12 +181,54 @@ export const Attendance: React.FC = () => {
       logType: "aula"
     }));
 
+    try {
+      const existing = await getPoolLog(date);
+      const data = existing.data as {
+        clima1: string;
+        clima2: string;
+        nota: string;
+        tipoOcorrencia: string;
+        tempExterna: string;
+        tempPiscina: string;
+        cloroPpm: number | null;
+      };
+
+      const icons = [
+        ...(data.clima1 ? data.clima1.split(", ") : []),
+        ...(data.clima2 ? data.clima2.split(", ") : []),
+      ].filter(Boolean);
+
+      setPoolData(prev => ({
+        ...prev,
+        tempExterna: data.tempExterna || "",
+        tempPiscina: data.tempPiscina || "",
+        cloro: data.cloroPpm ?? 1.5,
+        selectedIcons: icons,
+        incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
+        incidentNote: "",
+        logType: (data.nota as PoolLogEntry["nota"]) || "aula",
+      }));
+
+      if (data.nota === "ocorrencia") {
+        setModalStep("ocorrencia");
+      } else if (data.nota === "aula") {
+        setModalStep("aula");
+      } else {
+        setModalStep("select");
+      }
+
+      setShowDateModal(true);
+      return;
+    } catch (error) {
+      // Continua com prefill via clima
+    }
+
     // Pré-carregar dados da API
     const apiData = await fetchClimatempoData(date);
     
     // Mapeamento Automático (API -> Ícones)
     const autoIcons: string[] = [];
-    if (apiData.condition === "Céu Limpo") autoIcons.push("Sol");
+    if (apiData.condition === "Ceu Limpo") autoIcons.push("Sol");
     if (apiData.condition === "Chuva Fraca") autoIcons.push("Chuvoso");
     if (apiData.condition.includes("Nublado")) autoIcons.push("Nublado");
     
@@ -197,7 +236,7 @@ export const Attendance: React.FC = () => {
     const tempNum = parseInt(apiData.temp);
     if (tempNum > 28) autoIcons.push("Calor");
     else if (tempNum < 20) autoIcons.push("Frio");
-    else autoIcons.push("Agradável");
+    else autoIcons.push("Agradavel");
 
     setPoolData(prev => ({
       ...prev,
@@ -234,19 +273,19 @@ export const Attendance: React.FC = () => {
     return "normal";
   };
 
-  const handleSaveLog = () => {
+  const handleSaveLog = async () => {
     const statusSugerido = getSuggestedStatus();
     
     // Lógica para Feriado/Ponte/Justificada
     if (["feriado", "ponte-feriado"].includes(poolData.logType) || (poolData.logType === "aula" && statusSugerido === "justificada")) {
       // Aplicar justificativa em massa
-      setHistory((h) => [attendance, ...h.slice(0, 9)]);
+      setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
       setAttendance(prev => prev.map(student => ({
         ...student,
         attendance: { ...student.attendance, [modalDate]: "Justificado" },
         justifications: { 
           ...(student.justifications || {}), 
-          [modalDate]: poolData.logType === "aula" ? "Condições Climáticas" : poolData.logType 
+          [modalDate]: poolData.logType === "aula" ? "Condicoes Climaticas" : poolData.logType 
         }
       })));
     }
@@ -260,13 +299,17 @@ export const Attendance: React.FC = () => {
       nota: poolData.logType,
       tipoOcorrencia: poolData.logType === "ocorrencia" ? 
         (poolData.incidentType || poolData.personalType) : "nenhuma",
-      colunaPiscina: poolData.logType === "aula" || poolData.logType === "ocorrencia" ? 
-        `${poolData.tempPiscina || "??"}°C / Cloro: ${poolData.cloro}ppm` : "-"
+      tempExterna: poolData.tempExterna || "",
+      tempPiscina: poolData.tempPiscina || "",
+      cloroPpm: poolData.cloro,
     };
 
-    console.log(">>> APPENDING TO logPiscina.xlsx <<<");
-    console.table(logEntry);
-    alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}`);
+    try {
+      await savePoolLog(logEntry);
+      alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}`);
+    } catch (error) {
+      alert("Erro ao salvar dados do clima. Tente novamente.");
+    }
     setShowDateModal(false);
   };
 
@@ -370,7 +413,7 @@ export const Attendance: React.FC = () => {
 
   const handleStatusChange = (id: number, date: string) => {
     // Salva o estado atual no histórico antes de modificar
-    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
 
     setAttendance((prev) => {
       const newAttendance = prev.map((item) => {
@@ -395,13 +438,13 @@ export const Attendance: React.FC = () => {
 
   const handleUndo = () => {
     if (history.length > 0) {
-      setAttendance(history[0]);
+      setAttendance(JSON.parse(JSON.stringify(history[0])));
       setHistory((h) => h.slice(1));
     }
   };
 
   const handleClearAll = () => {
-    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
 
     setAttendance((prev) =>
       prev.map((item) => ({
@@ -420,7 +463,7 @@ export const Attendance: React.FC = () => {
   // Função de Exclusão: Ativada quando o aluno tem 3 ou mais faltas
   const excluirAluno = (id: number) => {
     if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
-      setHistory((h) => [attendance, ...h.slice(0, 9)]);
+      setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
       setAttendance((prev) => prev.filter((student) => student.id !== id));
     }
   };
@@ -451,7 +494,7 @@ export const Attendance: React.FC = () => {
       return;
     }
 
-    setHistory((h) => [attendance, ...h.slice(0, 9)]);
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setAttendance((prev) =>
       prev.map((item) => {
         if (item.id === justificationStudentId) {

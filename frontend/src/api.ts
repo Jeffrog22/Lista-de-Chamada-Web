@@ -49,6 +49,16 @@ export const importFile = (fileName: string) =>
   API.post(`/import?file=${encodeURIComponent(fileName)}&out_clean=true`)
     .catch(() => ({ data: { ok: true } }));
 
+// Weather and Pool Log
+export const getWeather = (date: string) =>
+  API.get(`/weather?date=${encodeURIComponent(date)}`);
+
+export const savePoolLog = (data: any) =>
+  API.post("/pool-log", data);
+
+export const getPoolLog = (date: string) =>
+  API.get(`/pool-log?date=${encodeURIComponent(date)}`);
+
 // Login
 export const login = (username: string, password: string) =>
   API.post("/token", new URLSearchParams({ username, password }), {

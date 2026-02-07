@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import * as XLSX from "xlsx";
 import "./Reports.css";
 import DashboardCharts from './DashboardCharts';
@@ -23,6 +23,7 @@ interface ClassStats {
 }
 
 export const Reports: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
   // Estados de Filtro
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [selectedClassId, setSelectedClassId] = useState<string>("1A");
@@ -70,6 +71,10 @@ export const Reports: React.FC = () => {
   const mediaFrequencia = currentClassData.alunos.length > 0 
     ? (currentClassData.alunos.reduce((acc, curr) => acc + curr.frequencia, 0) / currentClassData.alunos.length).toFixed(1) 
     : "0";
+
+  const totalAlunosTurma = currentClassData.alunos.length;
+  const capacidadeTurma = 20;
+  const ocupacaoPct = capacidadeTurma > 0 ? Math.min(100, Math.round((totalAlunosTurma / capacidadeTurma) * 100)) : 0;
 
   const handleGenerateExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -204,141 +209,161 @@ export const Reports: React.FC = () => {
   };
 
   return (
-    
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
-      
-      {/* HEADER & FILTROS */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", flexWrap: "wrap", gap: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "20px" }}>
         <div>
           <h2 style={{ color: "#2c3e50", margin: 0 }}>Relatórios e Análises</h2>
-          <p style={{ color: "#666", margin: "5px 0 0" }}>Visão geral de frequência e exportação de dados.</p>
-        </div>
-
-        <div style={{ display: "flex", gap: "15px", background: "#f8f9fa", padding: "10px", borderRadius: "8px" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#666", marginBottom: "4px" }}>Mês</label>
-            <input 
-              type="month" 
-              value={selectedMonth} 
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{ padding: "8px", borderRadius: "6px", border: "1px solid #ddd" }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#666", marginBottom: "4px" }}>Turma</label>
-            <select 
-              value={selectedClassId} 
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              style={{ padding: "8px", borderRadius: "6px", border: "1px solid #ddd", minWidth: "100px" }}
-            >
-              {classesData.map(c => <option key={c.turma} value={c.turma}>{c.turma}</option>)}
-            </select>
-          </div>
+          <p style={{ color: "#666", margin: "5px 0 0" }}>Selecione um módulo para visualizar os dados.</p>
         </div>
       </div>
 
-      {/* DASHBOARD DE ANÁLISE */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
-        
-        {/* Card 1: Resumo Geral */}
-        <div className="report-card" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white" }}>
-          <h3>📊 Resumo da Turma {selectedClassId}</h3>
-          <div style={{ display: "flex", justifyContent: "space-around", marginTop: "20px", textAlign: "center" }}>
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "bold" }}>{mediaFrequencia}%</div>
-              <div style={{ fontSize: "12px", opacity: 0.8 }}>Frequência Média</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalFaltas}</div>
-              <div style={{ fontSize: "12px", opacity: 0.8 }}>Total Faltas</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalJustificativas}</div>
-              <div style={{ fontSize: "12px", opacity: 0.8 }}>Justificativas</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Gráfico de Barras (Simulado com CSS) */}
-        <div className="report-card" style={{ background: "white", border: "1px solid #eee" }}>
-          <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
-            Desempenho por Aluno
-          </h3>
-          <div style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "5px" }}>
-            {currentClassData.alunos.map(aluno => (
-              <div key={aluno.id} style={{ marginBottom: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                  <span>{aluno.nome}</span>
-                  <span style={{ fontWeight: "bold", color: aluno.frequencia < 75 ? "#dc3545" : "#28a745" }}>
-                    {aluno.frequencia}%
-                  </span>
-                </div>
-                <div style={{ width: "100%", background: "#eee", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
-                  <div style={{ 
-                    width: `${aluno.frequencia}%`, 
-                    background: aluno.frequencia < 75 ? "#dc3545" : "#28a745",
-                    height: "100%" 
-                  }}></div>
-                </div>
-                <div style={{ fontSize: "11px", color: "#999", marginTop: "2px" }}>
-                  {aluno.presencas} Presenças | {aluno.faltas} Faltas | {aluno.justificativas} Justif.
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Card 3: Detalhes do Professor */}
-        <div className="report-card" style={{ background: "#fff", border: "1px solid #eee" }}>
-          <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
-            Dados da Aula
-          </h3>
-          <div style={{ fontSize: "14px", lineHeight: "1.8", color: "#555" }}>
-            <p><strong>👨‍🏫 Professor:</strong> {currentClassData.professor}</p>
-            <p><strong>📚 Nível:</strong> {currentClassData.nivel}</p>
-            <p><strong>⏰ Horário:</strong> {currentClassData.horario}</p>
-            <p><strong>👥 Total Alunos:</strong> {currentClassData.alunos.length}</p>
-            <div style={{ marginTop: "15px", padding: "10px", background: "#fffbeb", borderRadius: "6px", borderLeft: "3px solid #f39c12", fontSize: "12px" }}>
-              ⚠️ {currentClassData.alunos.filter(a => a.frequencia < 75).length} alunos abaixo de 75% de frequência.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* GRÁFICOS ESTATÍSTICOS */}
-      <DashboardCharts />
-
-      {/* ÁREA DE EXPORTAÇÃO */}
-      <div style={{ background: "#f1f3f5", padding: "25px", borderRadius: "12px", textAlign: "center" }}>
-        <h3 style={{ color: "#2c3e50", marginBottom: "10px" }}>Exportar Relatório Oficial</h3>
-        <p style={{ color: "#666", marginBottom: "20px", maxWidth: "600px", margin: "0 auto 20px" }}>
-          Gera um arquivo Excel (.xlsx) formatado com base no template 'relatorioChamada.xlsx', contendo a lista de alunos, datas do mês selecionado e registros de presença para a turma <strong>{selectedClassId}</strong>.
-        </p>
-        
-        <button 
-          onClick={handleGenerateExcel}
-          style={{
-            background: "#217346", // Cor Excel
-            color: "white",
-            border: "none",
-            padding: "12px 25px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "15px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "10px",
-            boxShadow: "0 4px 10px rgba(33, 115, 70, 0.3)",
-            transition: "transform 0.2s"
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-2px)")}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
-        >
-          📥 Baixar Relatório Excel
+      <div className="reports-tabs">
+        <button className={`reports-tab ${activeTab === "resumo" ? "active" : ""}`} onClick={() => setActiveTab("resumo")}>
+          📊 Resumo Geral
+        </button>
+        <button className={`reports-tab ${activeTab === "frequencias" ? "active" : ""}`} onClick={() => setActiveTab("frequencias")}>
+          📅 Frequências
+        </button>
+        <button className={`reports-tab ${activeTab === "graficos" ? "active" : ""}`} onClick={() => setActiveTab("graficos")}>
+          📈 Gráficos
+        </button>
+        <button className={`reports-tab ${activeTab === "clima" ? "active" : ""}`} onClick={() => setActiveTab("clima")}>
+          ☁️ Clima
+        </button>
+        <button className={`reports-tab ${activeTab === "vagas" ? "active" : ""}`} onClick={() => setActiveTab("vagas")}>
+          🏊 Gestão de Vagas
         </button>
       </div>
 
+      {activeTab === "resumo" && (
+        <div className="reports-section">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
+            <div className="report-card" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white" }}>
+              <h3>📊 Resumo da Turma {selectedClassId}</h3>
+              <div style={{ display: "flex", justifyContent: "space-around", marginTop: "20px", textAlign: "center" }}>
+                <div>
+                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{mediaFrequencia}%</div>
+                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Frequência Média</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalFaltas}</div>
+                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Total Faltas</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalJustificativas}</div>
+                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Justificativas</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="report-card" style={{ background: "white", border: "1px solid #eee" }}>
+              <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
+                Desempenho por Aluno
+              </h3>
+              <div style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "5px" }}>
+                {currentClassData.alunos.map(aluno => (
+                  <div key={aluno.id} style={{ marginBottom: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
+                      <span>{aluno.nome}</span>
+                      <span style={{ fontWeight: "bold", color: aluno.frequencia < 75 ? "#dc3545" : "#28a745" }}>
+                        {aluno.frequencia}%
+                      </span>
+                    </div>
+                    <div style={{ width: "100%", background: "#eee", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
+                      <div style={{ 
+                        width: `${aluno.frequencia}%`, 
+                        background: aluno.frequencia < 75 ? "#dc3545" : "#28a745",
+                        height: "100%" 
+                      }}></div>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#999", marginTop: "2px" }}>
+                      {aluno.presencas} Presenças | {aluno.faltas} Faltas | {aluno.justificativas} Justif.
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="report-card" style={{ background: "#fff", border: "1px solid #eee" }}>
+              <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
+                Dados da Aula
+              </h3>
+              <div style={{ fontSize: "14px", lineHeight: "1.8", color: "#555" }}>
+                <p><strong>👨‍🏫 Professor:</strong> {currentClassData.professor}</p>
+                <p><strong>📚 Nível:</strong> {currentClassData.nivel}</p>
+                <p><strong>⏰ Horário:</strong> {currentClassData.horario}</p>
+                <p><strong>👥 Total Alunos:</strong> {currentClassData.alunos.length}</p>
+                <div style={{ marginTop: "15px", padding: "10px", background: "#fffbeb", borderRadius: "6px", borderLeft: "3px solid #f39c12", fontSize: "12px" }}>
+                  ⚠️ {currentClassData.alunos.filter(a => a.frequencia < 75).length} alunos abaixo de 75% de frequência.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "frequencias" && (
+        <div className="reports-section">
+          <div className="reports-filters">
+            <div>
+              <label>Mês</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              />
+            </div>
+            <div>
+              <label>Turma</label>
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+              >
+                {classesData.map(c => <option key={c.turma} value={c.turma}>{c.turma}</option>)}
+              </select>
+            </div>
+            <button onClick={handleGenerateExcel} className="btn-primary">
+              Exportar relatorioChamada.xlsx
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "graficos" && (
+        <div className="reports-section">
+          <DashboardCharts />
+        </div>
+      )}
+
+      {activeTab === "clima" && (
+        <div className="reports-section placeholder">
+          Módulo em desenvolvimento
+        </div>
+      )}
+
+      {activeTab === "vagas" && (
+        <div className="reports-section">
+          <div className="vagas-grid">
+            <div className="report-card">
+              <h3>Ocupação da Turma {selectedClassId}</h3>
+              <div className="vagas-metric">
+                <span>{totalAlunosTurma} alunos</span>
+                <span>{capacidadeTurma} vagas</span>
+              </div>
+              <div className="vagas-bar">
+                <div className="vagas-bar-fill" style={{ width: `${ocupacaoPct}%` }} />
+              </div>
+              <div className="vagas-footer">{ocupacaoPct}% ocupada</div>
+            </div>
+            <div className="report-card">
+              <h3>Resumo de Ocupação</h3>
+              <p style={{ margin: "10px 0 0", color: "#666" }}>
+                Ajuste a capacidade por turma quando o cadastro estiver integrado ao backend.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

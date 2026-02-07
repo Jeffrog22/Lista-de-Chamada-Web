@@ -201,3 +201,93 @@
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
 }
+
+.reports-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.reports-tab {
+  background: #f1f3f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.reports-tab.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.reports-section {
+  background: #fafbfc;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.reports-section.placeholder {
+  text-align: center;
+  color: #999;
+  font-weight: 600;
+}
+
+.reports-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  align-items: end;
+}
+
+.reports-filters label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.reports-filters input,
+.reports-filters select {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.vagas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.vagas-metric {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  margin: 10px 0;
+}
+
+.vagas-bar {
+  background: #e9ecef;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.vagas-bar-fill {
+  background: #28a745;
+  height: 100%;
+}
+
+.vagas-footer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
