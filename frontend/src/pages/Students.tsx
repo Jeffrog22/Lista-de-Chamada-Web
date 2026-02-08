@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getBootstrap } from "../api";
 
 interface Student {
   id: string;
@@ -7,6 +8,7 @@ interface Student {
   idade: number;
   categoria: string;
   turma: string;
+  turmaCodigo?: string;
   horario: string;
   professor: string;
   whatsapp: string;
@@ -75,9 +77,97 @@ export const Students: React.FC = () => {
     return saved ? JSON.parse(saved) : initialMockStudents;
   });
 
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
     localStorage.setItem("activeStudents", JSON.stringify(students));
   }, [students]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+    getBootstrap()
+      .then((response) => {
+        if (!isMounted) return;
+        const data = response.data as {
+          classes: Array<{
+            id: number;
+            codigo: string;
+            turma_label: string;
+            horario: string;
+            professor: string;
+            nivel: string;
+            capacidade: number;
+            dias_semana: string;
+          }>;
+          students: Array<{
+            id: number;
+            class_id: number;
+            nome: string;
+            whatsapp: string;
+            data_nascimento: string;
+            data_atestado: string;
+            categoria: string;
+            genero: string;
+            parq: string;
+            atestado: boolean;
+          }>;
+        };
+
+        const classById = new Map<number, (typeof data.classes)[number]>();
+        data.classes.forEach((cls) => classById.set(cls.id, cls));
+
+        const mapped = data.students.map((student) => {
+          const cls = classById.get(student.class_id);
+          return {
+            id: String(student.id),
+            nome: student.nome,
+            nivel: cls?.nivel || "",
+            idade: calculateAge(student.data_nascimento || ""),
+            categoria: student.categoria || "",
+            turma: cls?.turma_label || cls?.codigo || "",
+            turmaCodigo: cls?.codigo || "",
+            horario: cls?.horario || "",
+            professor: cls?.professor || "",
+            whatsapp: student.whatsapp || "",
+            genero: student.genero || "",
+            dataNascimento: student.data_nascimento || "",
+            parQ: student.parq || "",
+            atestado: !!student.atestado,
+            dataAtestado: student.data_atestado || "",
+          } as Student;
+        });
+
+        if (mapped.length > 0) {
+          setStudents(mapped);
+          localStorage.setItem("activeStudents", JSON.stringify(mapped));
+        }
+
+        const classStorage = data.classes.map((cls) => ({
+          Turma: cls.turma_label || cls.codigo,
+          TurmaCodigo: cls.codigo,
+          Horario: cls.horario,
+          Professor: cls.professor,
+          Nivel: cls.nivel,
+          Atalho: cls.codigo,
+          CapacidadeMaxima: cls.capacidade,
+          DiasSemana: cls.dias_semana,
+        }));
+        if (classStorage.length > 0) {
+          localStorage.setItem("activeClasses", JSON.stringify(classStorage));
+        }
+      })
+      .catch(() => {
+        // keep local data
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -126,6 +216,19 @@ export const Students: React.FC = () => {
       age--;
     }
     return isNaN(age) ? 0 : age;
+  };
+
+  const formatHorario = (value: string) => {
+    if (!value) return "";
+    if (value.includes(":")) return value;
+    const digits = value.replace(/\D/g, "");
+    if (digits.length === 3) {
+      return `0${digits[0]}:${digits.slice(1)}`;
+    }
+    if (digits.length >= 4) {
+      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    }
+    return value;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -204,6 +307,7 @@ export const Students: React.FC = () => {
       genero: formData.genero,
       whatsapp: formData.whatsapp,
       turma: formData.turma,
+      turmaCodigo: formData.turma,
       horario: formData.horario,
       professor: formData.professor,
       nivel: formData.nivel,
@@ -335,7 +439,7 @@ export const Students: React.FC = () => {
                     {student.turma}
                   </span>
                 </td>
-                <td style={{ padding: "12px", textAlign: "center" }}>{student.horario}</td>
+                <td style={{ padding: "12px", textAlign: "center" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                   <button

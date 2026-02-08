@@ -1,0 +1,202 @@
+﻿aluno_nome;aluno_turma;atestado;capacidade;categoria;data_atest;data_nascimento;dias_semana;genero;horario;nivel;parq;professor;turma_codigo;unidade;whatsapp
+Ana Cristina Goldberger;Terça e Quinta;;8;Infantil I;;29/10/2013;"""Terça;Quinta""";Feminino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19989718760
+Arthur Macienti;Terça e Quinta;;8;Infantil II;;05/04/2012;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19991341632
+Felipe Gonçalves dos Santos;Terça e Quinta;;8;Juvenil I;;15/12/2011;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;11975642252
+Heloísa Rainha Stradioto;Terça e Quinta;;8;Infantil I;;26/04/2013;"""Terça;Quinta""";Feminino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19996576904
+Lavinia Evangelista dos Santos;Terça e Quinta;;8;Juvenil I;;18/10/2011;"""Terça;Quinta""";Feminino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19991541996
+Lucas Samuel Quintilho;Terça e Quinta;;8;Júnior I;;17/12/2009;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19991166950
+Matheus Henrique Liboni dos Santos;Terça e Quinta;;8;Infantil I;;23/02/2013;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19992227977
+Nicholas de Araújo Silva;Terça e Quinta;;8;Infantil II;;26/06/2012;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19991135105
+Welpy Pereira Nunes Rodrigues;Terça e Quinta;;8;Juvenil II;;10/04/2010;"""Terça;Quinta""";Masculino;800;Nível 4 A;Sim;Daniela;dtq01;Bela Vista;19988075332
+Ana Julia Bonfim dos Santos;Terça e Quinta;;8;Infantil II;;30/01/2012;"""Terça;Quinta""";Feminino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19984441275
+Fabiola Santos Marques da Silva;Terça e Quinta;;8;Juvenil I;;28/04/2011;"""Terça;Quinta""";Feminino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19993548421
+Henry Brito de Oliveira;Terça e Quinta;;8;Juvenil I;;18/10/2011;"""Terça;Quinta""";Masculino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19999318663
+Karen Pereira Martins;Terça e Quinta;;8;Infantil II;;01/08/2012;"""Terça;Quinta""";Feminino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19994721776
+Kevin Miguel do Nascimento Pardinho;Terça e Quinta;;8;Juvenil I;;18/02/2011;"""Terça;Quinta""";Masculino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19982254162
+Kleber Vinicius Gonçalves;Terça e Quinta;;8;Juvenil I;;29/04/2011;"""Terça;Quinta""";Masculino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19991567347
+Luara Karolina de Torres;Terça e Quinta;;8;Petiz II;;30/11/2014;"""Terça;Quinta""";Feminino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;11962430291
+Pietro dos Santos Cruz;Terça e Quinta;;8;Infantil II;;11/05/2012;"""Terça;Quinta""";Masculino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19982715285
+Samuel Marino Ribeiro;Terça e Quinta;;8;Infantil II;;17/05/2012;"""Terça;Quinta""";Masculino;800;Nível 4 B;Sim;Jefferson;jtq01;Bela Vista;19997908056
+Alice Marino Ribeiro;Terça e Quinta;;8;Mirim II;;26/10/2016;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19997908056
+Arielly Luiza Machado Silva;Terça e Quinta;;8;Petiz I;;04/05/2015;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19974100481
+Gabrielly Leal Marino;Terça e Quinta;;8;Mirim II;;12/04/2016;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19991933631
+Isabelly Pires da Silva Leopoldo;Terça e Quinta;;8;Petiz II;;09/09/2014;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19992678973
+Lorena Galdino Leal Ferres;Terça e Quinta;;8;Infantil I;;03/05/2013;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19991656714
+Lucas Oliveira dos Santos;Terça e Quinta;;8;Infantil I;;17/02/2013;"""Terça;Quinta""";Masculino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19989782455
+Maria Eduarda de Carvalho Falaschi;Terça e Quinta;;8;Mirim II;;05/03/2016;"""Terça;Quinta""";Feminino;845;Nível 2;Sim;Daniela;dtq02;Bela Vista;19999674545
+Arthur Abreu Pinho;Terça e Quinta;;8;Infantil I;;05/12/2013;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;11980348947
+Erick Gabriel Pereira da Souza;Terça e Quinta;;8;Infantil II;;19/09/2012;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19991254586
+Larissa Araujo Pereira;Terça e Quinta;;8;Petiz I;;07/10/2015;"""Terça;Quinta""";Feminino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19997502317
+Lucas Bernardo Carvalho Silva;Terça e Quinta;;8;Petiz II;;11/03/2014;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19996340906
+Matheus Henrique Araújo Oliveira;Terça e Quinta;;8;Petiz II;;19/03/2014;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19993260767
+Paulo Manoel Oliveira Braga;Terça e Quinta;;8;Juvenil I;;18/10/2011;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19987553511
+Rafael Nascimento dos Anjos;Terça e Quinta;;8;Petiz I;;11/08/2015;"""Terça;Quinta""";Masculino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19996808116
+Yasmin Gabrielly Teófilo de Souza;Terça e Quinta;;8;Infantil I;;02/11/2013;"""Terça;Quinta""";Feminino;845;Nível 3;Sim;Jefferson;jtq02;Bela Vista;19984566884
+Heloísa Silva Nascimento da Costa;Terça e Quinta;;7;Mirim II;;03/03/2016;"""Terça;Quinta""";Feminino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19999663861
+Kaleo de Oliveira Almeida;Terça e Quinta;;7;Mirim I;;18/10/2017;"""Terça;Quinta""";Masculino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19993068207
+Lucas Henrique de Assis;Terça e Quinta;;7;Mirim I;;18/02/2017;"""Terça;Quinta""";Masculino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19981152173
+Luiz Felipe Lima Ladeia;Terça e Quinta;;7;Juvenil II;;04/12/2010;"""Terça;Quinta""";Masculino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19981171356
+Pedro Henrique Silva Souza;Terça e Quinta;;7;Pré-Mirim;;18/01/2018;"""Terça;Quinta""";Masculino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19981149450
+Samuel Martins Cortiella de Moraes;Terça e Quinta;;7;Petiz I;;12/05/2015;"""Terça;Quinta""";Masculino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19988781485
+Sofia Helena Silva Santos;Terça e Quinta;;7;Infantil I;;24/10/2013;"""Terça;Quinta""";Feminino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;19982774269
+Yasmim Vitória de Oliveira ;Terça e Quinta;;7;Mirim II;;10/10/2016;"""Terça;Quinta""";Feminino;1015;Nível 1 B;Sim;Daniela;dtq03;Bela Vista;11956812138
+Davi Luis Araujo Pereira;Terça e Quinta;;7;Petiz I;;07/10/2015;"""Terça;Quinta""";Masculino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19997502317
+Emilly Araújo Silva;Terça e Quinta;;7;Infantil I;;05/04/2013;"""Terça;Quinta""";Feminino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19982830862
+Lucas Matias dos Santos;Terça e Quinta;;7;Petiz I;;04/03/2015;"""Terça;Quinta""";Masculino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19992899612
+Nicole Oliveira da Silva;Terça e Quinta;;7;Petiz I;;04/05/2015;"""Terça;Quinta""";Feminino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19994910868
+Roberta Costa Soares;Terça e Quinta;;7;Juvenil II;;30/11/2010;"""Terça;Quinta""";Feminino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19981499982
+Vinícius Oliveira da Silva;Terça e Quinta;;7;Petiz I;;04/05/2015;"""Terça;Quinta""";Masculino;1015;Nível 1 A;Sim;Jefferson;jtq03;Bela Vista;19994910868
+Ana Paula Pinto Liboni;Terça e Quinta;;5;F45+;;11/05/1977;"""Terça;Quinta""";Feminino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19992227977
+Fabio Antunes de Oliveira Ramos ;Terça e Quinta;;5;F45+;;26/04/1979;"""Terça;Quinta""";Masculino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;11980266619
+Larissa Cristina Cruz;Terça e Quinta;;5;B25+;;08/02/1997;"""Terça;Quinta""";Feminino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19993788449
+Ricardo Ferragut Gallo;Terça e Quinta;;5;E40+;;16/02/1984;"""Terça;Quinta""";Masculino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19999996367
+Eldirlei Cruz;Terça e Quinta;;5;E40+;;10/06/1985;"""Terça;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19993360327
+Elson Herly da Silva;Terça e Quinta;;5;C30+;;06/02/1994;"""Terça;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19983683310
+Geise Ribeiro Souza;Terça e Quinta;;5;D35+;;29/01/1988;"""Terça;Quinta""";Feminino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19974050666
+José Carlos da Silva;Terça e Quinta;;5;I60+;;31/10/1966;"""Terça;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19996443147
+Lécia Francisca da Silva;Terça e Quinta;true;5;G50+;25/01/2026;06/08/1973;"""Terça;Quinta""";Feminino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19996585489
+Alice Soares Batista;Terça e Quinta;;7;Petiz I;;10/03/2015;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19989185413
+Alice Sophia Dias Silva;Terça e Quinta;;7;Mirim II;;13/01/2016;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19988107162
+Lorena Costalonga;Terça e Quinta;;7;Mirim II;;26/11/2016;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19987452543
+Manuella Ferreira Lima;Terça e Quinta;;7;Mirim II;;21/12/2016;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19988575340
+Maria Heloísa Vieira Dutra;Terça e Quinta;;7;Petiz II;;11/01/2014;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19994957896
+Maria Raphaelly Candida Silva;Terça e Quinta;;7;Mirim I;;05/06/2017;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19987315511
+Otávio Azi de Matos;Terça e Quinta;;7;Mirim I;;15/03/2017;"""Terça;Quinta""";Masculino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19998364360
+Pedro Silva de Oliveira Neto;Terça e Quinta;;7;Mirim I;;27/06/2017;"""Terça;Quinta""";Masculino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19982512856
+Raphaella Agatha Candida Silva;Terça e Quinta;;7;Mirim I;;05/06/2017;"""Terça;Quinta""";Feminino;1300;Nível 1 A;Sim;Daniela;dtq05;Bela Vista;19987315511
+Evellyn Carolline Alves da Silva;Terça e Quinta;;7;Petiz I;;11/02/2015;"""Terça;Quinta""";Feminino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;11940018509
+Fernando Ribeiro de Lima;Terça e Quinta;;7;Infantil I;;01/11/2013;"""Terça;Quinta""";Masculino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;16996388331
+Guilherme Henrique Meira de Oliveira ;Terça e Quinta;;7;Infantil II;;26/07/2012;"""Terça;Quinta""";Masculino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19994877941
+Heloísa Anderson Navero;Terça e Quinta;;7;Pré-Mirim;;23/01/2018;"""Terça;Quinta""";Feminino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19981680946
+Joaquim Miguel;Terça e Quinta;;7;Mirim II;;15/03/2016;"""Terça;Quinta""";Masculino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19988730288
+Matheus Alves Martins;Terça e Quinta;;7;Mirim II;;22/04/2016;"""Terça;Quinta""";Masculino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19991156666
+Sophia Characomo Albino;Terça e Quinta;;7;Mirim II;;12/12/2016;"""Terça;Quinta""";Feminino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19974092190
+Yasmin de Oliveira Silva Pereira;Terça e Quinta;;7;Petiz I;;22/03/2015;"""Terça;Quinta""";Feminino;1300;Nível 1 B;Sim;Jefferson;jtq05;Bela Vista;19994702217
+Alice Gabrielly de Souza;Terça e Quinta;;8;Infantil I;;25/06/2013;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19996707327
+Ana Clara Batista;Terça e Quinta;;8;Petiz II;;05/08/2014;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19998537207
+Caíque Amorim Torezin;Terça e Quinta;;8;Infantil I;;09/06/2013;"""Terça;Quinta""";Masculino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19992047876
+Davi Francisco da Silva Sousa;Terça e Quinta;;8;Petiz II;;06/03/2014;"""Terça;Quinta""";Masculino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19988251193
+Guilherme Santos Cavalcante;Terça e Quinta;;8;Petiz II;;26/11/2014;"""Terça;Quinta""";Masculino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19998827136
+Isabella Aparecida Quintilho;Terça e Quinta;;8;Petiz II;;18/11/2014;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19997750882
+Julia Quintilho Carrera;Terça e Quinta;;8;Petiz I;;27/07/2015;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19997198447
+Luisa Barbosa Santos;Terça e Quinta;;8;Mirim I;;14/01/2017;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19995210605
+Manuella Eduarda Padilha de Souza;Terça e Quinta;;8;Mirim II;;30/01/2016;"""Terça;Quinta""";Feminino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19993591786
+Mateus Gomes Pacheco;Terça e Quinta;;8;Petiz I;;12/10/2015;"""Terça;Quinta""";Masculino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19988082611
+Ricardo Henrique Goldberger ;Terça e Quinta;;8;Mirim II;;18/05/2016;"""Terça;Quinta""";Masculino;1345;Nível 2 B;Sim;Daniela;dtq06;Bela Vista;19993603830
+Allana Micaela dos Santos Oliveira;Terça e Quinta;;8;Petiz I;;24/04/2015;"""Terça;Quinta""";Feminino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19971231709
+Arthur Tonetti de Andrade;Terça e Quinta;;8;Petiz I;;15/02/2015;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19986082984
+Bianca Rodrigues Franco;Terça e Quinta;;8;Petiz II;;21/04/2014;"""Terça;Quinta""";Feminino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19998698586
+Davi Lorenzo de Araújo;Terça e Quinta;;8;Petiz I;;02/06/2015;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19995925994
+João Cadorin Cintra;Terça e Quinta;;8;Infantil I;;15/02/2013;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19993425030
+Juan Pablo Costa Silva;Terça e Quinta;;8;Infantil I;;27/03/2013;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19981452475
+Julia Barros Camargo;Terça e Quinta;;8;Infantil II;;09/08/2012;"""Terça;Quinta""";Feminino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19982757624
+Matheus Facundo de Carvalho;Terça e Quinta;;8;Infantil II;;12/04/2012;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19997365963
+Miguel dos Santos Barreto;Terça e Quinta;;8;Mirim II;;12/01/2016;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19993978058
+Miguel Vitor Alves dos Santos;Terça e Quinta;;8;Juvenil I;;02/11/2011;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19984447378
+Pedro Duarte Martins;Terça e Quinta;;8;Mirim I;;23/02/2017;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19996083837
+Pedro Emanoel Alves de Souza;Terça e Quinta;;8;Petiz II;;25/01/2014;"""Terça;Quinta""";Masculino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19981436348
+Suzana Oliveira de Lima;Terça e Quinta;;8;Petiz II;;03/04/2014;"""Terça;Quinta""";Feminino;1345;Nível 2 A;Sim;Jefferson;jtq06;Bela Vista;19982272104
+Augusto Lira Cruvinel Machado;Terça e Quinta;;8;Petiz II;;17/11/2014;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;15981638442
+Daniel Ribeiro Ventura;Terça e Quinta;;8;Petiz I;;19/09/2015;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19983599038
+Emmanuel Bernardo da Silva;Terça e Quinta;;8;Infantil I;;03/09/2013;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19982468258
+Isabelle Felix dos Santos;Terça e Quinta;;8;Petiz II;;12/05/2014;"""Terça;Quinta""";Feminino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19984074178
+Marcos do Nascimento Leal;Terça e Quinta;;8;Petiz II;;17/09/2014;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19991656714
+Marcos José Oliveira Alexandre;Terça e Quinta;;8;Juvenil I;;03/11/2011;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19983113372
+Patrick Iezo Antunes Ramos;Terça e Quinta;;8;Mirim I;;27/06/2017;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19996908084
+Pedro Henrique Godoy Filho;Terça e Quinta;;8;Petiz II;;06/09/2014;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19994413169
+Pedro Oliveira Malveiro;Terça e Quinta;;8;Petiz I;;01/03/2015;"""Terça;Quinta""";Masculino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19996246959
+Rafaela Gomes Carvalho;Terça e Quinta;;8;Infantil I;;06/01/2013;"""Terça;Quinta""";Feminino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19993712123
+Vitoria Santos Cavalcante;Terça e Quinta;;8;Petiz I;;08/09/2015;"""Terça;Quinta""";Feminino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19999742039
+Yane Mendonça Oliveira;Terça e Quinta;;8;Infantil I;;12/07/2013;"""Terça;Quinta""";Feminino;1515;Nível 3;Sim;Daniela;dtq07;Bela Vista;19987192714
+Ana Julia da Silva Almeida;Terça e Quinta;;8;Petiz II;;08/10/2014;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19994409951
+Ana Laura Ramos Flores;Terça e Quinta;;8;Mirim II;;13/05/2016;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19991847066
+Helena Bezerra de Oliveira Bispo;Terça e Quinta;;8;Petiz I;;24/11/2015;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19998709730
+Isabelly Santos Cavalcante;Terça e Quinta;;8;Infantil I;;21/11/2013;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19999742039
+Lorenna Marineide de Jesus;Terça e Quinta;;8;Mirim II;;30/01/2016;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19991453921
+Maria Eduarda Garcia;Terça e Quinta;;8;Petiz II;;01/10/2014;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19991299416
+Maria Luiza Presti Resende;Terça e Quinta;;8;Mirim II;;25/02/2016;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19982025447
+Rebeca da Silva Santos;Terça e Quinta;;8;Petiz I;;02/03/2015;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19992004319
+Sarah Barbosa da Silva;Terça e Quinta;;8;Infantil II;;24/09/2012;"""Terça;Quinta""";Feminino;1515;Nível 4;Sim;Jefferson;jtq07;Bela Vista;19996033875
+Beatriz Feitosa Bezerra;Terça e Quinta;;5;Júnior I;;18/02/2009;"""Terça;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19982853297
+Ed Carlos de Oliveira;Terça e Quinta;;5;F45+;;25/12/1978;"""Terça;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19981523643
+Edna Lucia de Almeida Cruz;Terça e Quinta;;5;E40+;;26/03/1985;"""Terça;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19993705725
+Glaucia Yoko Baba;Terça e Quinta;;5;E40+;;25/01/1983;"""Terça;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19981526590
+Luis Pereira de Oliveira;Terça e Quinta;;5;F45+;;15/05/1980;"""Terça;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19999117443
+Matheus Araujo dos Santos Toquero;Terça e Quinta;;5;Júnior I;;15/04/2009;"""Terça;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19988427762
+Willian Silva Oliveira;Terça e Quinta;;5;E40+;;22/01/1985;"""Terça;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19988428989
+Gisele Cristina de Souza;Terça e Quinta;;5;F45+;;03/10/1980;"""Terça;Quinta""";Feminino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19989718760
+Nilton de Oliveira Fernandes;Terça e Quinta;;5;D35+;;03/02/1987;"""Terça;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19988117728
+Reinaldo Pires do Prado;Terça e Quinta;;5;F45+;;23/12/1979;"""Terça;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19982743085
+Renan Francisco Souza Oliveira;Terça e Quinta;;5;C30+;;02/06/1993;"""Terça;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;11984923877
+Elza Pereira Amorim Torezin;Quarta e Sexta;;5;G50+;;30/01/1974;"""Quarta;Sexta""";Feminino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;19991514800
+Priscila Moraes Lopes ;Quarta e Sexta;;5;C30+;;18/10/1993;"""Quarta;Sexta""";Feminino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;11990094977
+Rodrigo Gregório da Silva;Quarta e Sexta;;5;C30+;;01/03/1995;"""Quarta;Sexta""";Masculino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;19996514208
+Augusto de Almeida ;Quarta e Sexta;;5;B25+;;20/04/2001;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19999145542
+Bianca Almeida de Moura Coelho ;Quarta e Sexta;;5;C30+;;23/05/1994;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19999134428
+Bruno Nunes Marques;Quarta e Sexta;;5;E40+;;10/11/1986;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19981385193
+José Francisco da Silva;Quarta e Sexta;;5;E40+;;03/05/1983;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19996340906
+Katia Cilene Tibúrcio da Silva;Quarta e Sexta;;5;F45+;;15/08/1978;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19988379260
+Liliam de Sales Cambraia;Quarta e Sexta;;5;E40+;;27/05/1984;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19982739581
+Lucas Cordeiro da Silva;Quarta e Sexta;;5;B25+;;04/03/1998;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19988916662
+Samuel Ometto Franco;Quarta e Sexta;;5;D35+;;16/04/1987;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19998059969
+Helloisa de Jesus Inez;Quarta e Sexta;;8;Petiz I;;23/10/2015;"""Quarta;Sexta""";Feminino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;11943338262
+João Miguel de Souza Silva;Quarta e Sexta;;8;Petiz I;;26/12/2015;"""Quarta;Sexta""";Masculino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19996237950
+João Miguel Lima França;Quarta e Sexta;;8;Infantil I;;23/05/2013;"""Quarta;Sexta""";Masculino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19997886757
+Laura Ferreira Barbosa;Quarta e Sexta;;8;Mirim II;;22/01/2016;"""Quarta;Sexta""";Feminino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19997213918
+Lua Machado Pereira;Quarta e Sexta;;8;Pré-Mirim;;15/07/2018;"""Quarta;Sexta""";Feminino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19999664445
+Matheus Henrique de Souza Marciano;Quarta e Sexta;;8;Juvenil I;;04/10/2011;"""Quarta;Sexta""";Masculino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19988818856
+Miguel Soares Bastos;Quarta e Sexta;;8;Mirim I;;18/04/2017;"""Quarta;Sexta""";Masculino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19988874186
+Pedro Henrique Carvalho de Araújo;Quarta e Sexta;;8;Petiz I;;09/01/2015;"""Quarta;Sexta""";Masculino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;19992318737
+Rafaela Aguiar Prata;Quarta e Sexta;;8;Petiz I;;07/06/2015;"""Quarta;Sexta""";Feminino;930;Iniciação A;Sim;Jefferson;jqs02;Bela Vista;11952513843
+Alice Soares Cunha;Quarta e Sexta;;8;Pré-Mirim;;06/01/2019;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19987342571
+Allana Beatriz da Cruz Francisco;Quarta e Sexta;;8;Petiz I;;29/04/2015;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19994847352
+Ana Clara Pereira de Souza;Quarta e Sexta;;8;Pré-Mirim;;16/10/2018;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19995281206
+Aylla Victória Silva Souza;Quarta e Sexta;;8;Mirim II;;16/05/2016;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19999745798
+Isaque Galdino Autor;Quarta e Sexta;;8;Mirim II;;20/03/2016;"""Quarta;Sexta""";Masculino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19998312527
+Lorena Vitória Silveira dos Santos;Quarta e Sexta;;8;Pré-Mirim;;10/05/2018;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19999595186
+Lorenna Silva Ribeiro;Quarta e Sexta;;8;Pré-Mirim;;19/09/2018;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19987476037
+Natalia Silva de Souza;Quarta e Sexta;;8;Mirim II;;25/02/2016;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19991572328
+Nicole Yasmin Silveira dos Santos;Quarta e Sexta;;8;Mirim II;;20/02/2016;"""Quarta;Sexta""";Feminino;1015;Iniciação B;Sim;Daniela;dqs02;Bela Vista;19999595186
+Alice Lohane Silva;Quarta e Sexta;;8;Mirim II;;24/08/2016;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19992825803
+Arthur Guilherme Lima Santos;Quarta e Sexta;;8;Petiz I;;14/08/2015;"""Quarta;Sexta""";Masculino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19992302694
+Felipe Marques de Melo;Quarta e Sexta;;8;Infantil I;;26/12/2013;"""Quarta;Sexta""";Masculino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19982520300
+Ingrid Lohana Silva;Quarta e Sexta;;8;Mirim II;;24/08/2016;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19992825803
+Lívia Meira de Oliveira ;Quarta e Sexta;;8;Mirim II;;08/12/2016;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19994877941
+Nayla Mota de Matos;Quarta e Sexta;;8;Infantil I;;23/04/2013;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19971506163
+Sophia Marques Forner;Quarta e Sexta;;8;Infantil I;;20/06/2013;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19998321598
+Valentina Marques de Melo;Quarta e Sexta;;8;Mirim II;;31/03/2016;"""Quarta;Sexta""";Feminino;1300;Iniciação A;Sim;Daniela;dqs03;Bela Vista;19982520300
+Benjamin Nardi;Quarta e Sexta;;8;Mirim I;;25/08/2017;"""Quarta;Sexta""";Masculino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;19991111708
+Gabriella Modenez Oliveira;Quarta e Sexta;;8;Pré-Mirim;;26/10/2018;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;44998192333
+Giovana Silva dos Santos;Quarta e Sexta;;8;Pré-Mirim;;07/08/2025;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;75981749147
+Helena Santos Machado;Quarta e Sexta;;8;Pré-Mirim;;15/07/2018;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;11953483625
+Isadora Aparecida Barbosa;Quarta e Sexta;;8;Pré-Mirim;;12/01/2018;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;19983580505
+Livia Oliveira Alexandre;Quarta e Sexta;;8;Mirim I;;22/11/2017;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;19983113372
+Raquel Siqueira Sabino;Quarta e Sexta;;8;Petiz I;;12/10/2015;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;19992320844
+Rebeca Siqueira Sabino;Quarta e Sexta;;8;Petiz I;;12/10/2015;"""Quarta;Sexta""";Feminino;1345;Iniciação B;Sim;Jefferson;jqs03;Bela Vista;19992320844
+Eduarda Ferreira Gomes Gregório;Quarta e Sexta;;8;Petiz II;;22/07/2014;"""Quarta;Sexta""";Feminino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19982317908
+Gabriel Souza de Oliveira;Quarta e Sexta;;8;Petiz II;;08/12/2014;"""Quarta;Sexta""";Masculino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19981523643
+Kamilly Vitória da Silva Melo;Quarta e Sexta;;8;Juvenil I;;25/08/2011;"""Quarta;Sexta""";Feminino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19982431193
+Lucas Quintilho de Sousa;Quarta e Sexta;;8;Infantil I;;27/03/2013;"""Quarta;Sexta""";Masculino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19971426443
+Maria Laura Paiva da Silva;Quarta e Sexta;;8;Infantil I;;30/01/2013;"""Quarta;Sexta""";Feminino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19993687305
+Matheus Henrique Bonfim dos Santos;Quarta e Sexta;;8;Petiz II;;27/12/2014;"""Quarta;Sexta""";Masculino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19984441275
+Rebecca de Amorim Meggiato;Quarta e Sexta;;8;Petiz II;;21/07/2014;"""Quarta;Sexta""";Feminino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19993721808
+Victória Souza de Oliveira     ;Quarta e Sexta;;8;Petiz II;;08/12/2014;"""Quarta;Sexta""";Feminino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19981523643
+Vitor Alves Godoi;Quarta e Sexta;;8;Mirim II;;21/02/2016;"""Quarta;Sexta""";Masculino;1515;Nível 4 B;Sim;Daniela;dqs04;Bela Vista;19988351714
+Davi Gabriel Estevao;Quarta e Sexta;;8;Infantil I;;03/04/2013;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19991228987
+Gabriella Ferrarezi Evangelista;Quarta e Sexta;;8;Juvenil I;;11/01/2011;"""Quarta;Sexta""";Feminino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19996248581
+Guilherme Mancini de Moraes;Quarta e Sexta;;8;Júnior II/Sênior;;08/11/2007;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19997734881
+Heitor Josué de Queiroz;Quarta e Sexta;;8;Infantil II;;27/01/2012;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19991364016
+Leonardo de Souza do Carmo;Quarta e Sexta;;8;Infantil II;;07/11/2012;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19984495961
+Lorena dos Reis França Oliveira;Quarta e Sexta;;8;Infantil I;;11/11/2013;"""Quarta;Sexta""";Feminino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19992973384
+Thamyres Miranda Rodrigues;Quarta e Sexta;;8;Juvenil II;;28/10/2010;"""Quarta;Sexta""";Feminino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19999742482
+Victor Hugo Oliveira dos Santos;Quarta e Sexta;;8;Infantil II;;11/01/2012;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19984371127
+William Souza dos Santos Santana;Quarta e Sexta;;8;Juvenil I;;26/10/2011;"""Quarta;Sexta""";Masculino;1515;Nível 4 A;Sim;Jefferson;jqs04;Bela Vista;19984018654
+Aline Manoela Ferreira;Quarta e Sexta;;5;B25+;;28/03/1999;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19991576810
+Luiza Araujo de Oliveira de Melo;Quarta e Sexta;;5;E40+;;24/01/1982;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19982916475
+Priscila Correa Dias;Quarta e Sexta;;5;E40+;;10/12/1983;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19996371760
+Raimunda Maria da Silva Souza;Quarta e Sexta;;5;H55+;;31/08/1968;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19983549175
+Alana Oliveira de Melo;Quarta e Sexta;;5;Júnior I;;07/11/2009;"""Quarta;Sexta""";Feminino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19971440391
+Anderson Cleiton Alves Garcia;Quarta e Sexta;;5;D35+;;09/04/1988;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19993381881
+Daniel Carlos de Oliveira de Melo;Quarta e Sexta;;5;G50+;;07/04/1974;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19998585795
+João Victor Oliveira Alexandre;Quarta e Sexta;;5;Júnior I;;27/10/2009;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19983113372
+Rayssa de Oliveira de Melo;Quarta e Sexta;;5;Júnior II/Sênior;;12/04/2007;"""Quarta;Sexta""";Feminino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19971440391

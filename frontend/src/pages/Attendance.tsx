@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getPoolLog, getWeather, savePoolLog } from "../api";
 
 interface ClassOption {
-  turma: string;
+  turmaCodigo: string;
+  turmaLabel: string;
   horario: string;
   professor: string;
   nivel: string;
@@ -44,23 +45,98 @@ type AttendanceHistory = AttendanceRecord[];
 
 export const Attendance: React.FC = () => {
   // MOCK DATA - Estrutura baseada em chamadaBelaVista.xlsx
-  const classOptions: ClassOption[] = [
-    { turma: "1A", horario: "14:00", professor: "Joao Silva", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
-    { turma: "1B", horario: "15:30", professor: "Maria Santos", nivel: "Intermediario", diasSemana: ["Quarta", "Sexta"] },
-    { turma: "2A", horario: "16:30", professor: "Carlos Oliveira", nivel: "Avancado", diasSemana: ["Segunda", "Quarta"] },
-    { turma: "2B", horario: "18:00", professor: "Ana Costa", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
+  const defaultClassOptions: ClassOption[] = [
+    { turmaCodigo: "1A", turmaLabel: "1A", horario: "14:00", professor: "Joao Silva", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
+    { turmaCodigo: "1B", turmaLabel: "1B", horario: "15:30", professor: "Maria Santos", nivel: "Intermediario", diasSemana: ["Quarta", "Sexta"] },
+    { turmaCodigo: "2A", turmaLabel: "2A", horario: "16:30", professor: "Carlos Oliveira", nivel: "Avancado", diasSemana: ["Segunda", "Quarta"] },
+    { turmaCodigo: "2B", turmaLabel: "2B", horario: "18:00", professor: "Ana Costa", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
   ];
 
-  const studentsPerClass: { [key: string]: string[] } = {
+  const defaultStudentsPerClass: { [key: string]: string[] } = {
     "1A": ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa", "Pedro Ferreira"],
     "1B": ["Roberto Alves", "Fernanda Lima", "Lucas Martins", "Beatriz Souza", "Diego Rocha"],
     "2A": ["Amanda Silva", "Felipe Santos", "Juliana Costa", "Marcos Oliveira", "Sophia Pereira"],
     "2B": ["Thiago Mendes", "Camila Silva", "Bruno Costa", "Larissa Santos", "Rafael Lima"],
   };
 
+  const parseDiasSemana = (value: string | undefined): string[] => {
+    if (!value) return [];
+    return value
+      .split(/[;,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const formatHorario = (value: string) => {
+    if (!value) return "";
+    if (value.includes(":")) return value;
+    const digits = value.replace(/\D/g, "");
+    if (digits.length === 3) {
+      return `0${digits[0]}:${digits.slice(1)}`;
+    }
+    if (digits.length >= 4) {
+      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    }
+    return value;
+  };
+
+  const loadFromStorage = () => {
+    try {
+      const classesStr = localStorage.getItem("activeClasses");
+      const studentsStr = localStorage.getItem("activeStudents");
+      if (!classesStr || !studentsStr) return null;
+
+      const classes = JSON.parse(classesStr);
+      const students = JSON.parse(studentsStr);
+      if (!Array.isArray(classes) || !Array.isArray(students)) return null;
+
+      const classOptions: ClassOption[] = classes.map((cls: any) => ({
+        turmaCodigo: cls.TurmaCodigo || cls.Turma,
+        turmaLabel: cls.Turma,
+        horario: cls.Horario,
+        professor: cls.Professor,
+        nivel: cls.Nivel || "",
+        diasSemana: parseDiasSemana(cls.DiasSemana),
+      }));
+
+      const studentsPerClass: { [key: string]: string[] } = {};
+      students.forEach((student: any) => {
+        const key = student.turmaCodigo || student.turma;
+        if (!key || !student.nome) return;
+        if (!studentsPerClass[key]) {
+          studentsPerClass[key] = [];
+        }
+        studentsPerClass[key].push(student.nome);
+      });
+
+      return { classOptions, studentsPerClass };
+    } catch {
+      return null;
+    }
+  };
+
+  const stored = loadFromStorage();
+  const [classOptions, setClassOptions] = useState<ClassOption[]>(stored?.classOptions || defaultClassOptions);
+  const [studentsPerClass, setStudentsPerClass] = useState<{ [key: string]: string[] }>(
+    stored?.studentsPerClass || defaultStudentsPerClass
+  );
+
   // STATE
   const [selectedClass, setSelectedClass] = useState<ClassOption>(classOptions[0]);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+
+  useEffect(() => {
+    const latest = loadFromStorage();
+    if (!latest) return;
+    if (latest.classOptions.length > 0) {
+      setClassOptions(latest.classOptions);
+      setStudentsPerClass(latest.studentsPerClass);
+      const exists = latest.classOptions.some((opt) => opt.turmaCodigo === selectedClass.turmaCodigo);
+      if (!exists) {
+        setSelectedClass(latest.classOptions[0]);
+      }
+    }
+  }, []);
 
   // Gerar datas pré-determinadas baseadas no dia da semana (DEFINIR ANTES DO STATE)
   const generateDates = (daysOfWeek: string[]) => {
@@ -113,7 +189,7 @@ export const Attendance: React.FC = () => {
   const availableDates = generateDates(selectedClass.diasSemana);
   const dateDates = availableDates.map((d) => d.split(" ")[0]); // Pega apenas a data (YYYY-MM-DD)
 
-  const initialAttendance = studentsPerClass[selectedClass.turma].map((aluno, idx) => ({
+  const initialAttendance = (studentsPerClass[selectedClass.turmaCodigo] || []).map((aluno, idx) => ({
     id: idx + 1,
     aluno,
     attendance: dateDates.reduce(
@@ -381,8 +457,8 @@ export const Attendance: React.FC = () => {
     return `${months[now.getMonth()]}/${now.getFullYear()}`;
   })();
 
-  const handleClassChange = (turma: string) => {
-    const newClass = classOptions.find((c) => c.turma === turma) || selectedClass;
+  const handleClassChange = (turmaCodigo: string) => {
+    const newClass = classOptions.find((c) => c.turmaCodigo === turmaCodigo) || selectedClass;
     setSelectedClass(newClass);
     const newDates = generateDates(newClass.diasSemana).map((d) => d.split(" ")[0]);
 
@@ -390,7 +466,7 @@ export const Attendance: React.FC = () => {
     setHistory([]);
 
     setAttendance(
-      studentsPerClass[newClass.turma].map((aluno, idx) => ({
+      (studentsPerClass[newClass.turmaCodigo] || []).map((aluno, idx) => ({
         id: idx + 1,
         aluno,
         attendance: newDates.reduce(
@@ -542,7 +618,7 @@ export const Attendance: React.FC = () => {
             Turma
           </label>
           <select
-            value={selectedClass.turma}
+            value={selectedClass.turmaCodigo}
             onChange={(e) => handleClassChange(e.target.value)}
             style={{
               width: "100%",
@@ -555,8 +631,8 @@ export const Attendance: React.FC = () => {
             }}
           >
             {classOptions.map((c) => (
-              <option key={c.turma} value={c.turma}>
-                {c.turma}
+              <option key={c.turmaCodigo} value={c.turmaCodigo}>
+                {c.turmaLabel}
               </option>
             ))}
           </select>
@@ -576,7 +652,7 @@ export const Attendance: React.FC = () => {
               fontSize: "14px",
             }}
           >
-            {selectedClass.horario}
+            {formatHorario(selectedClass.horario)}
           </div>
         </div>
 

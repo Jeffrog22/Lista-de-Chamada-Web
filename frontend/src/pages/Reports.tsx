@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Reports.css";
 import DashboardCharts from './DashboardCharts';
@@ -22,11 +22,52 @@ interface ClassStats {
   alunos: StudentStats[];
 }
 
+interface ActiveStudentLite {
+  id?: string;
+  nome?: string;
+  turma?: string;
+  horario?: string;
+  professor?: string;
+  nivel?: string;
+}
+
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
   // Estados de Filtro
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [selectedClassId, setSelectedClassId] = useState<string>("1A");
+
+  const readActiveStudents = (): ActiveStudentLite[] => {
+    try {
+      const stored = localStorage.getItem("activeStudents");
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
+  const [capacities, setCapacities] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem("classCapacities");
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    setStudentsSnapshot(readActiveStudents());
+    const onStorage = () => setStudentsSnapshot(readActiveStudents());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("classCapacities", JSON.stringify(capacities));
+  }, [capacities]);
 
   // Mock Data Completo (Simulando dados vindos do backend/localStorage)
   const [classesData, setClassesData] = useState<ClassStats[]>([
@@ -75,6 +116,39 @@ export const Reports: React.FC = () => {
   const totalAlunosTurma = currentClassData.alunos.length;
   const capacidadeTurma = 20;
   const ocupacaoPct = capacidadeTurma > 0 ? Math.min(100, Math.round((totalAlunosTurma / capacidadeTurma) * 100)) : 0;
+
+  const classesByTurma = classesData.reduce<Record<string, ClassStats>>((acc, item) => {
+    acc[item.turma] = item;
+    return acc;
+  }, {});
+
+  const turmas = Array.from(new Set([
+    ...classesData.map((c) => c.turma),
+    ...studentsSnapshot.map((s) => s.turma).filter(Boolean) as string[],
+  ])).sort();
+
+  const vagasResumo = turmas.map((turma) => {
+    const meta = classesByTurma[turma];
+    const total = studentsSnapshot.length > 0
+      ? studentsSnapshot.filter((s) => s.turma === turma).length
+      : (meta?.alunos.length || 0);
+    const capacity = capacities[turma] ?? 20;
+    const pct = capacity > 0 ? Math.min(100, Math.round((total / capacity) * 100)) : 0;
+    return {
+      turma,
+      horario: meta?.horario || "-",
+      professor: meta?.professor || "-",
+      nivel: meta?.nivel || "-",
+      total,
+      capacity,
+      pct,
+    };
+  });
+
+  const handleCapacityChange = (turma: string, value: number) => {
+    const safeValue = Number.isNaN(value) ? 0 : Math.max(0, value);
+    setCapacities((prev) => ({ ...prev, [turma]: safeValue }));
+  };
 
   const handleGenerateExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -209,10 +283,10 @@ export const Reports: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "20px" }}>
+    <div className="reports-root" style={{ padding: "20px", borderRadius: "16px" }}>
+      <div className="reports-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "20px" }}>
         <div>
-          <h2 style={{ color: "#2c3e50", margin: 0 }}>Relatórios e Análises</h2>
+          <h2 style={{ color: "#1f2937", margin: 0 }}>Relatórios e Análises</h2>
           <p style={{ color: "#666", margin: "5px 0 0" }}>Selecione um módulo para visualizar os dados.</p>
         </div>
       </div>
@@ -343,24 +417,45 @@ export const Reports: React.FC = () => {
 
       {activeTab === "vagas" && (
         <div className="reports-section">
+          <div className="vagas-toolbar">
+            <div>
+              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "localStorage (activeStudents)" : "dados de exemplo"}
+            </div>
+            <button className="btn-secondary" onClick={() => setStudentsSnapshot(readActiveStudents())}>
+              Atualizar
+            </button>
+          </div>
+
           <div className="vagas-grid">
-            <div className="report-card">
-              <h3>Ocupação da Turma {selectedClassId}</h3>
-              <div className="vagas-metric">
-                <span>{totalAlunosTurma} alunos</span>
-                <span>{capacidadeTurma} vagas</span>
+            {vagasResumo.map((item) => (
+              <div key={item.turma} className="report-card vagas-card">
+                <div className="vagas-card-header">
+                  <h3>Turma {item.turma}</h3>
+                  <span className="vagas-chip">{item.nivel}</span>
+                </div>
+                <div className="vagas-meta">
+                  <span>⏰ {item.horario}</span>
+                  <span>👨‍🏫 {item.professor}</span>
+                </div>
+                <div className="vagas-metric">
+                  <span>{item.total} alunos</span>
+                  <span>{item.capacity} vagas</span>
+                </div>
+                <div className="vagas-bar">
+                  <div className="vagas-bar-fill" style={{ width: `${item.pct}%` }} />
+                </div>
+                <div className="vagas-footer">{item.pct}% ocupada</div>
+                <div className="vagas-capacity">
+                  <label>Capacidade</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={item.capacity}
+                    onChange={(e) => handleCapacityChange(item.turma, parseInt(e.target.value, 10))}
+                  />
+                </div>
               </div>
-              <div className="vagas-bar">
-                <div className="vagas-bar-fill" style={{ width: `${ocupacaoPct}%` }} />
-              </div>
-              <div className="vagas-footer">{ocupacaoPct}% ocupada</div>
-            </div>
-            <div className="report-card">
-              <h3>Resumo de Ocupação</h3>
-              <p style={{ margin: "10px 0 0", color: "#666" }}>
-                Ajuste a capacidade por turma quando o cadastro estiver integrado ao backend.
-              </p>
-            </div>
+            ))}
           </div>
         </div>
       )}
