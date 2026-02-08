@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import "./Exclusions.css";
 
 // Interface compatível com o Student do Students.tsx
@@ -88,16 +89,17 @@ export const Exclusions: React.FC = () => {
     const checked = (e.target as HTMLInputElement).checked;
     let newValue: string | boolean = type === "checkbox" ? checked : value;
 
-    if (name === "horario" && typeof newValue === "string") {
-      const digits = newValue.replace(/\D/g, "").slice(0, 4);
-      if (digits.length >= 3) {
-        newValue = `${digits.slice(0, 2)}:${digits.slice(2)}`;
-      } else {
-        newValue = digits;
+    setFormData((prev) => {
+      if (name === "horario" && typeof newValue === "string") {
+        const masked = maskHorarioInput(newValue);
+        if (!isValidHorarioPartial(masked)) {
+          return prev;
+        }
+        newValue = masked;
       }
-    }
-    
-    setFormData((prev) => ({ ...prev, [name]: newValue }));
+
+      return { ...prev, [name]: newValue };
+    });
   };
 
   const calculateAge = (dateString: string) => {

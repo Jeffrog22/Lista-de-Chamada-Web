@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getPoolLog, getWeather, savePoolLog } from "../api";
 
 interface ClassOption {
@@ -62,7 +62,7 @@ export const Attendance: React.FC = () => {
   const parseDiasSemana = (value: string | undefined): string[] => {
     if (!value) return [];
     return value
-      .split(/[;,]/)
+      .split(/[;,]|\s+e\s+/i)
       .map((item) => item.trim())
       .filter(Boolean);
   };
@@ -78,6 +78,62 @@ export const Attendance: React.FC = () => {
       return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
     }
     return value;
+  };
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const isDiasSemanaLabel = (label: string) => {
+    const normalized = normalizeText(label);
+    const weekdays = [
+      "domingo",
+      "segunda",
+      "terca",
+      "terça",
+      "quarta",
+      "quinta",
+      "sexta",
+      "sabado",
+      "sábado",
+    ];
+    return weekdays.some((day) => normalized.includes(normalizeText(day)));
+  };
+
+  const resolveDiasSemana = (opt: ClassOption) => {
+    if (opt.diasSemana && opt.diasSemana.length > 0) {
+      return opt.diasSemana;
+    }
+    const label = opt.turmaLabel || "";
+    if (label && isDiasSemanaLabel(label)) {
+      return label
+        .split(/\s+e\s+/i)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const resolveDiasSemanaFromText = (value: string) => {
+    if (!value) return [] as string[];
+    const normalized = normalizeText(value).replace(/\s/g, "");
+    if (normalized.includes("tq") || (normalized.includes("terca") && normalized.includes("quinta"))) {
+      return ["Terca", "Quinta"];
+    }
+    if (normalized.includes("qs") || (normalized.includes("quarta") && normalized.includes("sexta"))) {
+      return ["Quarta", "Sexta"];
+    }
+    return [] as string[];
+  };
+
+  const getTurmaKey = (opt: ClassOption) => opt.turmaLabel || opt.turmaCodigo;
+  const isSameTurma = (opt: ClassOption, turma: string) => {
+    const key = getTurmaKey(opt);
+    if (!key || !turma) return false;
+    return normalizeText(key) === normalizeText(turma);
   };
 
   const loadFromStorage = () => {
@@ -122,7 +178,17 @@ export const Attendance: React.FC = () => {
   );
 
   // STATE
-  const [selectedClass, setSelectedClass] = useState<ClassOption>(classOptions[0]);
+  const emptyClass: ClassOption = {
+    turmaCodigo: "",
+    turmaLabel: "",
+    horario: "",
+    professor: "",
+    nivel: "",
+    diasSemana: [],
+  };
+  const [selectedTurma, setSelectedTurma] = useState<string>(getTurmaKey(classOptions[0] || emptyClass) || "");
+  const [selectedHorario, setSelectedHorario] = useState<string>(classOptions[0]?.horario || "");
+  const [selectedProfessor, setSelectedProfessor] = useState<string>(classOptions[0]?.professor || "");
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
@@ -131,12 +197,105 @@ export const Attendance: React.FC = () => {
     if (latest.classOptions.length > 0) {
       setClassOptions(latest.classOptions);
       setStudentsPerClass(latest.studentsPerClass);
-      const exists = latest.classOptions.some((opt) => opt.turmaCodigo === selectedClass.turmaCodigo);
-      if (!exists) {
-        setSelectedClass(latest.classOptions[0]);
-      }
+      // selection handled by effects below
     }
   }, []);
+
+  useEffect(() => {
+    if (classOptions.length === 0) return;
+    const hasTurma = classOptions.some((opt) => isSameTurma(opt, selectedTurma));
+    if (!selectedTurma || !hasTurma) {
+      const first = classOptions[0];
+      setSelectedTurma(getTurmaKey(first) || "");
+      setSelectedHorario(first.horario);
+      setSelectedProfessor(first.professor);
+    }
+  }, [classOptions, selectedTurma]);
+
+  useEffect(() => {
+    const target = localStorage.getItem("attendanceTargetTurma");
+    if (!target) return;
+    const match = classOptions.find(
+      (opt) => isSameTurma(opt, target) || opt.turmaLabel === target
+    );
+    if (match) {
+      setSelectedTurma(getTurmaKey(match) || "");
+      setSelectedHorario(match.horario);
+      setSelectedProfessor(match.professor);
+    }
+    localStorage.removeItem("attendanceTargetTurma");
+  }, [classOptions]);
+
+  const turmaOptions = useMemo(() => {
+    const map = new Map<string, { codigo: string; label: string }>();
+    classOptions.forEach((opt) => {
+      const key = getTurmaKey(opt);
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, { codigo: key, label: opt.turmaLabel || opt.turmaCodigo || key });
+      }
+    });
+    return Array.from(map.values());
+  }, [classOptions]);
+
+  const horarioOptions = useMemo(() => {
+    const set = new Set<string>();
+    classOptions
+      .filter((opt) => isSameTurma(opt, selectedTurma))
+      .forEach((opt) => opt.horario && set.add(opt.horario));
+    const normalize = (value: string) => {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
+      if (digits.length === 3) return parseInt(`0${digits}`, 10);
+      return Number.MAX_SAFE_INTEGER;
+    };
+    return Array.from(set).sort((a, b) => normalize(a) - normalize(b));
+  }, [classOptions, selectedTurma]);
+
+  const professorOptions = useMemo(() => {
+    const set = new Set<string>();
+    classOptions
+      .filter((opt) => isSameTurma(opt, selectedTurma) && opt.horario === selectedHorario)
+      .forEach((opt) => opt.professor && set.add(opt.professor));
+    return Array.from(set);
+  }, [classOptions, selectedTurma, selectedHorario]);
+
+  useEffect(() => {
+    if (horarioOptions.length === 0) {
+      setSelectedHorario("");
+      return;
+    }
+    if (!horarioOptions.includes(selectedHorario)) {
+      setSelectedHorario(horarioOptions[0]);
+    }
+  }, [horarioOptions, selectedHorario]);
+
+  useEffect(() => {
+    if (professorOptions.length === 0) {
+      setSelectedProfessor("");
+      return;
+    }
+    if (!professorOptions.includes(selectedProfessor)) {
+      setSelectedProfessor(professorOptions[0]);
+    }
+  }, [professorOptions, selectedProfessor]);
+
+  const selectedClass = useMemo(() => {
+    if (classOptions.length === 0) return emptyClass;
+    const exact = classOptions.find(
+      (opt) =>
+        isSameTurma(opt, selectedTurma) &&
+        opt.horario === selectedHorario &&
+        opt.professor === selectedProfessor
+    );
+    if (exact) return exact;
+    const byHorario = classOptions.find(
+      (opt) => isSameTurma(opt, selectedTurma) && opt.horario === selectedHorario
+    );
+    if (byHorario) return byHorario;
+    const byTurma = classOptions.find((opt) => isSameTurma(opt, selectedTurma));
+    return byTurma || classOptions[0] || emptyClass;
+  }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
 
   // Gerar datas pré-determinadas baseadas no dia da semana (DEFINIR ANTES DO STATE)
   const generateDates = (daysOfWeek: string[]) => {
@@ -147,14 +306,16 @@ export const Attendance: React.FC = () => {
 
     // Mapa: nome do dia -> número (0=domingo, 1=segunda, etc)
     const dayMap: { [key: string]: number } = {
-      Domingo: 0,
-      Segunda: 1,
-      Terca: 2,
-      Quarta: 3,
-      Quinta: 4,
-      Sexta: 5,
-      Sabado: 6,
+      domingo: 0,
+      segunda: 1,
+      terca: 2,
+      quarta: 3,
+      quinta: 4,
+      sexta: 5,
+      sabado: 6,
     };
+
+    const normalizedDays = daysOfWeek.map((d) => normalizeText(d).replace(/[^a-z]/g, ""));
 
     for (let day = 1; day <= 31; day++) {
       try {
@@ -164,10 +325,11 @@ export const Attendance: React.FC = () => {
         const dayOfWeek = date.getDay();
         const dayNames = ["Domingo", "Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado"];
         const dayName = dayNames[dayOfWeek];
+        const normalizedDayName = normalizeText(dayName).replace(/[^a-z]/g, "");
 
         if (
-          daysOfWeek.some(
-            (d) => dayMap[d] === dayOfWeek || d === dayName
+          normalizedDays.some(
+            (d) => dayMap[d] === dayOfWeek || d === normalizedDayName
           )
         ) {
           const year = date.getFullYear();
@@ -186,10 +348,32 @@ export const Attendance: React.FC = () => {
     return dates;
   };
 
-  const availableDates = generateDates(selectedClass.diasSemana);
+  const resolvedDiasSemana = (() => {
+    const fromClass = resolveDiasSemana(selectedClass);
+    if (fromClass.length > 0) return fromClass;
+
+    const fromTurmaOptions = classOptions
+      .filter((opt) => isSameTurma(opt, selectedTurma))
+      .map((opt) => resolveDiasSemana(opt))
+      .find((days) => days.length > 0);
+    if (fromTurmaOptions) return fromTurmaOptions;
+
+    const byLabel = resolveDiasSemanaFromText(selectedClass.turmaLabel || "");
+    if (byLabel.length > 0) return byLabel;
+
+    const bySelected = resolveDiasSemanaFromText(selectedTurma);
+    if (bySelected.length > 0) return bySelected;
+
+    const byCode = resolveDiasSemanaFromText(selectedClass.turmaCodigo || "");
+    if (byCode.length > 0) return byCode;
+
+    return [] as string[];
+  })();
+  const availableDates = generateDates(resolvedDiasSemana);
   const dateDates = availableDates.map((d) => d.split(" ")[0]); // Pega apenas a data (YYYY-MM-DD)
 
-  const initialAttendance = (studentsPerClass[selectedClass.turmaCodigo] || []).map((aluno, idx) => ({
+  const initialTurmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
+  const initialAttendance = (studentsPerClass[initialTurmaLookup] || []).map((aluno, idx) => ({
     id: idx + 1,
     aluno,
     attendance: dateDates.reduce(
@@ -243,6 +427,7 @@ export const Attendance: React.FC = () => {
   };
 
   const handleDateClick = async (date: string) => {
+    setSelectedDate(date);
     setModalDate(date);
     setModalStep("select");
     
@@ -457,16 +642,17 @@ export const Attendance: React.FC = () => {
     return `${months[now.getMonth()]}/${now.getFullYear()}`;
   })();
 
-  const handleClassChange = (turmaCodigo: string) => {
-    const newClass = classOptions.find((c) => c.turmaCodigo === turmaCodigo) || selectedClass;
-    setSelectedClass(newClass);
-    const newDates = generateDates(newClass.diasSemana).map((d) => d.split(" ")[0]);
+  const selectedDaysKey = selectedClass.diasSemana.join("|");
+  useEffect(() => {
+    const turmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
+    if (!turmaLookup) return;
+    const newDates = generateDates(selectedClass.diasSemana).map((d) => d.split(" ")[0]);
 
-    // Resetar histórico ao mudar de turma para evitar inconsistências
+    // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
     setHistory([]);
 
     setAttendance(
-      (studentsPerClass[newClass.turmaCodigo] || []).map((aluno, idx) => ({
+      (studentsPerClass[turmaLookup] || []).map((aluno, idx) => ({
         id: idx + 1,
         aluno,
         attendance: newDates.reduce(
@@ -478,7 +664,7 @@ export const Attendance: React.FC = () => {
         ),
       }))
     );
-  };
+  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass]);
 
   // Ciclar entre os 4 estados
   const cycleStatus = (currentStatus: "Presente" | "Falta" | "Justificado" | "") => {
@@ -589,7 +775,7 @@ export const Attendance: React.FC = () => {
 
   const handleSave = () => {
     console.log("Salvando chamada:", {
-      turma: selectedClass.turma,
+      turma: selectedClass.turmaLabel || selectedClass.turmaCodigo,
       horario: selectedClass.horario,
       professor: selectedClass.professor,
       data: selectedDate,
@@ -618,8 +804,8 @@ export const Attendance: React.FC = () => {
             Turma
           </label>
           <select
-            value={selectedClass.turmaCodigo}
-            onChange={(e) => handleClassChange(e.target.value)}
+            value={selectedTurma}
+            onChange={(e) => setSelectedTurma(e.target.value)}
             style={{
               width: "100%",
               padding: "8px 12px",
@@ -630,48 +816,77 @@ export const Attendance: React.FC = () => {
               fontWeight: 600,
             }}
           >
-            {classOptions.map((c) => (
-              <option key={c.turmaCodigo} value={c.turmaCodigo}>
-                {c.turmaLabel}
+            {turmaOptions.map((c) => (
+              <option key={c.codigo} value={c.codigo}>
+                {c.label}
               </option>
             ))}
           </select>
+          {selectedClass.turmaCodigo && (
+            <div style={{ marginTop: "6px", fontSize: "11px", opacity: 0.8 }}>
+              Cod. {selectedClass.turmaCodigo}
+            </div>
+          )}
         </div>
 
         <div>
           <label style={{ fontSize: "12px", opacity: 0.9, fontWeight: 600 }}>
             Horário
           </label>
-          <div
+          <select
+            value={selectedHorario}
+            onChange={(e) => setSelectedHorario(e.target.value)}
+            disabled={!selectedTurma || horarioOptions.length === 0}
             style={{
-              background: "rgba(255,255,255,0.2)",
+              width: "100%",
               padding: "8px 12px",
               borderRadius: "6px",
+              border: "none",
               marginTop: "6px",
-              fontWeight: 600,
               fontSize: "14px",
+              fontWeight: 600,
             }}
           >
-            {formatHorario(selectedClass.horario)}
-          </div>
+            {horarioOptions.length === 0 ? (
+              <option value="">Sem horários</option>
+            ) : (
+              horarioOptions.map((horario) => (
+                <option key={horario} value={horario}>
+                  {formatHorario(horario)}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         <div>
           <label style={{ fontSize: "12px", opacity: 0.9, fontWeight: 600 }}>
             Professor
           </label>
-          <div
+          <select
+            value={selectedProfessor}
+            onChange={(e) => setSelectedProfessor(e.target.value)}
+            disabled={!selectedHorario || professorOptions.length === 0}
             style={{
-              background: "rgba(255,255,255,0.2)",
+              width: "100%",
               padding: "8px 12px",
               borderRadius: "6px",
+              border: "none",
               marginTop: "6px",
-              fontWeight: 600,
               fontSize: "14px",
+              fontWeight: 600,
             }}
           >
-            {selectedClass.professor}
-          </div>
+            {professorOptions.length === 0 ? (
+              <option value="">Sem professores</option>
+            ) : (
+              professorOptions.map((professor) => (
+                <option key={professor} value={professor}>
+                  {professor}
+                </option>
+              ))
+            )}
+          </select>
         </div>
 
         <div>
@@ -735,21 +950,26 @@ export const Attendance: React.FC = () => {
                 </th>
                 {dateDates.map((date) => {
                   const dayNum = date.split("-")[2];
+                  const isSelected = date === selectedDate;
                   return (
                     <th
                       key={date}
                       onClick={() => handleDateClick(date)}
                       style={{
                         cursor: "pointer",
-                        padding: "12px 8px",
+                        padding: "10px 0",
                         textAlign: "center",
                         fontWeight: "bold",
                         fontSize: "14px",
-                        minWidth: "60px",
+                        minWidth: "70px",
+                        width: "70px",
+                        background: isSelected ? "rgba(255, 255, 255, 0.2)" : "transparent",
                       }}
                     >
-                      <div style={{ fontSize: "10px", fontWeight: "normal", marginBottom: "2px" }}>📅</div>
-                      {dayNum}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1, width: "100%" }}>
+                        <span style={{ fontSize: "10px", fontWeight: "normal", marginBottom: "2px" }}>📅</span>
+                        <span>{dayNum}</span>
+                      </div>
                     </th>
                   );
                 })}

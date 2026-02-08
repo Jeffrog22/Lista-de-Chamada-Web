@@ -69,6 +69,34 @@ export const Reports: React.FC = () => {
     localStorage.setItem("classCapacities", JSON.stringify(capacities));
   }, [capacities]);
 
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("activeClasses");
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return;
+      setClassesData((prev) => {
+        const byTurma = new Map(prev.map((item) => [item.turma, item]));
+        parsed.forEach((cls: any) => {
+          const turma = cls.Turma || cls.turma_label || cls.codigo;
+          if (!turma) return;
+          const existing = byTurma.get(turma);
+          const next = {
+            turma,
+            horario: cls.Horario || cls.horario || existing?.horario || "",
+            professor: cls.Professor || cls.professor || existing?.professor || "",
+            nivel: cls.Nivel || cls.nivel || existing?.nivel || "",
+            alunos: existing?.alunos || [],
+          } as ClassStats;
+          byTurma.set(turma, next);
+        });
+        return Array.from(byTurma.values());
+      });
+    } catch {
+      // ignore
+    }
+  }, [studentsSnapshot]);
+
   // Mock Data Completo (Simulando dados vindos do backend/localStorage)
   const [classesData, setClassesData] = useState<ClassStats[]>([
     {
@@ -326,6 +354,14 @@ export const Reports: React.FC = () => {
                 <div>
                   <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalJustificativas}</div>
                   <div style={{ fontSize: "12px", opacity: 0.8 }}>Justificativas</div>
+                </div>
+              </div>
+              <div style={{ marginTop: "18px" }}>
+                <div style={{ fontSize: "12px", opacity: 0.8, marginBottom: "6px" }}>
+                  Ocupação da turma: {ocupacaoPct}%
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.25)", height: "6px", borderRadius: "999px", overflow: "hidden" }}>
+                  <div style={{ width: `${ocupacaoPct}%`, height: "100%", background: "rgba(255,255,255,0.9)" }} />
                 </div>
               </div>
             </div>

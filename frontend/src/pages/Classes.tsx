@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { getBootstrap } from "../api";
 import "./Classes.css";
 
@@ -204,24 +205,37 @@ export const Classes: React.FC = () => {
   };
 
   const handleGoToAttendance = (turma: string) => {
-    alert(`Ir para chamada da turma ${turma}`);
+    localStorage.setItem("attendanceTargetTurma", turma);
+    window.location.hash = "attendance";
+  };
+
+  const getLotacaoStyle = (count: number, capacity: number) => {
+    if (capacity > 0 && count > capacity) {
+      return { background: "#FF6969", color: "#1f1f1f" };
+    }
+    if (capacity > 0 && count === capacity) {
+      return { background: "#FFDF57", color: "#1f1f1f" };
+    }
+    return { background: "#eef2ff", color: "#4f46e5" };
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let newValue: string | number = value;
 
-    if (name === "Horario") {
-      const digits = value.replace(/\D/g, "").slice(0, 4);
-      if (digits.length >= 3) {
-        newValue = `${digits.slice(0, 2)}:${digits.slice(2)}`;
-      } else {
-        newValue = digits;
+    setFormData((prev) => {
+      if (name === "Horario") {
+        const masked = maskHorarioInput(value);
+        if (!isValidHorarioPartial(masked)) {
+          return prev;
+        }
+        newValue = masked;
+      } else if (name === "CapacidadeMaxima") {
+        newValue = parseInt(value) || 0;
       }
-    } else if (name === "CapacidadeMaxima") {
-      newValue = parseInt(value) || 0;
-    }
-    setFormData((prev) => ({ ...prev, [name]: newValue }));
+
+      return { ...prev, [name]: newValue };
+    });
   };
 
   return (
@@ -262,57 +276,75 @@ export const Classes: React.FC = () => {
         <div style={{ background: "#f9f9f9", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
           <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
-            <input
-              type="text"
-              name="Turma"
-              placeholder="Turma"
-              value={formData.Turma || ""}
-              onChange={handleFormChange}
-              disabled={!!editingClass}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
-            <input
-              type="text"
-              name="Horario"
-              placeholder="00:00"
-              value={formData.Horario ? formatHorario(String(formData.Horario)) : ""}
-              onChange={handleFormChange}
-              disabled={!!editingClass}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
-            <input
-              type="text"
-              name="Professor"
-              placeholder="Professor"
-              value={formData.Professor || ""}
-              onChange={handleFormChange}
-              disabled={!!editingClass}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
-            <input
-              type="text"
-              name="Nivel"
-              placeholder="Nível"
-              value={formData.Nivel || ""}
-              onChange={handleFormChange}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
-            <input
-              type="number"
-              name="CapacidadeMaxima"
-              placeholder="Capacidade Máxima *"
-              value={formData.CapacidadeMaxima || ""}
-              onChange={handleFormChange}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
-            <input
-              type="text"
-              name="Atalho"
-              placeholder="Atalho"
-              value={formData.Atalho || ""}
-              onChange={handleFormChange}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
-            />
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>turma</label>
+              <input
+                type="text"
+                name="Turma"
+                placeholder="Turma"
+                value={formData.Turma || ""}
+                onChange={handleFormChange}
+                disabled={!!editingClass}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>horário</label>
+              <input
+                type="text"
+                name="Horario"
+                placeholder="00:00"
+                value={formData.Horario ? formatHorario(String(formData.Horario)) : ""}
+                onChange={handleFormChange}
+                disabled={!!editingClass}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>professor(a)</label>
+              <input
+                type="text"
+                name="Professor"
+                placeholder="Professor"
+                value={formData.Professor || ""}
+                onChange={handleFormChange}
+                disabled={!!editingClass}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>nível</label>
+              <input
+                type="text"
+                name="Nivel"
+                placeholder="Nível"
+                value={formData.Nivel || ""}
+                onChange={handleFormChange}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>capacidade</label>
+              <input
+                type="number"
+                name="CapacidadeMaxima"
+                placeholder="Capacidade Máxima *"
+                value={formData.CapacidadeMaxima || ""}
+                onChange={handleFormChange}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>cód. turma</label>
+              <input
+                type="text"
+                name="Atalho"
+                placeholder="Atalho"
+                value={formData.Atalho || ""}
+                onChange={handleFormChange}
+                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
+              />
+            </div>
           </div>
           <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
             <button
@@ -389,7 +421,18 @@ export const Classes: React.FC = () => {
                 <td style={{ padding: "12px" }}>{classData.Professor}</td>
                 <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
                 <td style={{ padding: "12px", textAlign: "center" }}>
-                  <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 10px", borderRadius: "12px", fontWeight: "bold", fontSize: "12px" }}>
+                  <span
+                    style={{
+                      ...getLotacaoStyle(
+                        studentCounts[classData.TurmaCodigo || classData.Turma] || 0,
+                        classData.CapacidadeMaxima || 0
+                      ),
+                      padding: "4px 10px",
+                      borderRadius: "12px",
+                      fontWeight: "bold",
+                      fontSize: "12px",
+                    }}
+                  >
                     {studentCounts[classData.TurmaCodigo || classData.Turma] || 0} / {classData.CapacidadeMaxima || 0}
                   </span>
                 </td>

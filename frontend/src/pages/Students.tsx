@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { getBootstrap } from "../api";
 
 interface Student {
@@ -170,6 +171,11 @@ export const Students: React.FC = () => {
   }, []);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [nivelFilter, setNivelFilter] = useState("");
+  const [sortKey, setSortKey] = useState<
+    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
+  >(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(true);
@@ -231,24 +237,80 @@ export const Students: React.FC = () => {
     return value;
   };
 
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const nivelOrder = [
+    "Iniciação B",
+    "Iniciação A",
+    "Nível 1",
+    "Nível 2",
+    "Nível 3",
+    "Nível 4",
+    "Adulto B",
+    "Adulto A",
+  ];
+
+  const categoriaOrder = [
+    "Pré-Mirim",
+    "Mirim I",
+    "Mirim II",
+    "Petiz I",
+    "Petiz II",
+    "Infantil I",
+    "Infantil II",
+    "Juvenil I",
+    "Juvenil II",
+    "Júnior I",
+    "Júnior II/Sênior",
+  ];
+
+  const getNivelRank = (nivel: string) => {
+    const normalized = normalizeText(nivel);
+    const idx = nivelOrder.findIndex((item) => normalizeText(item) === normalized);
+    return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER - 1;
+  };
+
+  const getCategoriaRank = (categoria: string) => {
+    const normalized = normalizeText(categoria);
+    const idx = categoriaOrder.findIndex((item) => normalizeText(item) === normalized);
+    return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER - 1;
+  };
+
+  const compareHorario = (a: string, b: string) => {
+    const normalize = (value: string) => {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
+      if (digits.length === 3) return parseInt(`0${digits}`, 10);
+      if (digits.length === 2) return parseInt(`${digits}00`, 10);
+      return Number.MAX_SAFE_INTEGER;
+    };
+    return normalize(a) - normalize(b);
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     let newValue: string | boolean = type === "checkbox" ? checked : value;
 
-    if (name === "horario" && typeof newValue === "string") {
-      const digits = newValue.replace(/\D/g, "").slice(0, 4);
-      if (digits.length >= 3) {
-        newValue = `${digits.slice(0, 2)}:${digits.slice(2)}`;
-      } else {
-        newValue = digits;
+    setFormData((prev) => {
+      if (name === "horario" && typeof newValue === "string") {
+        const masked = maskHorarioInput(newValue);
+        if (!isValidHorarioPartial(masked)) {
+          return prev;
+        }
+        newValue = masked;
       }
-    }
-    
-    setFormData((prev) => ({
-      ...prev,
-      [name]: newValue
-    }));
+
+      return {
+        ...prev,
+        [name]: newValue,
+      };
+    });
   };
 
   const handleAddClick = () => {
@@ -362,33 +424,140 @@ export const Students: React.FC = () => {
   };
 
   const handleGoToAttendance = (turma: string) => {
-    // Simulação de navegação. Em um app real usaria navigate('/attendance', { state: { turma } })
-    alert(`Ir para chamada da turma ${turma}`);
-    // window.location.href = `/attendance?turma=${turma}`; // Exemplo se houvesse rotas
+    localStorage.setItem("attendanceTargetTurma", turma);
+    window.location.hash = "attendance";
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
-      s.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.turma.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const nivelExtras = Array.from(
+    new Set(
+      students
+        .map((s) => s.nivel)
+        .filter(Boolean)
+        .filter((nivel) => !nivelOrder.some((item) => normalizeText(item) === normalizeText(nivel)))
+    )
+  ).sort((a, b) => a.localeCompare(b));
+  const nivelOptions = [...nivelOrder, ...nivelExtras];
+
+  const filteredStudents = students.filter((s) => {
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !term ||
+      s.nome.toLowerCase().includes(term) ||
+      s.categoria.toLowerCase().includes(term) ||
+      s.professor.toLowerCase().includes(term);
+    const matchesNivel = !nivelFilter || normalizeText(s.nivel) === normalizeText(nivelFilter);
+    return matchesSearch && matchesNivel;
+  });
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!sortKey) return 0;
+    let result = 0;
+    if (sortKey === "nome") {
+      result = a.nome.localeCompare(b.nome);
+    } else if (sortKey === "nivel") {
+      result = getNivelRank(a.nivel) - getNivelRank(b.nivel);
+    } else if (sortKey === "idade") {
+      result = a.idade - b.idade;
+    } else if (sortKey === "categoria") {
+      const aRank = getCategoriaRank(a.categoria);
+      const bRank = getCategoriaRank(b.categoria);
+      const aIsCustom = aRank < Number.MAX_SAFE_INTEGER - 1;
+      const bIsCustom = bRank < Number.MAX_SAFE_INTEGER - 1;
+      if (aIsCustom && bIsCustom) {
+        result = aRank - bRank;
+      } else if (!aIsCustom && !bIsCustom) {
+        result = a.categoria.localeCompare(b.categoria);
+      } else {
+        result = aIsCustom ? -1 : 1;
+      }
+    } else if (sortKey === "turma") {
+      result = a.turma.localeCompare(b.turma);
+    } else if (sortKey === "horario") {
+      result = compareHorario(a.horario, b.horario);
+    } else if (sortKey === "professor") {
+      result = a.professor.localeCompare(b.professor);
+    }
+    return sortDir === "asc" ? result : -result;
+  });
+
+  const handleSort = (
+    key: "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor"
+  ) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const getSortIndicator = (
+    key: "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor"
+  ) => {
+    if (sortKey !== key) return "";
+    return sortDir === "asc" ? " ▲" : " ▼";
+  };
 
   return (
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
-        <input
-          type="text"
-          placeholder="🔍 Buscar aluno por nome ou turma..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+        <div style={{ position: "relative", flex: 1 }}>
+          <input
+            type="text"
+            placeholder="🔍 Buscar aluno por nome, categoria ou professor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px 36px 12px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "8px",
+              fontSize: "14px",
+            }}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              title="Limpar busca"
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: "14px",
+                color: "#666",
+                padding: 0,
+              }}
+            >
+              x
+            </button>
+          )}
+        </div>
+        {loading && (
+          <span style={{ fontSize: "12px", color: "#666" }}>Carregando...</span>
+        )}
+        <select
+          value={nivelFilter}
+          onChange={(e) => setNivelFilter(e.target.value)}
           style={{
-            flex: 1,
             padding: "12px",
             border: "1px solid #ddd",
             borderRadius: "8px",
             fontSize: "14px",
+            background: "white",
           }}
-        />
+        >
+          <option value="">Limpar filtro</option>
+          {nivelOptions.map((nivel) => (
+            <option key={nivel} value={nivel}>
+              {nivel}
+            </option>
+          ))}
+        </select>
         <button
           onClick={handleAddClick}
           style={{
@@ -411,18 +580,53 @@ export const Students: React.FC = () => {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
           <thead>
             <tr style={{ background: "#f4f4f4", color: "#333", borderBottom: "2px solid #ddd" }}>
-              <th style={{ padding: "12px", textAlign: "left" }}>Nome</th>
-              <th style={{ padding: "12px", textAlign: "left" }}>Nível</th>
-              <th style={{ padding: "12px", textAlign: "center" }}>Idade</th>
-              <th style={{ padding: "12px", textAlign: "left" }}>Categoria</th>
-              <th style={{ padding: "12px", textAlign: "center" }}>Turma</th>
-              <th style={{ padding: "12px", textAlign: "center" }}>Horário</th>
-              <th style={{ padding: "12px", textAlign: "left" }}>Professor</th>
+              <th
+                onClick={() => handleSort("nome")}
+                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+              >
+                Nome{getSortIndicator("nome")}
+              </th>
+              <th
+                onClick={() => handleSort("nivel")}
+                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+              >
+                Nível{getSortIndicator("nivel")}
+              </th>
+              <th
+                onClick={() => handleSort("idade")}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+              >
+                Idade{getSortIndicator("idade")}
+              </th>
+              <th
+                onClick={() => handleSort("categoria")}
+                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+              >
+                Categoria{getSortIndicator("categoria")}
+              </th>
+              <th
+                onClick={() => handleSort("turma")}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+              >
+                Turma{getSortIndicator("turma")}
+              </th>
+              <th
+                onClick={() => handleSort("horario")}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+              >
+                Horário{getSortIndicator("horario")}
+              </th>
+              <th
+                onClick={() => handleSort("professor")}
+                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+              >
+                Professor{getSortIndicator("professor")}
+              </th>
               <th style={{ padding: "12px", textAlign: "center" }}>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {filteredStudents.map((student, idx) => (
+            {sortedStudents.map((student, idx) => (
               <tr key={student.id} style={{ borderBottom: "1px solid #eee", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
                 <td 
                   style={{ padding: "12px", fontWeight: 500, cursor: "pointer", color: "#2c3e50" }}

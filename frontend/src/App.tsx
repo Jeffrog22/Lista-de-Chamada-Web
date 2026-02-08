@@ -11,9 +11,16 @@ import "./App.simple.css";
 
 type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | "reports" | "vacancies";
 
+const getViewFromHash = (hash: string): ViewType => {
+  const normalized = hash.replace(/^#/, "").trim();
+  if (!normalized) return "main";
+  const candidates: ViewType[] = ["attendance", "students", "classes", "exclusions", "reports", "vacancies", "main"];
+  return (candidates.find((view) => view === normalized) || "main");
+};
+
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
-  const [currentView, setCurrentView] = useState<ViewType>("main");
+  const [currentView, setCurrentView] = useState<ViewType>(getViewFromHash(window.location.hash));
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [teacherName, setTeacherName] = useState<string>("");
   const [teacherUnit, setTeacherUnit] = useState<string>("");
@@ -36,6 +43,14 @@ export default function App() {
         // ignore
       }
     }
+  }, []);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setCurrentView(getViewFromHash(window.location.hash));
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   const onLogin = (t: string) => {
@@ -146,6 +161,11 @@ export default function App() {
 
   const showView = (view: ViewType) => {
     setCurrentView(view);
+    if (view === "main") {
+      window.location.hash = "";
+    } else {
+      window.location.hash = view;
+    }
   };
 
   if (!token) {

@@ -1,6 +1,27 @@
 from typing import Optional
 from datetime import date, datetime
 from sqlmodel import SQLModel, Field
+from pydantic import validator
+
+def _normalize_horario(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if raw == "":
+        return None
+
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if len(digits) == 3:
+        digits = "0" + digits
+    if len(digits) != 4:
+        raise ValueError("horario must be 4 digits in HHMM format")
+
+    hour = int(digits[:2])
+    minute = int(digits[2:])
+    if hour > 23 or minute > 59:
+        raise ValueError("horario must be between 0000 and 2359")
+
+    return digits
 
 class Student(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -17,6 +38,10 @@ class Student(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
+    @validator("horario", pre=True)
+    def validate_horario(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_horario(value)
+
 class ClassModel(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     nome: str
@@ -25,6 +50,10 @@ class ClassModel(SQLModel, table=True):
     instrutor: Optional[str] = None
     nivel: Optional[str] = None
     capacidade_maxima: Optional[int] = None
+
+    @validator("horario", pre=True)
+    def validate_horario(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_horario(value)
 
 class Attendance(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

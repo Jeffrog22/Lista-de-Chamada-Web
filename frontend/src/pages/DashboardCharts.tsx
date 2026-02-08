@@ -150,6 +150,23 @@ const DashboardCharts: React.FC = () => {
           </ResponsiveContainer>
         </div>
 
+        {/* Gráfico por Professor */}
+        <div className="chart-card">
+          <h4>Presença por Professor</h4>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={teacherData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" />
+              <YAxis dataKey="name" type="category" width={120} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="presente" fill={COLORS.presente} stackId="a" name="Presente" />
+              <Bar dataKey="ausente" fill={COLORS.ausente} stackId="a" name="Ausente" />
+              <Bar dataKey="justificado" fill={COLORS.justificado} stackId="a" name="Justificado" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
         {/* Top Alunos */}
         <div className="chart-card full-width">
           <h4>Top 5 Alunos Mais Assíduos (%)</h4>
