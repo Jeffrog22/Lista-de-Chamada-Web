@@ -409,6 +409,7 @@ export const Attendance: React.FC = () => {
     tempExterna: "",
     tempPiscina: "",
     cloro: 1.5,
+    cloroEnabled: true,
     selectedIcons: [] as string[],
     incidentType: "",
     incidentNote: "",
@@ -436,6 +437,7 @@ export const Attendance: React.FC = () => {
       ...prev,
       tempPiscina: "",
       cloro: 1.5,
+      cloroEnabled: true,
       selectedIcons: [],
       incidentType: "",
       incidentNote: "",
@@ -459,11 +461,14 @@ export const Attendance: React.FC = () => {
         ...(data.clima2 ? data.clima2.split(", ") : []),
       ].filter(Boolean);
 
+      const cloroValue = data.cloroPpm;
+      const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
       setPoolData(prev => ({
         ...prev,
         tempExterna: data.tempExterna || "",
         tempPiscina: data.tempPiscina || "",
-        cloro: data.cloroPpm ?? 1.5,
+        cloro: cloroEnabled ? cloroValue : 1.5,
+        cloroEnabled,
         selectedIcons: icons,
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
         incidentNote: "",
@@ -562,7 +567,7 @@ export const Attendance: React.FC = () => {
         (poolData.incidentType || poolData.personalType) : "nenhuma",
       tempExterna: poolData.tempExterna || "",
       tempPiscina: poolData.tempPiscina || "",
-      cloroPpm: poolData.cloro,
+      cloroPpm: poolData.cloroEnabled ? poolData.cloro : null,
     };
 
     try {
@@ -1413,16 +1418,34 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 <div style={{ marginBottom: "20px" }}>
-                  <label style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "bold", color: "#666" }}>
-                    <span>Cloro (ppm)</span>
-                    <span style={{ color: getChlorineColor(poolData.cloro) }}>{poolData.cloro.toFixed(1)}</span>
+                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled })}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "14px",
+                        border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
+                        background: poolData.cloroEnabled ? "#eef2ff" : "white",
+                        color: poolData.cloroEnabled ? "#667eea" : "#666",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Cloro (ppm)
+                    </button>
+                    <span style={{ color: poolData.cloroEnabled ? getChlorineColor(poolData.cloro) : "#999" }}>
+                      {poolData.cloroEnabled ? poolData.cloro.toFixed(1) : "-"}
+                    </span>
                   </label>
-                  <input 
-                    type="range" 
-                    min="0" max="7" step="0.5" 
+                  <input
+                    type="range"
+                    min="0" max="7" step="0.5"
                     value={poolData.cloro}
                     onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})}
-                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro) }}
+                    disabled={!poolData.cloroEnabled}
+                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro), opacity: poolData.cloroEnabled ? 1 : 0.4 }}
                   />
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#999" }}>
                     <span>0.0</span><span>3.5</span><span>7.0</span>
@@ -1430,7 +1453,7 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 <div style={{ background: getSuggestedStatus() === "justificada" ? "#fff3cd" : "#d4edda", padding: "10px", borderRadius: "6px", marginBottom: "15px", fontSize: "13px", textAlign: "center", border: "1px solid rgba(0,0,0,0.1)" }}>
-                  Status Sugerido: <strong>{getSuggestedStatus() === "justificada" ? "AULA JUSTIFICADA" : "AULA NORMAL"}</strong>
+                  Status Sugerido: <strong>{getSuggestedStatus() === "justificada" ? "FALTA JUSTIFICADA" : "AULA NORMAL"}</strong>
                 </div>
 
                 <div style={{ display: "flex", gap: "10px" }}>
@@ -1478,8 +1501,35 @@ export const Attendance: React.FC = () => {
 
                 {/* Slider de Cloro também na Ocorrência para registros técnicos */}
                 <div style={{ marginBottom: "20px", borderTop: "1px solid #eee", paddingTop: "15px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>Registro Técnico (Cloro)</label>
-                  <input type="range" min="0" max="7" step="0.5" value={poolData.cloro} onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})} style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro) }} />
+                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled })}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "14px",
+                        border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
+                        background: poolData.cloroEnabled ? "#eef2ff" : "white",
+                        color: poolData.cloroEnabled ? "#667eea" : "#666",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                      }}
+                    >
+                      Registro Técnico (Cloro)
+                    </button>
+                    <span style={{ color: poolData.cloroEnabled ? getChlorineColor(poolData.cloro) : "#999" }}>
+                      {poolData.cloroEnabled ? poolData.cloro.toFixed(1) : "-"}
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0" max="7" step="0.5"
+                    value={poolData.cloro}
+                    onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})}
+                    disabled={!poolData.cloroEnabled}
+                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro), opacity: poolData.cloroEnabled ? 1 : 0.4 }}
+                  />
                 </div>
 
                 <div style={{ display: "flex", gap: "10px" }}>

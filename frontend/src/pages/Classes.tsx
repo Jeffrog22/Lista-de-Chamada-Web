@@ -9,6 +9,7 @@ interface Class {
   Horario: string;
   Professor: string;
   Nivel?: string;
+  FaixaEtaria?: string;
   Atalho?: string;
   CapacidadeMaxima?: number;
   DiasSemana?: string;
@@ -30,10 +31,10 @@ const formatHorario = (value: string) => {
 export const Classes: React.FC = () => {
   // MOCK DATA - Baseado em chamadaBelaVista.xlsx
   const [classes, setClasses] = useState<Class[]>([
-    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", Atalho: "1A", CapacidadeMaxima: 20 },
-    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", Atalho: "1B", CapacidadeMaxima: 20 },
-    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", Atalho: "2A", CapacidadeMaxima: 15 },
-    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", Atalho: "2B", CapacidadeMaxima: 20 },
+    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", FaixaEtaria: "Juvenil", Atalho: "1A", CapacidadeMaxima: 20 },
+    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", FaixaEtaria: "Juvenil", Atalho: "1B", CapacidadeMaxima: 20 },
+    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", FaixaEtaria: "Adulto", Atalho: "2A", CapacidadeMaxima: 15 },
+    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", FaixaEtaria: "Juvenil", Atalho: "2B", CapacidadeMaxima: 20 },
   ]);
   
   const [loading] = useState(false);
@@ -42,7 +43,7 @@ export const Classes: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Class>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [studentCounts, setStudentCounts] = useState<{ [key: string]: number }>({});
-  const [sortKey, setSortKey] = useState<"Turma" | "Horario" | "Professor" | "Nivel" | null>(null);
+  const [sortKey, setSortKey] = useState<"Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export const Classes: React.FC = () => {
             horario: string;
             professor: string;
             nivel: string;
+            faixa_etaria: string;
             capacidade: number;
             dias_semana: string;
           }>;
@@ -87,6 +89,7 @@ export const Classes: React.FC = () => {
           Horario: cls.horario,
           Professor: cls.professor,
           Nivel: cls.nivel,
+          FaixaEtaria: cls.faixa_etaria,
           Atalho: cls.codigo,
           CapacidadeMaxima: cls.capacidade,
           DiasSemana: cls.dias_semana,
@@ -146,11 +149,13 @@ export const Classes: React.FC = () => {
       result = a.Professor.localeCompare(b.Professor);
     } else if (sortKey === "Nivel") {
       result = getNivelRank(a.Nivel) - getNivelRank(b.Nivel);
+    } else if (sortKey === "FaixaEtaria") {
+      result = (a.FaixaEtaria || "").localeCompare(b.FaixaEtaria || "");
     }
     return sortDir === "asc" ? result : -result;
   });
 
-  const handleSort = (key: "Turma" | "Horario" | "Professor" | "Nivel") => {
+  const handleSort = (key: "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria") => {
     if (sortKey === key) {
       setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
     } else {
@@ -159,7 +164,7 @@ export const Classes: React.FC = () => {
     }
   };
 
-  const getSortIndicator = (key: "Turma" | "Horario" | "Professor" | "Nivel") => {
+  const getSortIndicator = (key: "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria") => {
     if (sortKey !== key) return "";
     return sortDir === "asc" ? " ▲" : " ▼";
   };
@@ -407,6 +412,12 @@ export const Classes: React.FC = () => {
               >
                 Nível{getSortIndicator("Nivel")}
               </th>
+              <th
+                onClick={() => handleSort("FaixaEtaria")}
+                style={{ padding: "12px", textAlign: "left", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Faixa etária{getSortIndicator("FaixaEtaria")}
+              </th>
               <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Lotação</th>
               <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Ações</th>
             </tr>
@@ -420,6 +431,9 @@ export const Classes: React.FC = () => {
                 <td style={{ padding: "12px" }}>{formatHorario(classData.Horario)}</td>
                 <td style={{ padding: "12px" }}>{classData.Professor}</td>
                 <td style={{ padding: "12px" }}>{classData.Nivel || "-"}</td>
+                <td style={{ padding: "12px", fontWeight: "bold", fontSize: "12px", color: "#677feb" }}>
+                  {classData.FaixaEtaria || "-"}
+                </td>
                 <td style={{ padding: "12px", textAlign: "center" }}>
                   <span
                     style={{

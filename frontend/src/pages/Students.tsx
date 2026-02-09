@@ -98,6 +98,7 @@ export const Students: React.FC = () => {
             horario: string;
             professor: string;
             nivel: string;
+            faixa_etaria: string;
             capacidade: number;
             dias_semana: string;
           }>;
@@ -150,6 +151,7 @@ export const Students: React.FC = () => {
           Horario: cls.horario,
           Professor: cls.professor,
           Nivel: cls.nivel,
+          FaixaEtaria: cls.faixa_etaria,
           Atalho: cls.codigo,
           CapacidadeMaxima: cls.capacidade,
           DiasSemana: cls.dias_semana,

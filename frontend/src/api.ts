@@ -4,9 +4,6 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
-const IMPORT_API = axios.create({
-  baseURL: import.meta.env.VITE_IMPORT_API_URL || "http://localhost:8001",
-});
 
 // Attach token if present
 API.interceptors.request.use((config) => {
@@ -65,12 +62,12 @@ export const getPoolLog = (date: string) =>
 
 // Import backend (multi-unit)
 export const getBootstrap = (unitId?: number) =>
-  IMPORT_API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);
+  API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);
 
 export const importDataFile = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
-  return IMPORT_API.post("/api/import-data", formData, {
+  return API.post("/api/import-data", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
