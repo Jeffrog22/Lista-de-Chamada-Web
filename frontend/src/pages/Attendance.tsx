@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getPoolLog, getWeather, savePoolLog } from "../api";
+import { getPoolLog, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 
 interface ClassOption {
   turmaCodigo: string;
@@ -21,6 +21,10 @@ interface AttendanceRecord {
 // Interface para o Log da Piscina (logPiscina.xlsx)
 interface PoolLogEntry {
   data: string;
+  turmaCodigo: string;
+  turmaLabel: string;
+  horario: string;
+  professor: string;
   clima1: string; // Estado (sol, chuvoso, etc)
   clima2: string; // Sensação (calor, frio, etc)
   statusAula: "normal" | "justificada" | "cancelada";
@@ -86,6 +90,47 @@ export const Attendance: React.FC = () => {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const normalizeNumberInput = (value: unknown) => {
+    if (value === null || value === undefined) return "";
+    const raw = String(value).replace(",", ".").trim();
+    const num = Number(raw);
+    if (!Number.isFinite(num)) return "";
+    return raw;
+  };
+
+  const loadAttendanceStorage = () => {
+    if (!storageKey) return null as AttendanceRecord[] | null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && Array.isArray(parsed.records)) return parsed.records as AttendanceRecord[];
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveAttendanceStorage = (records: AttendanceRecord[]) => {
+    if (!storageKey) return;
+    const payload = { records, updatedAt: new Date().toISOString() };
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+  };
+
+  const hasAnyMonthJustification = (justifications?: Record<string, string>) => {
+    if (!justifications || !monthKey) return false;
+    return Object.keys(justifications).some((key) => key.startsWith(`${monthKey}-`));
+  };
+
+  const getMonthJustificationEntries = (justifications?: Record<string, string>) => {
+    if (!justifications || !monthKey) return [] as { day: string; reason: string }[];
+    return Object.entries(justifications)
+      .filter(([key]) => key.startsWith(`${monthKey}-`))
+      .map(([key, reason]) => ({ day: key.split("-")[2] || "", reason }))
+      .sort((a, b) => Number(a.day) - Number(b.day));
+  };
 
   const isDiasSemanaLabel = (label: string) => {
     const normalized = normalizeText(label);
@@ -372,6 +417,21 @@ export const Attendance: React.FC = () => {
   const availableDates = generateDates(resolvedDiasSemana);
   const dateDates = availableDates.map((d) => d.split(" ")[0]); // Pega apenas a data (YYYY-MM-DD)
 
+  const monthKey = useMemo(() => {
+    const base = dateDates[0] || selectedDate || new Date().toISOString().split("T")[0];
+    return base.slice(0, 7);
+  }, [dateDates, selectedDate]);
+
+  const classKey = useMemo(() => {
+    const turmaKey = selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || "";
+    const horarioKey = selectedClass.horario || selectedHorario || "";
+    const professorKey = selectedClass.professor || selectedProfessor || "";
+    if (!turmaKey || !horarioKey || !professorKey || !monthKey) return "";
+    return `${turmaKey}|${horarioKey}|${professorKey}|${monthKey}`;
+  }, [selectedClass, selectedTurma, selectedHorario, selectedProfessor, monthKey]);
+
+  const storageKey = classKey ? `attendance:${classKey}` : "";
+
   const initialTurmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
   const initialAttendance = (studentsPerClass[initialTurmaLookup] || []).map((aluno, idx) => ({
     id: idx + 1,
@@ -403,6 +463,7 @@ export const Attendance: React.FC = () => {
   const [showDateModal, setShowDateModal] = useState(false);
   const [modalDate, setModalDate] = useState(""); // Data selecionada (YYYY-MM-DD)
   const [modalStep, setModalStep] = useState<"select" | "aula" | "ocorrencia">("select");
+  const [climaPrefillApplied, setClimaPrefillApplied] = useState(false);
   
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
@@ -413,9 +474,21 @@ export const Attendance: React.FC = () => {
     selectedIcons: [] as string[],
     incidentType: "",
     incidentNote: "",
+    incidentImpact: "aula" as "aula" | "dia",
     personalType: "Medico" as "Medico" | "Particular",
     logType: "aula" as PoolLogEntry["nota"]
   });
+
+  const cloroLocked =
+    poolData.logType === "feriado" ||
+    poolData.logType === "ponte-feriado" ||
+    (poolData.logType === "ocorrencia" && poolData.incidentType !== "Manutencao");
+
+  useEffect(() => {
+    if (cloroLocked && poolData.cloroEnabled) {
+      setPoolData(prev => ({ ...prev, cloroEnabled: false }));
+    }
+  }, [cloroLocked, poolData.cloroEnabled]);
 
   // Simulação da API Climatempo
   const fetchClimatempoData = async (date: string) => {
@@ -427,10 +500,46 @@ export const Attendance: React.FC = () => {
     }
   };
 
+  const climaCacheKey = (date: string) => `climaCache:${date}`;
+
+  const getClimaCache = (date: string) => {
+    try {
+      const raw = localStorage.getItem(climaCacheKey(date));
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        tempExterna: string;
+        selectedIcons: string[];
+        apiTemp?: string;
+        apiCondition?: string;
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const setClimaCache = (date: string, payload: { tempExterna: string; selectedIcons: string[]; apiTemp?: string; apiCondition?: string }) => {
+    localStorage.setItem(climaCacheKey(date), JSON.stringify(payload));
+  };
+
+  const buildIconsFromApi = (apiData: { temp: string; condition: string }) => {
+    const autoIcons: string[] = [];
+    if (apiData.condition === "Ceu Limpo") autoIcons.push("Sol");
+    if (apiData.condition === "Chuva Fraca") autoIcons.push("Chuvoso");
+    if (apiData.condition.includes("Nublado")) autoIcons.push("Nublado");
+
+    const tempNum = parseInt(apiData.temp, 10);
+    if (tempNum > 28) autoIcons.push("Calor");
+    else if (tempNum < 20) autoIcons.push("Frio");
+    else autoIcons.push("Agradavel");
+
+    return autoIcons.slice(0, 2);
+  };
+
   const handleDateClick = async (date: string) => {
     setSelectedDate(date);
     setModalDate(date);
     setModalStep("select");
+    setClimaPrefillApplied(false);
     
     // Resetar dados
     setPoolData(prev => ({
@@ -441,12 +550,25 @@ export const Attendance: React.FC = () => {
       selectedIcons: [],
       incidentType: "",
       incidentNote: "",
+      incidentImpact: "aula",
       logType: "aula"
     }));
 
     try {
-      const existing = await getPoolLog(date);
+      const existing = await getPoolLog(date, {
+        turmaCodigo: selectedClass.turmaCodigo,
+        turmaLabel: selectedClass.turmaLabel,
+        horario: selectedClass.horario,
+        professor: selectedClass.professor,
+      });
+      if (!existing?.data || typeof existing.data !== "object") {
+        throw new Error("no pool log");
+      }
       const data = existing.data as {
+        turmaCodigo?: string;
+        turmaLabel?: string;
+        horario?: string;
+        professor?: string;
         clima1: string;
         clima2: string;
         nota: string;
@@ -465,15 +587,17 @@ export const Attendance: React.FC = () => {
       const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
       setPoolData(prev => ({
         ...prev,
-        tempExterna: data.tempExterna || "",
-        tempPiscina: data.tempPiscina || "",
+        tempExterna: normalizeNumberInput(data.tempExterna),
+        tempPiscina: normalizeNumberInput(data.tempPiscina),
         cloro: cloroEnabled ? cloroValue : 1.5,
         cloroEnabled,
         selectedIcons: icons,
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
         incidentNote: "",
+        incidentImpact: "aula",
         logType: (data.nota as PoolLogEntry["nota"]) || "aula",
       }));
+      setClimaPrefillApplied(true);
 
       if (data.nota === "ocorrencia") {
         setModalStep("ocorrencia");
@@ -486,32 +610,121 @@ export const Attendance: React.FC = () => {
       setShowDateModal(true);
       return;
     } catch (error) {
-      // Continua com prefill via clima
+      // Tenta prefill pelo log do dia (qualquer turma)
+      try {
+        const dayLog = await getPoolLog(date);
+        if (dayLog?.data && typeof dayLog.data === "object") {
+          const data = dayLog.data as {
+            clima1: string;
+            clima2: string;
+            tempExterna: string;
+            tempPiscina: string;
+            cloroPpm: number | null;
+          };
+
+          const icons = [
+            ...(data.clima1 ? data.clima1.split(", ") : []),
+            ...(data.clima2 ? data.clima2.split(", ") : []),
+          ].filter(Boolean);
+
+          const cloroValue = data.cloroPpm;
+          const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
+          setPoolData(prev => ({
+            ...prev,
+            tempExterna: normalizeNumberInput(data.tempExterna),
+            tempPiscina: normalizeNumberInput(data.tempPiscina),
+            cloro: cloroEnabled ? cloroValue : 1.5,
+            cloroEnabled,
+            selectedIcons: icons,
+            incidentType: "",
+            incidentNote: "",
+            incidentImpact: "aula",
+            logType: "aula",
+          }));
+
+          const existingCache = getClimaCache(date);
+          setClimaCache(date, {
+            tempExterna: normalizeNumberInput(data.tempExterna),
+            selectedIcons: icons,
+            apiTemp: existingCache?.apiTemp,
+            apiCondition: existingCache?.apiCondition,
+          });
+
+          setClimaPrefillApplied(true);
+          setShowDateModal(true);
+          return;
+        }
+      } catch {
+        // Continua com prefill via clima
+      }
+    }
+
+    const cache = getClimaCache(date);
+    if (cache) {
+      setPoolData(prev => ({
+        ...prev,
+        tempExterna: normalizeNumberInput(cache.tempExterna),
+        selectedIcons: cache.selectedIcons || [],
+      }));
+      setClimaPrefillApplied(true);
+      setShowDateModal(true);
     }
 
     // Pré-carregar dados da API
     const apiData = await fetchClimatempoData(date);
-    
-    // Mapeamento Automático (API -> Ícones)
-    const autoIcons: string[] = [];
-    if (apiData.condition === "Ceu Limpo") autoIcons.push("Sol");
-    if (apiData.condition === "Chuva Fraca") autoIcons.push("Chuvoso");
-    if (apiData.condition.includes("Nublado")) autoIcons.push("Nublado");
-    
-    // Inferência de sensação baseada na temperatura
-    const tempNum = parseInt(apiData.temp);
-    if (tempNum > 28) autoIcons.push("Calor");
-    else if (tempNum < 20) autoIcons.push("Frio");
-    else autoIcons.push("Agradavel");
+    const apiTemp = String(apiData.temp || "");
+    const apiCondition = String(apiData.condition || "");
+    const hasApiSignature = cache && cache.apiTemp && cache.apiCondition;
+    const cacheMatchesApi =
+      cache &&
+      (cache.apiTemp || "") === apiTemp &&
+      (cache.apiCondition || "") === apiCondition;
 
-    setPoolData(prev => ({
-      ...prev,
-      tempExterna: apiData.temp,
-      selectedIcons: autoIcons.slice(0, 2) // Limitar a 2 ícones iniciais
-    }));
+    if (cache && (cacheMatchesApi || !hasApiSignature)) {
+      if (!hasApiSignature) {
+        setClimaCache(date, {
+          tempExterna: cache.tempExterna,
+          selectedIcons: cache.selectedIcons || [],
+          apiTemp,
+          apiCondition,
+        });
+      }
+    } else {
+      const autoIcons = buildIconsFromApi(apiData);
+      setPoolData(prev => ({
+        ...prev,
+        tempExterna: normalizeNumberInput(apiData.temp),
+        selectedIcons: autoIcons,
+      }));
+      setClimaCache(date, {
+        tempExterna: normalizeNumberInput(apiData.temp),
+        selectedIcons: autoIcons,
+        apiTemp,
+        apiCondition,
+      });
+      setClimaPrefillApplied(true);
+    }
 
     setShowDateModal(true);
   };
+
+  useEffect(() => {
+    if (!showDateModal || !modalDate) return;
+    if (climaPrefillApplied) return;
+    const shouldApply =
+      modalStep === "aula" ||
+      (modalStep === "ocorrencia" && poolData.incidentImpact === "aula");
+    if (!shouldApply) return;
+    const cache = getClimaCache(modalDate);
+    if (cache) {
+      setPoolData(prev => ({
+        ...prev,
+        tempExterna: normalizeNumberInput(cache.tempExterna),
+        selectedIcons: cache.selectedIcons || [],
+      }));
+    }
+    setClimaPrefillApplied(true);
+  }, [showDateModal, modalDate, modalStep, poolData.incidentImpact, climaPrefillApplied]);
 
   const toggleIcon = (icon: string) => {
     setPoolData(prev => {
@@ -539,42 +752,93 @@ export const Attendance: React.FC = () => {
     return "normal";
   };
 
-  const handleSaveLog = async () => {
+  const handleSaveLog = async (logTypeOverride?: PoolLogEntry["nota"] | React.MouseEvent<HTMLButtonElement>) => {
+    const effectiveLogType = typeof logTypeOverride === "string" ? logTypeOverride : poolData.logType;
     const statusSugerido = getSuggestedStatus();
+    const isOccurrence = effectiveLogType === "ocorrencia";
+    const occurrenceImpact = poolData.incidentImpact;
+    const reasonLabel = isOccurrence
+      ? `Ocorrencia (${occurrenceImpact}): ${poolData.incidentType || poolData.personalType}`
+      : (effectiveLogType === "aula" ? "Condicoes Climaticas" : effectiveLogType);
     
     // Lógica para Feriado/Ponte/Justificada
-    if (["feriado", "ponte-feriado"].includes(poolData.logType) || (poolData.logType === "aula" && statusSugerido === "justificada")) {
+    const shouldTreatOccurrenceAsDay = isOccurrence && occurrenceImpact === "dia";
+    const shouldMassJustify =
+      ["feriado", "ponte-feriado"].includes(effectiveLogType) ||
+      (effectiveLogType === "aula" && statusSugerido === "justificada") ||
+      shouldTreatOccurrenceAsDay;
+    const shouldAddJustificationNote = shouldMassJustify || isOccurrence;
+    if (shouldMassJustify || shouldAddJustificationNote) {
       // Aplicar justificativa em massa
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
-      setAttendance(prev => prev.map(student => ({
-        ...student,
-        attendance: { ...student.attendance, [modalDate]: "Justificado" },
-        justifications: { 
-          ...(student.justifications || {}), 
-          [modalDate]: poolData.logType === "aula" ? "Condicoes Climaticas" : poolData.logType 
+      setAttendance(prev => prev.map(student => {
+        const nextJustifications = { ...(student.justifications || {}) };
+        if (shouldMassJustify) {
+          nextJustifications[modalDate] = reasonLabel;
         }
-      })));
+        if (shouldAddJustificationNote) {
+          nextJustifications[modalDate] = reasonLabel;
+        }
+        return {
+          ...student,
+          attendance: shouldMassJustify ? { ...student.attendance, [modalDate]: "Justificado" } : student.attendance,
+          justifications: nextJustifications,
+        };
+      }));
+
+      try {
+        const entries = attendance.map((student) => ({
+          aluno_nome: student.aluno,
+          data: modalDate,
+          motivo: reasonLabel,
+          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+          horario: selectedClass.horario || selectedHorario || "",
+          professor: selectedClass.professor || selectedProfessor || "",
+        }));
+        await saveJustificationLog(entries);
+      } catch {
+        // ignore to avoid blocking UI
+      }
     }
 
     // Construção do Objeto de Log (Persistência)
     const logEntry: PoolLogEntry = {
       data: modalDate,
+      turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
+      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+      horario: selectedClass.horario || selectedHorario || "",
+      professor: selectedClass.professor || selectedProfessor || "",
       clima1: poolData.selectedIcons.filter(i => WEATHER_ICONS.conditions.includes(i)).join(", "),
       clima2: poolData.selectedIcons.filter(i => WEATHER_ICONS.sensations.includes(i)).join(", "),
-      statusAula: poolData.logType === "aula" ? statusSugerido : "cancelada",
-      nota: poolData.logType,
-      tipoOcorrencia: poolData.logType === "ocorrencia" ? 
+      statusAula: effectiveLogType === "aula" ? statusSugerido : "cancelada",
+      nota: effectiveLogType,
+      tipoOcorrencia: effectiveLogType === "ocorrencia" ? 
         (poolData.incidentType || poolData.personalType) : "nenhuma",
       tempExterna: poolData.tempExterna || "",
       tempPiscina: poolData.tempPiscina || "",
-      cloroPpm: poolData.cloroEnabled ? poolData.cloro : null,
+      cloroPpm: !cloroLocked && poolData.cloroEnabled && Number.isFinite(poolData.cloro) ? poolData.cloro : null,
     };
 
     try {
-      await savePoolLog(logEntry);
-      alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}`);
-    } catch (error) {
-      alert("Erro ao salvar dados do clima. Tente novamente.");
+      if (effectiveLogType === "aula" || (isOccurrence && occurrenceImpact === "aula")) {
+        const existingCache = getClimaCache(modalDate);
+        setClimaCache(modalDate, {
+          tempExterna: normalizeNumberInput(poolData.tempExterna),
+          selectedIcons: poolData.selectedIcons,
+          apiTemp: existingCache?.apiTemp,
+          apiCondition: existingCache?.apiCondition,
+        });
+      }
+      const response = await savePoolLog(logEntry);
+      const action = response?.data?.action ? ` (${response.data.action})` : "";
+      const file = response?.data?.file ? `\nArquivo: ${response.data.file}` : "";
+      console.info("pool-log saved", response?.data);
+      alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}${action}${file}`);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      console.error("pool-log save error", error);
+      alert(detail ? `Erro ao salvar dados do clima: ${detail}` : "Erro ao salvar dados do clima. Tente novamente.");
     }
     setShowDateModal(false);
   };
@@ -652,6 +916,8 @@ export const Attendance: React.FC = () => {
     const turmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
     if (!turmaLookup) return;
     const newDates = generateDates(selectedClass.diasSemana).map((d) => d.split(" ")[0]);
+    const storedRecords = loadAttendanceStorage();
+    const storedByName = new Map((storedRecords || []).map((item) => [item.aluno, item]));
 
     // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
     setHistory([]);
@@ -660,16 +926,27 @@ export const Attendance: React.FC = () => {
       (studentsPerClass[turmaLookup] || []).map((aluno, idx) => ({
         id: idx + 1,
         aluno,
-        attendance: newDates.reduce(
-          (acc, date) => {
-            acc[date] = "";
-            return acc;
-          },
-          {} as { [date: string]: "Presente" | "Falta" | "Justificado" | "" }
-        ),
+        attendance: (() => {
+          const base = newDates.reduce(
+            (acc, date) => {
+              acc[date] = "";
+              return acc;
+            },
+            {} as { [date: string]: "Presente" | "Falta" | "Justificado" | "" }
+          );
+          const stored = storedByName.get(aluno);
+          if (!stored) return base;
+          return { ...base, ...(stored.attendance || {}) };
+        })(),
+        justifications: storedByName.get(aluno)?.justifications || {},
       }))
     );
   }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass]);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    saveAttendanceStorage(attendance);
+  }, [attendance, storageKey]);
 
   // Ciclar entre os 4 estados
   const cycleStatus = (currentStatus: "Presente" | "Falta" | "Justificado" | "") => {
@@ -737,9 +1014,12 @@ export const Attendance: React.FC = () => {
 
   // Função de Justificativa: Abre o modal de notação
   const adicionarJustificativa = (id: number) => {
+    const student = attendance.find((item) => item.id === id);
+    const entries = getMonthJustificationEntries(student?.justifications);
+    const first = entries[0];
     setJustificationStudentId(id);
-    setJustificationDay("");
-    setJustificationReason("");
+    setJustificationDay(first?.day || "");
+    setJustificationReason(first?.reason || "");
     setShowJustificationModal(true);
   };
 
@@ -776,17 +1056,45 @@ export const Attendance: React.FC = () => {
     );
 
     setShowJustificationModal(false);
+
+    const student = attendance.find((item) => item.id === justificationStudentId);
+    if (student) {
+      saveJustificationLog([
+        {
+          aluno_nome: student.aluno,
+          data: targetDate,
+          motivo: justificationReason,
+          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+          horario: selectedClass.horario || selectedHorario || "",
+          professor: selectedClass.professor || selectedProfessor || "",
+        },
+      ]).catch(() => undefined);
+    }
   };
 
   const handleSave = () => {
-    console.log("Salvando chamada:", {
-      turma: selectedClass.turmaLabel || selectedClass.turmaCodigo,
-      horario: selectedClass.horario,
-      professor: selectedClass.professor,
-      data: selectedDate,
-      attendance,
-    });
-    alert("Chamada salva com sucesso! (Demo)");
+    const payload = {
+      turmaCodigo: selectedClass.turmaCodigo || "",
+      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+      horario: selectedClass.horario || selectedHorario || "",
+      professor: selectedClass.professor || selectedProfessor || "",
+      mes: monthKey,
+      registros: attendance.map((item) => ({
+        aluno_nome: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+      })),
+    };
+
+    saveAttendanceLog(payload)
+      .then((resp) => {
+        const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
+        alert(`Chamada salva com sucesso!${file}`);
+      })
+      .catch(() => {
+        alert("Erro ao salvar chamada. Tente novamente.");
+      });
   };
 
   return (
@@ -986,7 +1294,9 @@ export const Attendance: React.FC = () => {
             <tbody>
               {attendance.map((item, idx) => {
                 const absences = Object.values(item.attendance).filter((s) => s === "Falta").length;
-                const showNote = Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado");
+                const showNote =
+                  Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado") ||
+                  hasAnyMonthJustification(item.justifications);
                 const showDelete = absences >= 3;
                 return (
                 <tr
@@ -1201,6 +1511,25 @@ export const Attendance: React.FC = () => {
         >
           <div style={{ background: "white", padding: "25px", borderRadius: "12px", width: "300px", boxShadow: "0 4px 20px rgba(0,0,0,0.2)" }}>
             <h3 style={{ marginTop: 0, marginBottom: "15px", color: "#333" }}>Adicionar Justificativa</h3>
+
+            {(() => {
+              const student = attendance.find((item) => item.id === justificationStudentId);
+              const entries = getMonthJustificationEntries(student?.justifications);
+              if (entries.length === 0) return null;
+              return (
+                <div style={{ marginBottom: "15px", background: "#f8f9fa", border: "1px solid #eee", borderRadius: "8px", padding: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "6px" }}>Justificativas do mês</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "#666" }}>
+                    {entries.map((entry, idx) => (
+                      <div key={`${entry.day}-${idx}`} style={{ display: "flex", gap: "6px" }}>
+                        <span style={{ minWidth: "28px", fontWeight: 700 }}>{entry.day}</span>
+                        <span>{entry.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px", fontSize: "14px", fontWeight: 600 }}>Dia (dd):</label>
@@ -1352,19 +1681,19 @@ export const Attendance: React.FC = () => {
                   🏊 Aula
                 </button>
                 <button className="btn-option" style={{ background: "#ffc107", color: "#333", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "ocorrencia"})); setModalStep("ocorrencia"); }}>
+                  onClick={() => { setPoolData(p => ({...p, logType: "ocorrencia", cloroEnabled: false, incidentImpact: "aula" })); setModalStep("ocorrencia"); }}>
                   ⚠️ Ocorrência
                 </button>
                 <button className="btn-option" style={{ background: "#17a2b8", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "feriado"})); handleSaveLog(); }}>
+                  onClick={() => { setPoolData(p => ({...p, logType: "feriado"})); handleSaveLog("feriado"); }}>
                   🎉 Feriado
                 </button>
                 <button className="btn-option" style={{ background: "#6c757d", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "ponte-feriado"})); handleSaveLog(); }}>
+                  onClick={() => { setPoolData(p => ({...p, logType: "ponte-feriado"})); handleSaveLog("ponte-feriado"); }}>
                   🌉 Ponte
                 </button>
                 <button className="btn-option" style={{ gridColumn: "1 / -1", background: "#28a745", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "reuniao"})); handleSaveLog(); }}>
+                  onClick={() => { setPoolData(p => ({...p, logType: "reuniao"})); handleSaveLog("reuniao"); }}>
                   🤝 Reunião
                 </button>
               </div>
@@ -1418,38 +1747,54 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 <div style={{ marginBottom: "20px" }}>
-                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled })}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "14px",
-                        border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
-                        background: poolData.cloroEnabled ? "#eef2ff" : "white",
-                        color: poolData.cloroEnabled ? "#667eea" : "#666",
-                        cursor: "pointer",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Cloro (ppm)
-                    </button>
-                    <span style={{ color: poolData.cloroEnabled ? getChlorineColor(poolData.cloro) : "#999" }}>
-                      {poolData.cloroEnabled ? poolData.cloro.toFixed(1) : "-"}
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0" max="7" step="0.5"
-                    value={poolData.cloro}
-                    onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})}
-                    disabled={!poolData.cloroEnabled}
-                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro), opacity: poolData.cloroEnabled ? 1 : 0.4 }}
-                  />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#999" }}>
-                    <span>0.0</span><span>3.5</span><span>7.0</span>
-                  </div>
+                  {(() => {
+                    const cloroSafe = Number.isFinite(poolData.cloro) ? poolData.cloro : 1.5;
+                    return (
+                      <>
+                        <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (cloroLocked) return;
+                              setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled });
+                            }}
+                            disabled={cloroLocked}
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: "14px",
+                              border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
+                              background: poolData.cloroEnabled ? "#eef2ff" : "white",
+                              color: poolData.cloroEnabled ? "#667eea" : "#666",
+                              cursor: cloroLocked ? "not-allowed" : "pointer",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              opacity: cloroLocked ? 0.5 : 1,
+                            }}
+                          >
+                            Cloro (ppm)
+                          </button>
+                          <span style={{ color: poolData.cloroEnabled ? getChlorineColor(cloroSafe) : "#999" }}>
+                            {poolData.cloroEnabled ? cloroSafe.toFixed(1) : "-"}
+                          </span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0" max="7" step="0.5"
+                          value={cloroSafe}
+                          onChange={e => {
+                            const next = parseFloat(e.target.value);
+                            if (!Number.isFinite(next)) return;
+                            setPoolData({ ...poolData, cloro: next });
+                          }}
+                          disabled={!poolData.cloroEnabled || cloroLocked}
+                          style={{ width: "100%", accentColor: getChlorineColor(cloroSafe), opacity: poolData.cloroEnabled && !cloroLocked ? 1 : 0.4 }}
+                        />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#999" }}>
+                          <span>0.0</span><span>3.5</span><span>7.0</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ background: getSuggestedStatus() === "justificada" ? "#fff3cd" : "#d4edda", padding: "10px", borderRadius: "6px", marginBottom: "15px", fontSize: "13px", textAlign: "center", border: "1px solid rgba(0,0,0,0.1)" }}>
@@ -1458,7 +1803,7 @@ export const Attendance: React.FC = () => {
 
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button onClick={() => setModalStep("select")} style={{ flex: 1, padding: "10px", border: "1px solid #ccc", borderRadius: "6px", background: "white", cursor: "pointer" }}>Voltar</button>
-                  <button onClick={handleSaveLog} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#667eea", color: "white", fontWeight: "bold", cursor: "pointer" }}>Salvar Dados</button>
+                  <button onClick={() => handleSaveLog()} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#667eea", color: "white", fontWeight: "bold", cursor: "pointer" }}>Salvar Dados</button>
                 </div>
               </div>
             )}
@@ -1467,10 +1812,42 @@ export const Attendance: React.FC = () => {
             {modalStep === "ocorrencia" && (
               <div className="card-bo">
                 <div style={{ marginBottom: "15px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>Tipo de Ocorrência</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>
+                    Tipo de Ocorrência
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "10px", background: poolData.incidentImpact === "dia" ? "#ffe8cc" : "#e6ffed", color: poolData.incidentImpact === "dia" ? "#b54708" : "#1a7f37" }}>
+                      {poolData.incidentImpact === "dia" ? "Dia" : "Aula"}
+                    </span>
+                  </label>
+                  <div style={{ display: "flex", gap: "12px", marginBottom: "8px", fontSize: "12px", color: "#666" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <input
+                        type="radio"
+                        name="occurrenceImpact"
+                        checked={poolData.incidentImpact === "aula"}
+                        onChange={() => setPoolData({ ...poolData, incidentImpact: "aula" })}
+                      />
+                      Compromete a aula
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <input
+                        type="radio"
+                        name="occurrenceImpact"
+                        checked={poolData.incidentImpact === "dia"}
+                        onChange={() => setPoolData({ ...poolData, incidentImpact: "dia" })}
+                      />
+                      Compromete o dia
+                    </label>
+                  </div>
                   <select 
                     value={poolData.incidentType} 
-                    onChange={e => setPoolData({...poolData, incidentType: e.target.value})}
+                    onChange={e => {
+                      const next = e.target.value;
+                      setPoolData({
+                        ...poolData,
+                        incidentType: next,
+                        cloroEnabled: next === "Manutencao" ? false : poolData.cloroEnabled,
+                      });
+                    }}
                     style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                   >
                     <option value="">Selecione...</option>
@@ -1500,41 +1877,59 @@ export const Attendance: React.FC = () => {
                 </div>
 
                 {/* Slider de Cloro também na Ocorrência para registros técnicos */}
-                <div style={{ marginBottom: "20px", borderTop: "1px solid #eee", paddingTop: "15px" }}>
-                  <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled })}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "14px",
-                        border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
-                        background: poolData.cloroEnabled ? "#eef2ff" : "white",
-                        color: poolData.cloroEnabled ? "#667eea" : "#666",
-                        cursor: "pointer",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                      }}
-                    >
-                      Registro Técnico (Cloro)
-                    </button>
-                    <span style={{ color: poolData.cloroEnabled ? getChlorineColor(poolData.cloro) : "#999" }}>
-                      {poolData.cloroEnabled ? poolData.cloro.toFixed(1) : "-"}
-                    </span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0" max="7" step="0.5"
-                    value={poolData.cloro}
-                    onChange={e => setPoolData({...poolData, cloro: parseFloat(e.target.value)})}
-                    disabled={!poolData.cloroEnabled}
-                    style={{ width: "100%", accentColor: getChlorineColor(poolData.cloro), opacity: poolData.cloroEnabled ? 1 : 0.4 }}
-                  />
-                </div>
+                {poolData.incidentType === "Manutencao" && (
+                  <div style={{ marginBottom: "20px", borderTop: "1px solid #eee", paddingTop: "15px" }}>
+                    {(() => {
+                      const cloroSafe = Number.isFinite(poolData.cloro) ? poolData.cloro : 1.5;
+                      return (
+                        <>
+                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "5px" }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (cloroLocked) return;
+                                setPoolData({ ...poolData, cloroEnabled: !poolData.cloroEnabled });
+                              }}
+                              disabled={cloroLocked}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "14px",
+                                border: poolData.cloroEnabled ? "2px solid #667eea" : "1px solid #ddd",
+                                background: poolData.cloroEnabled ? "#eef2ff" : "white",
+                                color: poolData.cloroEnabled ? "#667eea" : "#666",
+                                cursor: cloroLocked ? "not-allowed" : "pointer",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                opacity: cloroLocked ? 0.5 : 1,
+                              }}
+                            >
+                              Registro Técnico (Cloro)
+                            </button>
+                            <span style={{ color: poolData.cloroEnabled ? getChlorineColor(cloroSafe) : "#999" }}>
+                              {poolData.cloroEnabled ? cloroSafe.toFixed(1) : "-"}
+                            </span>
+                          </label>
+                          <input
+                            type="range"
+                            min="0" max="7" step="0.5"
+                            value={cloroSafe}
+                            onChange={e => {
+                              const next = parseFloat(e.target.value);
+                              if (!Number.isFinite(next)) return;
+                              setPoolData({ ...poolData, cloro: next });
+                            }}
+                            disabled={!poolData.cloroEnabled || cloroLocked}
+                            style={{ width: "100%", accentColor: getChlorineColor(cloroSafe), opacity: poolData.cloroEnabled && !cloroLocked ? 1 : 0.4 }}
+                          />
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button onClick={() => setModalStep("select")} style={{ flex: 1, padding: "10px", border: "1px solid #ccc", borderRadius: "6px", background: "white", cursor: "pointer" }}>Voltar</button>
-                  <button onClick={handleSaveLog} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#dc3545", color: "white", fontWeight: "bold", cursor: "pointer" }}>Registrar Ocorrência</button>
+                  <button onClick={() => handleSaveLog()} style={{ flex: 2, padding: "10px", border: "none", borderRadius: "6px", background: "#dc3545", color: "white", fontWeight: "bold", cursor: "pointer" }}>Registrar Ocorrência</button>
                 </div>
               </div>
             )}

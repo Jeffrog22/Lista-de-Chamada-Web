@@ -1,6 +1,7 @@
 from typing import Optional
 from datetime import date, datetime
 from sqlmodel import SQLModel, Field
+from sqlalchemy import UniqueConstraint
 from pydantic import validator
 
 def _normalize_horario(value: Optional[str]) -> Optional[str]:
@@ -75,3 +76,40 @@ class User(SQLModel, table=True):
     username: str
     password_hash: str
     role: Optional[str] = "operator"
+
+class ImportUnit(SQLModel, table=True):
+    __tablename__ = "import_units"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+
+class ImportClass(SQLModel, table=True):
+    __tablename__ = "import_classes"
+    __table_args__ = (
+        UniqueConstraint("unit_id", "codigo", "horario", name="uq_import_class_unit_codigo_horario"),
+    )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    unit_id: int
+    codigo: str
+    turma_label: str = ""
+    horario: str
+    professor: str = ""
+    nivel: str = ""
+    faixa_etaria: str = ""
+    capacidade: int = 0
+    dias_semana: str = ""
+
+class ImportStudent(SQLModel, table=True):
+    __tablename__ = "import_students"
+    __table_args__ = (
+        UniqueConstraint("class_id", "nome", name="uq_import_student_class_nome"),
+    )
+    id: Optional[int] = Field(default=None, primary_key=True)
+    class_id: int
+    nome: str
+    whatsapp: str = ""
+    data_nascimento: str = ""
+    data_atestado: str = ""
+    categoria: str = ""
+    genero: str = ""
+    parq: str = ""
+    atestado: bool = False

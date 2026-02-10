@@ -1,0 +1,569 @@
+[
+  {
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "mes": "2026-02",
+    "registros": [
+      {
+        "aluno_nome": "Augusto de Almeida",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Bianca Almeida de Moura Coelho",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Bruno Nunes Marques",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "José Francisco da Silva",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Katia Cilene Tibúrcio da Silva",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Liliam de Sales Cambraia",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Lucas Cordeiro da Silva",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Samuel Ometto Franco",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      }
+    ],
+    "saved_at": "2026-02-10T02:13:29.868965+00:00"
+  },
+  {
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "mes": "2026-02",
+    "registros": [
+      {
+        "aluno_nome": "Augusto de Almeida",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Bianca Almeida de Moura Coelho",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Bruno Nunes Marques",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "José Francisco da Silva",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Justificado",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas",
+          "2026-02-06": "horário das 11h"
+        }
+      },
+      {
+        "aluno_nome": "Katia Cilene Tibúrcio da Silva",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Liliam de Sales Cambraia",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Lucas Cordeiro da Silva",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Samuel Ometto Franco",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      }
+    ],
+    "saved_at": "2026-02-10T02:16:12.679788+00:00"
+  },
+  {
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "mes": "2026-02",
+    "registros": [
+      {
+        "aluno_nome": "Helloisa de Jesus Inez",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "João Miguel Lima França",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "João Miguel de Souza Silva",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Laura Ferreira Barbosa",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Lua Machado Pereira",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Matheus Henrique de Souza Marciano",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Miguel Soares Bastos",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      },
+      {
+        "aluno_nome": "Rafaela Aguiar Prata",
+        "attendance": {
+          "2026-02-04": "",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {}
+      }
+    ],
+    "saved_at": "2026-02-10T02:56:56.270209+00:00"
+  },
+  {
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "mes": "2026-02",
+    "registros": [
+      {
+        "aluno_nome": "Helloisa de Jesus Inez",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "João Miguel Lima França",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "João Miguel de Souza Silva",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Laura Ferreira Barbosa",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Falta",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Lua Machado Pereira",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Matheus Henrique de Souza Marciano",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Miguel Soares Bastos",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      },
+      {
+        "aluno_nome": "Rafaela Aguiar Prata",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "",
+          "2026-02-13": "",
+          "2026-02-18": "",
+          "2026-02-20": "",
+          "2026-02-25": "",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-04": "Condicoes Climaticas"
+        }
+      }
+    ],
+    "saved_at": "2026-02-10T03:13:26.380047+00:00"
+  }
+]

@@ -57,8 +57,16 @@ export const getWeather = (date: string) =>
 export const savePoolLog = (data: any) =>
   API.post("/pool-log", data);
 
-export const getPoolLog = (date: string) =>
-  API.get(`/pool-log?date=${encodeURIComponent(date)}`);
+export const getPoolLog = (date: string, params?: Record<string, string | undefined>) => {
+  const query = new URLSearchParams({ date, ...(params || {}) });
+  return API.get(`/pool-log?${query.toString()}`);
+};
+
+export const saveAttendanceLog = (data: any) =>
+  API.post("/attendance-log", data);
+
+export const saveJustificationLog = (data: any) =>
+  API.post("/justifications-log", data);
 
 // Import backend (multi-unit)
 export const getBootstrap = (unitId?: number) =>

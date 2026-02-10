@@ -6,7 +6,16 @@ connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite")
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
 def create_db_and_tables():
-    from app.models import Student, ClassModel, Attendance, Category, User
+    from app.models import (
+        Student,
+        ClassModel,
+        Attendance,
+        Category,
+        User,
+        ImportUnit,
+        ImportClass,
+        ImportStudent,
+    )
     from sqlmodel import SQLModel
     SQLModel.metadata.create_all(engine)
 

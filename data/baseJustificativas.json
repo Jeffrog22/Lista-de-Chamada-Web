@@ -1,0 +1,182 @@
+[
+  {
+    "aluno_nome": "Augusto de Almeida",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063074+00:00"
+  },
+  {
+    "aluno_nome": "Bianca Almeida de Moura Coelho",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063308+00:00"
+  },
+  {
+    "aluno_nome": "Bruno Nunes Marques",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063361+00:00"
+  },
+  {
+    "aluno_nome": "José Francisco da Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063408+00:00"
+  },
+  {
+    "aluno_nome": "Katia Cilene Tibúrcio da Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063453+00:00"
+  },
+  {
+    "aluno_nome": "Liliam de Sales Cambraia",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063497+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Cordeiro da Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063540+00:00"
+  },
+  {
+    "aluno_nome": "Samuel Ometto Franco",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:12:47.063582+00:00"
+  },
+  {
+    "aluno_nome": "José Francisco da Silva",
+    "data": "2026-02-06",
+    "motivo": "horário das 11h",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T02:15:51.304866+00:00"
+  },
+  {
+    "aluno_nome": "Helloisa de Jesus Inez",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749107+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel Lima França",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749217+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel de Souza Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749269+00:00"
+  },
+  {
+    "aluno_nome": "Laura Ferreira Barbosa",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749314+00:00"
+  },
+  {
+    "aluno_nome": "Lua Machado Pereira",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749359+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Henrique de Souza Marciano",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749401+00:00"
+  },
+  {
+    "aluno_nome": "Miguel Soares Bastos",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749443+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749485+00:00"
+  },
+  {
+    "aluno_nome": "Rafaela Aguiar Prata",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-10T03:12:50.749526+00:00"
+  }
+]
