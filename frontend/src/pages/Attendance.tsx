@@ -1007,6 +1007,44 @@ export const Attendance: React.FC = () => {
   // Função de Exclusão: Ativada quando o aluno tem 3 ou mais faltas
   const excluirAluno = (id: number) => {
     if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
+      const student = attendance.find((item) => item.id === id);
+      if (student) {
+        const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
+        const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
+        const turmaKey = selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "";
+        const horarioKey = selectedClass.horario || selectedHorario || "";
+        const professorKey = selectedClass.professor || selectedProfessor || "";
+        const full = activeStudents.find((s: any) =>
+          s.nome === student.aluno &&
+          (s.turma === turmaKey || s.turmaCodigo === turmaKey) &&
+          s.horario === horarioKey &&
+          s.professor === professorKey
+        );
+        const payload = {
+          ...(full || {
+            id: `excl-${Date.now()}`,
+            nome: student.aluno,
+            turma: turmaKey,
+            horario: horarioKey,
+            professor: professorKey,
+            nivel: selectedClass.nivel || "",
+            idade: 0,
+            categoria: "",
+            whatsapp: "",
+            genero: "",
+            dataNascimento: "",
+            parQ: "",
+            atestado: false,
+          }),
+          dataExclusao: new Date().toLocaleDateString(),
+        };
+
+        const exists = excludedStudents.some((s: any) => s.id === payload.id);
+        if (!exists) {
+          excludedStudents.push(payload);
+          localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
+        }
+      }
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
       setAttendance((prev) => prev.filter((student) => student.id !== id));
     }

@@ -178,5 +178,175 @@
     "horario": "930",
     "professor": "Jefferson",
     "saved_at": "2026-02-10T03:12:50.749526+00:00"
+  },
+  {
+    "aluno_nome": "Alice Soares Cunha",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.032528+00:00"
+  },
+  {
+    "aluno_nome": "Allana Beatriz da Cruz Francisco",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.032777+00:00"
+  },
+  {
+    "aluno_nome": "Ana Clara Pereira de Souza",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.032849+00:00"
+  },
+  {
+    "aluno_nome": "Aylla Victória Silva Souza",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.032931+00:00"
+  },
+  {
+    "aluno_nome": "Isaque Galdino Autor",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.033029+00:00"
+  },
+  {
+    "aluno_nome": "Lorena Vitória Silveira dos Santos",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.033109+00:00"
+  },
+  {
+    "aluno_nome": "Lorenna Silva Ribeiro",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.033188+00:00"
+  },
+  {
+    "aluno_nome": "Natalia Silva de Souza",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.033266+00:00"
+  },
+  {
+    "aluno_nome": "Nicole Yasmin Silveira dos Santos",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:44:57.033343+00:00"
+  },
+  {
+    "aluno_nome": "Alice Lohane Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.080709+00:00"
+  },
+  {
+    "aluno_nome": "Arthur Guilherme Lima Santos",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.080800+00:00"
+  },
+  {
+    "aluno_nome": "Felipe Marques de Melo",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.080866+00:00"
+  },
+  {
+    "aluno_nome": "Ingrid Lohana Silva",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.080915+00:00"
+  },
+  {
+    "aluno_nome": "Lívia Meira de Oliveira",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.080960+00:00"
+  },
+  {
+    "aluno_nome": "Nayla Mota de Matos",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.081003+00:00"
+  },
+  {
+    "aluno_nome": "Sophia Marques Forner",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.081088+00:00"
+  },
+  {
+    "aluno_nome": "Valentina Marques de Melo",
+    "data": "2026-02-04",
+    "motivo": "Condicoes Climaticas",
+    "turmaCodigo": "dqs03",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-10T23:47:08.081154+00:00"
   }
 ]

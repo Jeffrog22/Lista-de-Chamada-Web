@@ -54,6 +54,50 @@ const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
 };
 
 export const Students: React.FC = () => {
+  const overridesKey = "studentOverrides";
+  const loadOverrides = () => {
+    try {
+      const raw = localStorage.getItem(overridesKey);
+      if (!raw) return { added: [], updated: {}, deleted: [] } as {
+        added: Student[];
+        updated: Record<string, Student>;
+        deleted: string[];
+      };
+      const parsed = JSON.parse(raw);
+      return {
+        added: Array.isArray(parsed.added) ? parsed.added : [],
+        updated: parsed.updated && typeof parsed.updated === "object" ? parsed.updated : {},
+        deleted: Array.isArray(parsed.deleted) ? parsed.deleted : [],
+      } as {
+        added: Student[];
+        updated: Record<string, Student>;
+        deleted: string[];
+      };
+    } catch {
+      return { added: [], updated: {}, deleted: [] } as {
+        added: Student[];
+        updated: Record<string, Student>;
+        deleted: string[];
+      };
+    }
+  };
+
+  const saveOverrides = (next: { added: Student[]; updated: Record<string, Student>; deleted: string[] }) => {
+    localStorage.setItem(overridesKey, JSON.stringify(next));
+  };
+
+  const applyOverrides = (base: Student[], overrides: { added: Student[]; updated: Record<string, Student>; deleted: string[] }) => {
+    const deleted = new Set(overrides.deleted || []);
+    const updated = overrides.updated || {};
+    const result = base
+      .filter((s) => !deleted.has(s.id))
+      .map((s) => (updated[s.id] ? updated[s.id] : s));
+
+    (overrides.added || []).forEach((s) => {
+      if (!deleted.has(s.id)) result.push(s);
+    });
+    return result;
+  };
   // Mock Data inicial expandido
   const initialMockStudents: Student[] = [
     {
@@ -75,10 +119,19 @@ export const Students: React.FC = () => {
 
   const [students, setStudents] = useState<Student[]>(() => {
     const saved = localStorage.getItem("activeStudents");
-    return saved ? JSON.parse(saved) : initialMockStudents;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return initialMockStudents;
   });
 
   const [loading, setLoading] = useState(false);
+  const [professorOptions, setProfessorOptions] = useState<string[]>([]);
 
   useEffect(() => {
     localStorage.setItem("activeStudents", JSON.stringify(students));
@@ -141,8 +194,10 @@ export const Students: React.FC = () => {
         });
 
         if (mapped.length > 0) {
-          setStudents(mapped);
-          localStorage.setItem("activeStudents", JSON.stringify(mapped));
+          const overrides = loadOverrides();
+          const merged = applyOverrides(mapped, overrides);
+          setStudents(merged);
+          localStorage.setItem("activeStudents", JSON.stringify(merged));
         }
 
         const classStorage = data.classes.map((cls) => ({
@@ -158,6 +213,10 @@ export const Students: React.FC = () => {
         }));
         if (classStorage.length > 0) {
           localStorage.setItem("activeClasses", JSON.stringify(classStorage));
+          const professors = Array.from(
+            new Set(classStorage.map((cls) => cls.Professor).filter(Boolean))
+          );
+          setProfessorOptions(professors);
         }
       })
       .catch(() => {
@@ -172,6 +231,19 @@ export const Students: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (professorOptions.length > 0) return;
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (!raw) return;
+      const classes = JSON.parse(raw) as Array<{ Professor?: string }>;
+      const professors = Array.from(new Set(classes.map((cls) => cls.Professor).filter(Boolean)));
+      setProfessorOptions(professors);
+    } catch {
+      // ignore
+    }
+  }, [professorOptions.length]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [nivelFilter, setNivelFilter] = useState("");
   const [sortKey, setSortKey] = useState<
@@ -181,6 +253,7 @@ export const Students: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(true);
+  const [minAgeError, setMinAgeError] = useState<string>("");
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -208,7 +281,8 @@ export const Students: React.FC = () => {
         turma: parsed.turma || "",
         horario: parsed.horario || "",
         professor: parsed.professor || "",
-        parQ: parsed.parQ || "Não"
+        parQ: parsed.parQ || "Não",
+        genero: parsed.genero || prev.genero,
       }));
     }
   }, []);
@@ -224,6 +298,51 @@ export const Students: React.FC = () => {
       age--;
     }
     return isNaN(age) ? 0 : age;
+  };
+
+  const parseBirthDate = (value: string) => {
+    const [day, month, year] = value.split("/").map(Number);
+    if (!day || !month || !year) return null;
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return null;
+    }
+    return date;
+  };
+
+  const categoriaRules = [
+    { min: 6, label: "Pré-Mirim" },
+    { min: 9, label: "Mirim I" },
+    { min: 10, label: "Mirim II" },
+    { min: 11, label: "Petiz I" },
+    { min: 12, label: "Petiz II" },
+    { min: 13, label: "Infantil I" },
+    { min: 14, label: "Infantil II" },
+    { min: 15, label: "Juvenil I" },
+    { min: 16, label: "Juvenil II" },
+    { min: 17, label: "Júnior I" },
+    { min: 18, label: "Júnior II/Sênior" },
+    { min: 20, label: "A20+" },
+    { min: 25, label: "B25+" },
+    { min: 30, label: "C30+" },
+    { min: 35, label: "D35+" },
+    { min: 40, label: "E40+" },
+    { min: 45, label: "F45+" },
+    { min: 50, label: "G50+" },
+    { min: 55, label: "H55+" },
+    { min: 60, label: "I60+" },
+    { min: 65, label: "J65+" },
+    { min: 70, label: "K70+" },
+  ];
+
+  const getCategoriaByAge = (age: number) => {
+    if (!Number.isFinite(age)) return "";
+    if (age < 6) return "";
+    let result = "";
+    for (const rule of categoriaRules) {
+      if (age >= rule.min) result = rule.label;
+    }
+    return result;
   };
 
   const formatHorario = (value: string) => {
@@ -245,6 +364,93 @@ export const Students: React.FC = () => {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const maskDateInput = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  };
+
+  const maskWhatsappInput = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const getNivelFromClasses = (turma: string, horario: string, professor: string) => {
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (!raw) return "";
+      const classes = JSON.parse(raw) as Array<{
+        Turma?: string;
+        TurmaCodigo?: string;
+        Horario?: string;
+        Professor?: string;
+        Nivel?: string;
+      }>;
+      const turmaNorm = normalizeText(turma || "");
+      const professorNorm = normalizeText(professor || "");
+      const horarioNorm = (value: string) => {
+        const digits = (value || "").replace(/\D/g, "");
+        if (digits.length === 3) return `0${digits}`;
+        if (digits.length >= 4) return digits.slice(0, 4);
+        return digits;
+      };
+      const horarioKey = horarioNorm(horario || "");
+      const match = classes.find((cls) => {
+        const turmaKey = cls.TurmaCodigo || "";
+        const turmaLabel = cls.Turma || "";
+        if (!horarioKey || !professorNorm) return false;
+        const turmaKeyNorm = normalizeText(turmaKey);
+        const turmaLabelNorm = normalizeText(turmaLabel);
+        const turmaMatch = turmaNorm && (turmaNorm === turmaKeyNorm || turmaNorm === turmaLabelNorm);
+        const clsHorario = horarioNorm(cls.Horario || "");
+        const clsProfessor = normalizeText(cls.Professor || "");
+        return turmaMatch && clsHorario === horarioKey && clsProfessor === professorNorm;
+      });
+      return match?.Nivel || "";
+    } catch {
+      return "";
+    }
+  };
+
+  const getTurmaCodigoFromClasses = (turma: string, horario: string, professor: string) => {
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (!raw) return turma;
+      const classes = JSON.parse(raw) as Array<{
+        Turma?: string;
+        TurmaCodigo?: string;
+        Horario?: string;
+        Professor?: string;
+      }>;
+      const turmaNorm = normalizeText(turma || "");
+      const professorNorm = normalizeText(professor || "");
+      const horarioNorm = (value: string) => {
+        const digits = (value || "").replace(/\D/g, "");
+        if (digits.length === 3) return `0${digits}`;
+        if (digits.length >= 4) return digits.slice(0, 4);
+        return digits;
+      };
+      const horarioKey = horarioNorm(horario || "");
+      const match = classes.find((cls) => {
+        const turmaKey = cls.TurmaCodigo || "";
+        const turmaLabel = cls.Turma || "";
+        if (!horarioKey || !professorNorm) return false;
+        const turmaKeyNorm = normalizeText(turmaKey);
+        const turmaLabelNorm = normalizeText(turmaLabel);
+        const turmaMatch = turmaNorm && (turmaNorm === turmaKeyNorm || turmaNorm === turmaLabelNorm);
+        const clsHorario = horarioNorm(cls.Horario || "");
+        const clsProfessor = normalizeText(cls.Professor || "");
+        return turmaMatch && clsHorario === horarioKey && clsProfessor === professorNorm;
+      });
+      return match?.TurmaCodigo || turma;
+    } catch {
+      return turma;
+    }
+  };
 
   const nivelOrder = [
     "Iniciação B",
@@ -269,6 +475,17 @@ export const Students: React.FC = () => {
     "Juvenil II",
     "Júnior I",
     "Júnior II/Sênior",
+    "A20+",
+    "B25+",
+    "C30+",
+    "D35+",
+    "E40+",
+    "F45+",
+    "G50+",
+    "H55+",
+    "I60+",
+    "J65+",
+    "K70+",
   ];
 
   const getNivelRank = (nivel: string) => {
@@ -308,28 +525,69 @@ export const Students: React.FC = () => {
         newValue = masked;
       }
 
-      return {
+      if ((name === "dataNascimento" || name === "dataAtestado") && typeof newValue === "string") {
+        newValue = maskDateInput(newValue);
+      }
+
+      if (name === "whatsapp" && typeof newValue === "string") {
+        newValue = maskWhatsappInput(newValue);
+      }
+
+      const nextState = {
         ...prev,
         [name]: newValue,
-      };
+      } as typeof prev;
+
+      if (["turma", "horario", "professor"].includes(name)) {
+        const turmaValue = name === "turma" ? String(newValue) : nextState.turma;
+        const horarioValue = name === "horario" ? String(newValue) : nextState.horario;
+        const professorValue = name === "professor" ? String(newValue) : nextState.professor;
+        const nivel = getNivelFromClasses(turmaValue, horarioValue, professorValue);
+        if (nivel) {
+          nextState.nivel = nivel;
+        }
+      }
+
+      if (name === "dataNascimento" && typeof newValue === "string") {
+        const date = parseBirthDate(newValue);
+        if (date) {
+          const age = calculateAge(newValue);
+          if (newValue.length === 10 && age < 6) {
+            setMinAgeError("Idade mínima é 6 anos. Corrija a data de nascimento.");
+            alert("Idade mínima é 6 anos. Corrija a data de nascimento.");
+          } else {
+            setMinAgeError("");
+          }
+          const categoria = getCategoriaByAge(age);
+          if (categoria) {
+            nextState.categoria = categoria;
+          }
+        } else {
+          setMinAgeError("");
+        }
+      }
+
+      return nextState;
     });
   };
 
   const handleAddClick = () => {
     setEditingId(null);
     setIsEditing(true);
+    setMinAgeError("");
     const sticky = localStorage.getItem("studentStickyData");
     const parsed = sticky ? JSON.parse(sticky) : {};
+    const suggestedNivel = getNivelFromClasses(parsed.turma || "", parsed.horario || "", parsed.professor || "");
     
     setFormData({
       nome: "",
       dataNascimento: "",
-      genero: "Masculino",
+      genero: parsed.genero || "Masculino",
       whatsapp: "",
       turma: parsed.turma || "",
       horario: parsed.horario || "",
       professor: parsed.professor || "",
-      nivel: "Iniciante",
+      nivel: suggestedNivel || "Iniciante",
       categoria: "Juvenil",
       parQ: parsed.parQ || "Não",
       atestado: false,
@@ -341,19 +599,29 @@ export const Students: React.FC = () => {
   const handleEditClick = (student: Student) => {
     setEditingId(student.id);
     setIsEditing(false);
+    setMinAgeError("");
+    const normalizedBirth = maskDateInput(student.dataNascimento || "");
+    const normalizedAtestado = maskDateInput(student.dataAtestado || "");
+    const normalizedWhatsapp = maskWhatsappInput(student.whatsapp || "");
+    const normalizedHorario = maskHorarioInput(student.horario || "");
+    const age = calculateAge(normalizedBirth);
+    const categoria = getCategoriaByAge(age) || student.categoria;
+    if (normalizedBirth.length === 10 && age < 6) {
+      setMinAgeError("Idade mínima é 6 anos. Corrija a data de nascimento.");
+    }
     setFormData({
       nome: student.nome,
-      dataNascimento: student.dataNascimento,
+      dataNascimento: normalizedBirth,
       genero: student.genero,
-      whatsapp: student.whatsapp,
+      whatsapp: normalizedWhatsapp,
       turma: student.turma,
-      horario: student.horario,
+      horario: normalizedHorario,
       professor: student.professor,
       nivel: student.nivel,
-      categoria: student.categoria,
+      categoria,
       parQ: student.parQ,
       atestado: student.atestado,
-      dataAtestado: student.dataAtestado || ""
+      dataAtestado: normalizedAtestado
     });
     setShowModal(true);
   };
@@ -364,29 +632,62 @@ export const Students: React.FC = () => {
       return;
     }
 
+    const birthDate = parseBirthDate(formData.dataNascimento);
+    if (!birthDate) {
+      alert("Data de nascimento inválida.");
+      return;
+    }
+    const age = calculateAge(formData.dataNascimento);
+    if (age < 6) {
+      alert("Idade mínima é 6 anos. Não é possível cadastrar.");
+      return;
+    }
+    const autoCategoria = getCategoriaByAge(age);
+
+    const turmaCodigo = getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor);
+    const studentId = editingId || `local-${Date.now()}`;
     const studentData: Student = {
-      id: editingId || Date.now().toString(),
+      id: studentId,
       nome: formData.nome,
       dataNascimento: formData.dataNascimento,
       genero: formData.genero,
       whatsapp: formData.whatsapp,
       turma: formData.turma,
-      turmaCodigo: formData.turma,
+      turmaCodigo,
       horario: formData.horario,
       professor: formData.professor,
       nivel: formData.nivel,
-      categoria: formData.categoria,
+      categoria: autoCategoria || formData.categoria,
       parQ: formData.parQ,
       atestado: formData.atestado,
       dataAtestado: formData.atestado ? formData.dataAtestado : undefined,
-      idade: calculateAge(formData.dataNascimento)
+      idade: age,
     };
 
+    const overrides = loadOverrides();
+    const addedIndex = overrides.added.findIndex((s) => s.id === studentId);
     if (editingId) {
-      setStudents((prev) => prev.map((s) => (s.id === editingId ? studentData : s)));
+      if (addedIndex >= 0) {
+        overrides.added[addedIndex] = studentData;
+      } else {
+        overrides.updated[studentId] = studentData;
+      }
+    } else {
+      overrides.added.push(studentData);
+    }
+    overrides.deleted = overrides.deleted.filter((id) => id !== studentId);
+    saveOverrides(overrides);
+
+    setStudents((prev) => {
+      const base = addedIndex >= 0 ? prev.filter((s) => s.id !== studentId) : prev;
+      const merged = applyOverrides(base, overrides);
+      localStorage.setItem("activeStudents", JSON.stringify(merged));
+      return merged;
+    });
+
+    if (editingId) {
       alert("Aluno atualizado com sucesso!");
     } else {
-      setStudents([...students, studentData]);
       alert("Aluno adicionado com sucesso!");
     }
 
@@ -395,22 +696,36 @@ export const Students: React.FC = () => {
       turma: formData.turma,
       horario: formData.horario,
       professor: formData.professor,
-      parQ: formData.parQ
+      parQ: formData.parQ,
+      genero: formData.genero,
     };
     localStorage.setItem("studentStickyData", JSON.stringify(stickyData));
 
-    // Resetar campos específicos
-    setFormData((prev) => ({
-      ...prev,
-      nome: "",
-      dataNascimento: "",
-      genero: "Masculino",
-      whatsapp: "",
-      // Mantém turma, horário, professor, parQ
-    }));
+    if (!editingId) {
+      // Abrir nova edição imediatamente
+      const suggestedNivel = getNivelFromClasses(formData.turma, formData.horario, formData.professor);
+      setFormData({
+        nome: "",
+        dataNascimento: "",
+        genero: formData.genero,
+        whatsapp: "",
+        turma: formData.turma,
+        horario: formData.horario,
+        professor: formData.professor,
+        nivel: suggestedNivel || formData.nivel,
+        categoria: formData.categoria,
+        parQ: formData.parQ,
+        atestado: false,
+        dataAtestado: "",
+      });
 
-    setShowModal(false);
-    setEditingId(null);
+      setEditingId(null);
+      setIsEditing(true);
+      setShowModal(true);
+    } else {
+      setShowModal(false);
+      setEditingId(null);
+    }
   };
 
   const handleDelete = (student: Student) => {
@@ -420,7 +735,19 @@ export const Students: React.FC = () => {
       excludedStudents.push({ ...student, dataExclusao: new Date().toLocaleDateString() });
       localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
 
-      setStudents((prev) => prev.filter((s) => s.id !== student.id));
+      const overrides = loadOverrides();
+      overrides.added = overrides.added.filter((s) => s.id !== student.id);
+      delete overrides.updated[student.id];
+      if (!overrides.deleted.includes(student.id)) {
+        overrides.deleted.push(student.id);
+      }
+      saveOverrides(overrides);
+
+      setStudents((prev) => {
+        const next = prev.filter((s) => s.id !== student.id);
+        localStorage.setItem("activeStudents", JSON.stringify(next));
+        return next;
+      });
       alert("Aluno movido para a lista de exclusão.");
     }
   };
@@ -760,6 +1087,11 @@ export const Students: React.FC = () => {
                   placeholder="Ex: 10/05/2010"
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}
                 />
+                {minAgeError && (
+                  <div style={{ marginTop: "6px", fontSize: "12px", color: "#dc3545", fontWeight: 600 }}>
+                    {minAgeError}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -820,7 +1152,7 @@ export const Students: React.FC = () => {
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Professor</label>
                 <div style={{ display: "flex", gap: "15px", background: "#fffbeb", padding: "10px", borderRadius: "6px" }}>
-                  {["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa"].map(prof => (
+                  {(professorOptions.length > 0 ? professorOptions : ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa"]).map(prof => (
                     <label key={prof} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", cursor: "pointer" }}>
                       <input
                         type="radio"
@@ -839,19 +1171,19 @@ export const Students: React.FC = () => {
               <div>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Nível</label>
                 <select name="nivel" value={formData.nivel} onChange={handleInputChange} disabled={!isEditing} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
-                  <option value="Iniciante">Iniciante</option>
-                  <option value="Intermediario">Intermediário</option>
-                  <option value="Avancado">Avançado</option>
+                  {nivelOptions.map((nivel) => (
+                    <option key={nivel} value={nivel}>
+                      {nivel}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Categoria</label>
-                <select name="categoria" value={formData.categoria} onChange={handleInputChange} disabled={!isEditing} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc" }}>
-                  <option value="Infantil">Infantil</option>
-                  <option value="Juvenil">Juvenil</option>
-                  <option value="Adulto">Adulto</option>
-                </select>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: "#555", padding: "6px 0" }}>
+                  {formData.categoria || "-"}
+                </div>
               </div>
 
               <div style={{ gridColumn: "1 / -1" }}>
@@ -896,6 +1228,7 @@ export const Students: React.FC = () => {
               {isEditing && (
                 <button
                   onClick={handleSave}
+                  disabled={!!minAgeError}
                   style={{ background: "#28a745", color: "white", border: "none", padding: "10px 20px", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
                 >
                   {editingId ? "Salvar Alterações" : "Salvar Aluno"}
