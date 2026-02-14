@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { getBootstrap } from "../api";
+import { addExclusion, getBootstrap } from "../api";
 
 interface Student {
   id: string;
@@ -54,49 +54,110 @@ const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
 };
 
 export const Students: React.FC = () => {
+  const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
   const overridesKey = "studentOverrides";
   const loadOverrides = () => {
     try {
       const raw = localStorage.getItem(overridesKey);
-      if (!raw) return { added: [], updated: {}, deleted: [] } as {
+      if (!raw) return { added: [], updated: {}, deleted: [], deletedKeys: [], deletedSignatures: [] } as {
         added: Student[];
         updated: Record<string, Student>;
         deleted: string[];
+        deletedKeys: string[];
+        deletedSignatures: string[];
       };
       const parsed = JSON.parse(raw);
       return {
         added: Array.isArray(parsed.added) ? parsed.added : [],
         updated: parsed.updated && typeof parsed.updated === "object" ? parsed.updated : {},
         deleted: Array.isArray(parsed.deleted) ? parsed.deleted : [],
+        deletedKeys: Array.isArray(parsed.deletedKeys) ? parsed.deletedKeys : [],
+        deletedSignatures: Array.isArray(parsed.deletedSignatures) ? parsed.deletedSignatures : [],
       } as {
         added: Student[];
         updated: Record<string, Student>;
         deleted: string[];
+        deletedKeys: string[];
+        deletedSignatures: string[];
       };
     } catch {
-      return { added: [], updated: {}, deleted: [] } as {
+      return { added: [], updated: {}, deleted: [], deletedKeys: [], deletedSignatures: [] } as {
         added: Student[];
         updated: Record<string, Student>;
         deleted: string[];
+        deletedKeys: string[];
+        deletedSignatures: string[];
       };
     }
   };
 
-  const saveOverrides = (next: { added: Student[]; updated: Record<string, Student>; deleted: string[] }) => {
+  const saveOverrides = (next: { added: Student[]; updated: Record<string, Student>; deleted: string[]; deletedKeys: string[]; deletedSignatures: string[] }) => {
     localStorage.setItem(overridesKey, JSON.stringify(next));
   };
 
-  const applyOverrides = (base: Student[], overrides: { added: Student[]; updated: Record<string, Student>; deleted: string[] }) => {
+  const applyOverrides = (base: Student[], overrides: { added: Student[]; updated: Record<string, Student>; deleted: string[]; deletedKeys: string[]; deletedSignatures: string[] }) => {
     const deleted = new Set(overrides.deleted || []);
+    const deletedKeys = new Set(overrides.deletedKeys || []);
+    const deletedSignatures = new Set(overrides.deletedSignatures || []);
     const updated = overrides.updated || {};
     const result = base
-      .filter((s) => !deleted.has(s.id))
+      .filter((s) => {
+        if (deleted.has(s.id) || deletedKeys.has(buildStudentKey(s))) return false;
+        const signature = buildStudentSignature(s);
+        const nameOnly = buildStudentNameSignature(s);
+        return !deletedSignatures.has(signature) && !deletedSignatures.has(nameOnly);
+      })
       .map((s) => (updated[s.id] ? updated[s.id] : s));
 
     (overrides.added || []).forEach((s) => {
       if (!deleted.has(s.id)) result.push(s);
     });
     return result;
+  };
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const normalizeHorarioKey = (value: string) => {
+    const digits = (value || "").replace(/\D/g, "");
+    if (digits.length === 3) return `0${digits}`;
+    if (digits.length >= 4) return digits.slice(0, 4);
+    return digits;
+  };
+
+  const buildStudentKey = (student: Partial<Student>) => {
+    const nameKey = normalizeText(student.nome || "");
+    const turmaKey = normalizeText(student.turma || "");
+    const professorKey = normalizeText(student.professor || "");
+    const horarioKey = normalizeHorarioKey(student.horario || "");
+    const birthKey = (student.dataNascimento || "").trim();
+    const whatsappKey = (student.whatsapp || "").replace(/\D/g, "");
+    return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
+  };
+
+  const buildStudentSignature = (student: Partial<Student>) => {
+    const nameKey = normalizeText(student.nome || "");
+    const turmaKey = normalizeText(student.turma || student.turmaCodigo || "");
+    return turmaKey ? `${nameKey}|${turmaKey}` : nameKey;
+  };
+
+  const buildStudentNameSignature = (student: Partial<Student>) => {
+    return normalizeText(student.nome || "");
+  };
+
+  const dedupeStudents = (list: Student[]) => {
+    const seen = new Map<string, Student>();
+    list.forEach((student) => {
+      const key = buildStudentKey(student);
+      if (!seen.has(key)) {
+        seen.set(key, student);
+      }
+    });
+    return Array.from(seen.values());
   };
   // Mock Data inicial expandido
   const initialMockStudents: Student[] = [
@@ -122,7 +183,7 @@ export const Students: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return dedupeStudents(parsed);
       } catch {
         // ignore
       }
@@ -136,6 +197,37 @@ export const Students: React.FC = () => {
   useEffect(() => {
     localStorage.setItem("activeStudents", JSON.stringify(students));
   }, [students]);
+
+  useEffect(() => {
+    const overrides = loadOverrides();
+    if (
+      (overrides.deletedKeys && overrides.deletedKeys.length > 0) ||
+      (overrides.deletedSignatures && overrides.deletedSignatures.length > 0)
+    ) {
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("excludedStudents");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      const deletedKeys = parsed
+        .map((student: Partial<Student>) => buildStudentKey(student))
+        .filter((key: string) => key && key !== "|||||");
+      const deletedSignatures = parsed
+        .map((student: Partial<Student>) => buildStudentSignature(student))
+        .filter((key: string) => key);
+      const deletedNames = parsed
+        .map((student: Partial<Student>) => buildStudentNameSignature(student))
+        .filter((key: string) => key);
+      const mergedSignatures = Array.from(new Set([...deletedSignatures, ...deletedNames]));
+      if (deletedKeys.length > 0 || mergedSignatures.length > 0) {
+        saveOverrides({ ...overrides, deletedKeys, deletedSignatures: mergedSignatures });
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -196,8 +288,9 @@ export const Students: React.FC = () => {
         if (mapped.length > 0) {
           const overrides = loadOverrides();
           const merged = applyOverrides(mapped, overrides);
-          setStudents(merged);
-          localStorage.setItem("activeStudents", JSON.stringify(merged));
+          const deduped = dedupeStudents(merged);
+          setStudents(deduped);
+          localStorage.setItem("activeStudents", JSON.stringify(deduped));
         }
 
         const classStorage = data.classes.map((cls) => ({
@@ -237,7 +330,9 @@ export const Students: React.FC = () => {
       const raw = localStorage.getItem("activeClasses");
       if (!raw) return;
       const classes = JSON.parse(raw) as Array<{ Professor?: string }>;
-      const professors = Array.from(new Set(classes.map((cls) => cls.Professor).filter(Boolean)));
+      const professors = Array.from(
+        new Set(classes.map((cls) => cls.Professor).filter((value): value is string => Boolean(value)))
+      );
       setProfessorOptions(professors);
     } catch {
       // ignore
@@ -254,6 +349,9 @@ export const Students: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(true);
   const [minAgeError, setMinAgeError] = useState<string>("");
+  const [showExcludeReasonModal, setShowExcludeReasonModal] = useState(false);
+  const [studentPendingExclusion, setStudentPendingExclusion] = useState<Student | null>(null);
+  const [excludeReason, setExcludeReason] = useState("");
 
   // Estado do formulário
   const [formData, setFormData] = useState({
@@ -357,13 +455,6 @@ export const Students: React.FC = () => {
     }
     return value;
   };
-
-  const normalizeText = (value: string) =>
-    value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
 
   const maskDateInput = (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 8);
@@ -644,6 +735,22 @@ export const Students: React.FC = () => {
     }
     const autoCategoria = getCategoriaByAge(age);
 
+    const candidateKey = buildStudentKey({
+      nome: formData.nome,
+      turma: formData.turma,
+      horario: formData.horario,
+      professor: formData.professor,
+      dataNascimento: formData.dataNascimento,
+      whatsapp: formData.whatsapp,
+    });
+    const duplicate = students.find(
+      (student) => student.id !== editingId && buildStudentKey(student) === candidateKey
+    );
+    if (duplicate) {
+      alert("Aluno já cadastrado para esta turma/horário. Verifique os duplicados.");
+      return;
+    }
+
     const turmaCodigo = getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor);
     const studentId = editingId || `local-${Date.now()}`;
     const studentData: Student = {
@@ -676,13 +783,18 @@ export const Students: React.FC = () => {
       overrides.added.push(studentData);
     }
     overrides.deleted = overrides.deleted.filter((id) => id !== studentId);
+    overrides.deletedKeys = overrides.deletedKeys.filter((key) => key !== buildStudentKey(studentData));
+    overrides.deletedSignatures = (overrides.deletedSignatures || []).filter((key) => {
+      return key !== buildStudentSignature(studentData) && key !== buildStudentNameSignature(studentData);
+    });
     saveOverrides(overrides);
 
     setStudents((prev) => {
       const base = addedIndex >= 0 ? prev.filter((s) => s.id !== studentId) : prev;
       const merged = applyOverrides(base, overrides);
-      localStorage.setItem("activeStudents", JSON.stringify(merged));
-      return merged;
+      const deduped = dedupeStudents(merged);
+      localStorage.setItem("activeStudents", JSON.stringify(deduped));
+      return deduped;
     });
 
     if (editingId) {
@@ -729,27 +841,73 @@ export const Students: React.FC = () => {
   };
 
   const handleDelete = (student: Student) => {
-    if (confirm(`Deseja excluir o aluno ${student.nome}?`)) {
-      // Simulação de envio para lista de exclusão
-      const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
-      excludedStudents.push({ ...student, dataExclusao: new Date().toLocaleDateString() });
-      localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
+    setStudentPendingExclusion(student);
+    setExcludeReason("");
+    setShowExcludeReasonModal(true);
+  };
 
-      const overrides = loadOverrides();
-      overrides.added = overrides.added.filter((s) => s.id !== student.id);
-      delete overrides.updated[student.id];
-      if (!overrides.deleted.includes(student.id)) {
-        overrides.deleted.push(student.id);
-      }
-      saveOverrides(overrides);
+  const confirmDeleteWithReason = () => {
+    if (!studentPendingExclusion) return;
 
-      setStudents((prev) => {
-        const next = prev.filter((s) => s.id !== student.id);
-        localStorage.setItem("activeStudents", JSON.stringify(next));
-        return next;
-      });
-      alert("Aluno movido para a lista de exclusão.");
+    const student = studentPendingExclusion;
+    const reason = excludeReason.trim();
+    if (!reason) {
+      alert("Selecione um motivo para a exclusão.");
+      return;
     }
+    const exclusionPayload = {
+      ...student,
+      dataExclusao: new Date().toLocaleDateString(),
+      motivo_exclusao: reason,
+    };
+
+    addExclusion(exclusionPayload).catch(() => {
+      alert("Falha ao enviar exclusão ao backend. Tente novamente.");
+    });
+
+    const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
+    excludedStudents.push(exclusionPayload);
+    localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
+
+    const overrides = loadOverrides();
+    overrides.added = overrides.added.filter((s) => s.id !== student.id);
+    delete overrides.updated[student.id];
+    if (!overrides.deleted.includes(student.id)) {
+      overrides.deleted.push(student.id);
+    }
+    const deleteKey = buildStudentKey(student);
+    if (!overrides.deletedKeys.includes(deleteKey)) {
+      overrides.deletedKeys.push(deleteKey);
+    }
+    const deleteSignature = buildStudentSignature(student);
+    const deleteName = buildStudentNameSignature(student);
+    if (!overrides.deletedSignatures.includes(deleteSignature)) {
+      overrides.deletedSignatures.push(deleteSignature);
+    }
+    if (!overrides.deletedSignatures.includes(deleteName)) {
+      overrides.deletedSignatures.push(deleteName);
+    }
+    saveOverrides(overrides);
+
+    setStudents((prev) => {
+      const removeKey = buildStudentKey(student);
+      const removeSignature = buildStudentSignature(student);
+      const removeName = buildStudentNameSignature(student);
+      const next = prev.filter((s) => {
+        if (s.id === student.id) return false;
+        if (buildStudentKey(s) === removeKey) return false;
+        if (buildStudentSignature(s) === removeSignature) return false;
+        if (buildStudentNameSignature(s) === removeName) return false;
+        return true;
+      });
+      localStorage.setItem("activeStudents", JSON.stringify(next));
+      return next;
+    });
+
+    setShowExcludeReasonModal(false);
+    setStudentPendingExclusion(null);
+    setExcludeReason("");
+    alert("Aluno movido para a lista de exclusão.");
   };
 
   const handleGoToAttendance = (turma: string) => {
@@ -1015,6 +1173,98 @@ export const Students: React.FC = () => {
       {filteredStudents.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
           Nenhum aluno encontrado
+        </div>
+      )}
+
+      {showExcludeReasonModal && studentPendingExclusion && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1100,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: "12px",
+              width: "420px",
+              padding: "18px",
+              boxShadow: "0 10px 24px rgba(0,0,0,0.22)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 10px", color: "#2c3e50" }}>Motivo da exclusão</h3>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#555" }}>
+              Informe o motivo para excluir <strong>{studentPendingExclusion.nome}</strong>.
+            </p>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
+              {exclusionReasonOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() =>
+                    setExcludeReason((prev) => (prev.trim() === option ? "" : option))
+                  }
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: excludeReason.trim() === option ? "#2563eb" : "#f8fafc",
+                    color: excludeReason.trim() === option ? "#fff" : "#334155",
+                    borderRadius: "999px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "12px", color: "#64748b" }}>
+              Motivo selecionado: <strong>{excludeReason.trim() || "Nenhum"}</strong>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "14px" }}>
+              <button
+                onClick={() => {
+                  setShowExcludeReasonModal(false);
+                  setStudentPendingExclusion(null);
+                  setExcludeReason("");
+                }}
+                style={{
+                  background: "#e5e7eb",
+                  color: "#111827",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmDeleteWithReason}
+                style={{
+                  background: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Confirmar exclusão
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

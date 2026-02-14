@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getPoolLog, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, getPoolLog, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 
 interface ClassOption {
   turmaCodigo: string;
@@ -32,7 +32,7 @@ interface PoolLogEntry {
   tipoOcorrencia: string;
   tempExterna: string;
   tempPiscina: string;
-  cloroPpm: number;
+  cloroPpm: number | null;
 }
 
 // Opções de Clima para a Matriz de Decisão
@@ -1037,7 +1037,12 @@ export const Attendance: React.FC = () => {
             atestado: false,
           }),
           dataExclusao: new Date().toLocaleDateString(),
+          motivo_exclusao: "Falta",
         };
+
+        addExclusion(payload).catch(() => {
+          alert("Falha ao enviar exclusão ao backend. Tente novamente.");
+        });
 
         const exists = excludedStudents.some((s: any) => s.id === payload.id);
         if (!exists) {

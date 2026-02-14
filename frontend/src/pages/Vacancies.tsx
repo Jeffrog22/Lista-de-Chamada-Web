@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { getBootstrap } from "../api";
 import "./Vacancies.css";
 
 type Periodo = "Todos" | "Manha" | "Tarde";
@@ -71,11 +72,69 @@ export const Vacancies: React.FC = () => {
   const [periodoFiltro, setPeriodoFiltro] = useState<Periodo>("Todos");
 
   useEffect(() => {
+    let isMounted = true;
+
+    const fetchSnapshot = () => {
+      getBootstrap()
+        .then((response) => {
+          if (!isMounted) return;
+          const data = response.data as {
+            classes: Array<{
+              id: number;
+              codigo: string;
+              turma_label: string;
+              horario: string;
+              professor: string;
+              nivel: string;
+              faixa_etaria: string;
+            }>;
+            students: Array<{
+              id: number;
+              class_id: number;
+              nome: string;
+              categoria: string;
+              nivel: string;
+              horario: string;
+            }>;
+          };
+
+          const classById = new Map<number, (typeof data.classes)[number]>();
+          data.classes.forEach((cls) => classById.set(cls.id, cls));
+
+          const mapped = data.students.map((student) => {
+            const cls = classById.get(student.class_id);
+            return {
+              id: String(student.id),
+              nome: student.nome,
+              nivel: cls?.nivel || student.nivel || "",
+              categoria: student.categoria || cls?.faixa_etaria || "",
+              turma: cls?.turma_label || cls?.codigo || "",
+              turmaCodigo: cls?.codigo || "",
+              horario: cls?.horario || "",
+            } as ActiveStudentLite;
+          });
+
+          if (mapped.length > 0) {
+            setStudentsSnapshot(mapped);
+          } else {
+            setStudentsSnapshot(readActiveStudents());
+          }
+        })
+        .catch(() => {
+          if (isMounted) setStudentsSnapshot(readActiveStudents());
+        });
+    };
+
+    fetchSnapshot();
     const intervalId = window.setInterval(() => {
-      setStudentsSnapshot(readActiveStudents());
+      fetchSnapshot();
       setCapacities(readCapacities());
     }, 2000);
-    return () => window.clearInterval(intervalId);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const turmaMeta = useMemo(() => {

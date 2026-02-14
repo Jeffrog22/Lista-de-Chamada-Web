@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { getBootstrap, getReports } from "../api";
 import "./Reports.css";
 import DashboardCharts from './DashboardCharts';
 
@@ -26,16 +27,29 @@ interface ActiveStudentLite {
   id?: string;
   nome?: string;
   turma?: string;
+  turmaCodigo?: string;
   horario?: string;
   professor?: string;
   nivel?: string;
+  whatsapp?: string;
+  dataNascimento?: string;
+  dataAtestado?: string;
+  parQ?: string;
+  atestado?: boolean;
 }
 
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
-  // Estados de Filtro
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  const [selectedClassId, setSelectedClassId] = useState<string>("1A");
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [loadingReports, setLoadingReports] = useState(false);
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
 
   const readActiveStudents = (): ActiveStudentLite[] => {
     try {
@@ -48,7 +62,22 @@ export const Reports: React.FC = () => {
     }
   };
 
+  const readStudentDetails = (): Record<string, ActiveStudentLite> => {
+    const list = readActiveStudents();
+    const map: Record<string, ActiveStudentLite> = {};
+    list.forEach((item) => {
+      const key = normalizeText(item.nome || "");
+      if (!key) return;
+      map[key] = item;
+    });
+    return map;
+  };
+
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
+  const [studentDetails, setStudentDetails] = useState<Record<string, ActiveStudentLite>>(() =>
+    readStudentDetails()
+  );
+  const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [capacities, setCapacities] = useState<Record<string, number>>(() => {
     try {
       const stored = localStorage.getItem("classCapacities");
@@ -59,89 +88,135 @@ export const Reports: React.FC = () => {
   });
 
   useEffect(() => {
-    setStudentsSnapshot(readActiveStudents());
-    const onStorage = () => setStudentsSnapshot(readActiveStudents());
+    let isMounted = true;
+    const loadLocal = () => setStudentsSnapshot(readActiveStudents());
+
+    getBootstrap()
+      .then((response) => {
+        if (!isMounted) return;
+        const data = response.data as {
+          classes: Array<{
+            id: number;
+            codigo: string;
+            turma_label: string;
+            horario: string;
+            professor: string;
+            nivel: string;
+          }>;
+          students: Array<{
+            id: number;
+            class_id: number;
+            nome: string;
+            whatsapp: string;
+            data_nascimento: string;
+            data_atestado: string;
+            categoria: string;
+            genero: string;
+            parq: string;
+            atestado: boolean;
+          }>;
+        };
+
+        const classById = new Map<number, (typeof data.classes)[number]>();
+        data.classes.forEach((cls) => classById.set(cls.id, cls));
+
+        const mapped = data.students.map((student) => {
+          const cls = classById.get(student.class_id);
+          return {
+            id: String(student.id),
+            nome: student.nome,
+            turma: cls?.turma_label || cls?.codigo || "",
+            turmaCodigo: cls?.codigo || "",
+            horario: cls?.horario || "",
+            professor: cls?.professor || "",
+            nivel: cls?.nivel || "",
+            whatsapp: student.whatsapp || "",
+            dataNascimento: student.data_nascimento || "",
+            dataAtestado: student.data_atestado || "",
+            parQ: student.parq || "",
+            atestado: !!student.atestado,
+          } as ActiveStudentLite;
+        });
+
+        const fromBootstrapDetails: Record<string, ActiveStudentLite> = {};
+        mapped.forEach((student) => {
+          const key = normalizeText(student.nome || "");
+          if (!key) return;
+          fromBootstrapDetails[key] = student;
+        });
+
+        const fromLocalDetails = readStudentDetails();
+        setStudentDetails({ ...fromBootstrapDetails, ...fromLocalDetails });
+
+        if (mapped.length > 0) {
+          setStudentsSnapshot(mapped);
+        } else {
+          loadLocal();
+        }
+      })
+      .catch(() => {
+        if (isMounted) loadLocal();
+      });
+
+    const onStorage = () => loadLocal();
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
+
+  useEffect(() => {
+    setStudentDetails(readStudentDetails());
+  }, [studentsSnapshot]);
 
   useEffect(() => {
     localStorage.setItem("classCapacities", JSON.stringify(capacities));
   }, [capacities]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("activeClasses");
-      if (!stored) return;
-      const parsed = JSON.parse(stored);
-      if (!Array.isArray(parsed)) return;
-      setClassesData((prev) => {
-        const byTurma = new Map(prev.map((item) => [item.turma, item]));
-        parsed.forEach((cls: any) => {
-          const turma = cls.Turma || cls.turma_label || cls.codigo;
-          if (!turma) return;
-          const existing = byTurma.get(turma);
-          const next = {
-            turma,
-            horario: cls.Horario || cls.horario || existing?.horario || "",
-            professor: cls.Professor || cls.professor || existing?.professor || "",
-            nivel: cls.Nivel || cls.nivel || existing?.nivel || "",
-            alunos: existing?.alunos || [],
-          } as ClassStats;
-          byTurma.set(turma, next);
-        });
-        return Array.from(byTurma.values());
+    if (classesData.length === 0) return;
+    if (!selectedClassId || !classesData.some((item) => item.turma === selectedClassId)) {
+      setSelectedClassId(classesData[0].turma);
+    }
+  }, [classesData, selectedClassId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingReports(true);
+    getReports({ month: selectedMonth })
+      .then((response) => {
+        if (!isMounted) return;
+        const data = response.data as ClassStats[];
+        setClassesData(Array.isArray(data) ? data : []);
+        if (Array.isArray(data) && data.length > 0 && !data.some((item) => item.turma === selectedClassId)) {
+          setSelectedClassId(data[0].turma);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setClassesData([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingReports(false);
       });
-    } catch {
-      // ignore
-    }
-  }, [studentsSnapshot]);
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMonth]);
 
-  // Mock Data Completo (Simulando dados vindos do backend/localStorage)
-  const [classesData, setClassesData] = useState<ClassStats[]>([
-    {
-      turma: "1A",
-      horario: "14:00",
-      professor: "Joao Silva",
-      nivel: "Iniciante",
-      alunos: [
-        { id: "1", nome: "João Silva", presencas: 8, faltas: 0, justificativas: 0, frequencia: 100, historico: { "02": "c", "05": "c", "09": "c", "12": "c" }, anotacoes: "Excelente desempenho" },
-        { id: "2", nome: "Maria Santos", presencas: 6, faltas: 2, justificativas: 0, frequencia: 75, historico: { "02": "c", "05": "f", "09": "c", "12": "f" } },
-        { id: "3", nome: "Pedro Ferreira", presencas: 7, faltas: 0, justificativas: 1, frequencia: 87.5, historico: { "02": "c", "05": "c", "09": "j", "12": "c" }, anotacoes: "Atestado dia 09" },
-      ]
-    },
-    {
-      turma: "1B",
-      horario: "15:30",
-      professor: "Maria Santos",
-      nivel: "Intermediario",
-      alunos: [
-        { id: "4", nome: "Roberto Alves", presencas: 5, faltas: 3, justificativas: 0, frequencia: 62.5, historico: { "03": "c", "06": "f", "10": "f", "13": "c" } },
-        { id: "5", nome: "Fernanda Lima", presencas: 8, faltas: 0, justificativas: 0, frequencia: 100, historico: { "03": "c", "06": "c", "10": "c", "13": "c" } },
-      ]
-    },
-    {
-      turma: "2A",
-      horario: "16:30",
-      professor: "Carlos Oliveira",
-      nivel: "Avancado",
-      alunos: [
-        { id: "6", nome: "Amanda Silva", presencas: 8, faltas: 0, justificativas: 0, frequencia: 100, historico: { "02": "c", "04": "c", "09": "c", "11": "c" } },
-      ]
-    }
-  ]);
-
-  // Dados computados para a turma selecionada
-  const currentClassData = classesData.find(c => c.turma === selectedClassId) || classesData[0];
+  const currentClassData = classesData.find((c) => c.turma === selectedClassId) || classesData[0] || null;
   
   // Estatísticas Gerais da Turma Selecionada
-  const totalFaltas = currentClassData.alunos.reduce((acc, curr) => acc + curr.faltas, 0);
-  const totalJustificativas = currentClassData.alunos.reduce((acc, curr) => acc + curr.justificativas, 0);
-  const mediaFrequencia = currentClassData.alunos.length > 0 
-    ? (currentClassData.alunos.reduce((acc, curr) => acc + curr.frequencia, 0) / currentClassData.alunos.length).toFixed(1) 
-    : "0";
+  const totalFaltas = currentClassData ? currentClassData.alunos.reduce((acc, curr) => acc + curr.faltas, 0) : 0;
+  const totalJustificativas = currentClassData
+    ? currentClassData.alunos.reduce((acc, curr) => acc + curr.justificativas, 0)
+    : 0;
+  const mediaFrequencia =
+    currentClassData && currentClassData.alunos.length > 0
+      ? (currentClassData.alunos.reduce((acc, curr) => acc + curr.frequencia, 0) / currentClassData.alunos.length).toFixed(1)
+      : "0";
 
-  const totalAlunosTurma = currentClassData.alunos.length;
+  const totalAlunosTurma = currentClassData ? currentClassData.alunos.length : 0;
   const capacidadeTurma = 20;
   const ocupacaoPct = capacidadeTurma > 0 ? Math.min(100, Math.round((totalAlunosTurma / capacidadeTurma) * 100)) : 0;
 
@@ -179,106 +254,64 @@ export const Reports: React.FC = () => {
   };
 
   const handleGenerateExcel = () => {
+    if (!currentClassData) {
+      alert("Nenhuma turma disponível para exportação.");
+      return;
+    }
+
     const wb = XLSX.utils.book_new();
     const wsData: any[][] = [];
 
-    // Configuração do Mês e Dias
-    const classDays = Object.keys(currentClassData.alunos[0]?.historico || {}).sort(); 
-    
-    // Formatar mês para mmm/aaaa (ex: jan/2026)
+    const classDays = Array.from(
+      new Set(currentClassData.alunos.flatMap((aluno) => Object.keys(aluno.historico || {})))
+    ).sort();
+
     const [year, month] = selectedMonth.split("-");
     const monthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
     const formattedMonth = `${monthNames[parseInt(month) - 1]}/${year}`;
 
-    // --- Construção do Layout Específico ---
-    
-    // Linha 1 (Índice 0): A1: Modalidade, B1: Natação, D1: Prefeitura
     wsData.push(["Modalidade:", "Natação", "", "PREFEITURA MUNICIPAL DE VINHEDO", ""]); 
-
-    // Linha 2 (Índice 1): A2: Local, B2: Piscina, D2: Secretaria
     wsData.push(["Local:", "Piscina Bela Vista", "", "SECRETARIA DE ESPORTE E LAZER", ""]);
-
-    // Linha 3 (Índice 2): B3: Professor
     wsData.push(["Professor:", currentClassData.professor, "", "", ""]);
-
-    // Linha 4 (Índice 3): B4: Turma, E4: Nível
     wsData.push(["Turma:", currentClassData.turma, "", "Nível:", currentClassData.nivel]);
-
-    // Linha 5 (Índice 4): B5: Horário, E5: Mês Selecionado
     wsData.push(["Horário:", currentClassData.horario, "", "Mês:", formattedMonth]);
 
-    // Linha 6 (Índice 5): Cabeçalhos da Tabela
     const headerRow = ["", "", "", "", ""]; 
-    headerRow[0] = "Nome"; // A7 (considerando cabeçalho na linha 6 do Excel)
+    headerRow[0] = "Nome";
     headerRow[1] = "Whatsapp";
     headerRow[2] = "parQ";
     headerRow[3] = "Aniversário";
 
-    // Preencher datas a partir da coluna E (índice 4)
     const dateColumnsStart = 4;
     classDays.forEach((day, idx) => {
       headerRow[dateColumnsStart + idx] = day;
     });
-    
-    // Coluna Anotações após a última data
+
     headerRow[dateColumnsStart + classDays.length] = "Anotações";
-    
+
     wsData.push(headerRow);
 
-    // Base de dados de fallback para garantir que a demo funcione mesmo sem dados no localStorage
-    const fallbackStudentsDB = [
-      { id: "1", nome: "João Silva", whatsapp: "(11) 98765-4321", dataNascimento: "10/05/2010", parQ: "Não", atestado: true, dataAtestado: "15/01/2025" },
-      { id: "2", nome: "Maria Santos", whatsapp: "(11) 98765-4322", dataNascimento: "20/08/2009", parQ: "Sim", atestado: false },
-      { id: "3", nome: "Pedro Ferreira", whatsapp: "(11) 98765-4323", dataNascimento: "05/02/2008", parQ: "Não", atestado: false },
-      { id: "4", nome: "Roberto Alves", whatsapp: "(11) 98765-4324", dataNascimento: "12/12/2007", parQ: "Não", atestado: false },
-      { id: "5", nome: "Fernanda Lima", whatsapp: "(11) 98765-4325", dataNascimento: "30/03/2008", parQ: "Sim", atestado: false },
-      { id: "6", nome: "Amanda Silva", whatsapp: "(11) 98765-4326", dataNascimento: "14/07/2009", parQ: "Não", atestado: true, dataAtestado: "10/02/2025" },
-    ];
-
-    // Mesclar dados do localStorage com o fallback
-    let allStudents = [...fallbackStudentsDB];
-    try {
-      const stored = localStorage.getItem("activeStudents");
-      if (stored) {
-        const storedStudents = JSON.parse(stored);
-        // Atualiza os dados do fallback com o que estiver no storage (edições do usuário)
-        storedStudents.forEach((s: any) => {
-          const index = allStudents.findIndex(f => f.id === s.id || f.nome === s.nome);
-          if (index >= 0) {
-            allStudents[index] = { ...allStudents[index], ...s };
-          } else {
-            allStudents.push(s);
-          }
-        });
-      }
-    } catch (e) { console.error(e); }
-
-    // Linhas 7+ (Índice 6+): Dados dos Alunos
     currentClassData.alunos.forEach((aluno) => {
-      const extraInfo = allStudents.find((s: any) => s.id === aluno.id || s.nome === aluno.nome);
+      const extraInfo = studentDetails[normalizeText(aluno.nome)] || {};
       const row = new Array(headerRow.length).fill("");
-      row[0] = aluno.nome; // A7: Nome
-      
+      row[0] = aluno.nome;
+
       if (extraInfo) {
         row[1] = extraInfo.whatsapp || "";
-        // Mostrar data do atestado se houver, senão mostrar parQ
         row[2] = extraInfo.atestado ? (extraInfo.dataAtestado || "Com Atestado") : (extraInfo.parQ || "");
         row[3] = extraInfo.dataNascimento || "";
       }
 
-      // Preencher presenças
       classDays.forEach((day, idx) => {
         const status = aluno.historico[day] || "";
         row[dateColumnsStart + idx] = status;
       });
 
-      // Anotações
       row[dateColumnsStart + classDays.length] = aluno.anotacoes || "";
-      
+
       wsData.push(row);
     });
 
-    // Criar a planilha
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
     // Tentativa de aplicar estilos (funciona se a biblioteca suportar estilos, ex: xlsx-js-style)
@@ -294,18 +327,16 @@ export const Reports: React.FC = () => {
     ["D1", "D2"].forEach(c => setStyle(c, boldLeft));
     ["B6", "C6", "D6"].forEach(c => setStyle(c, boldCenter));
 
-    // Ajustes de largura de coluna
     const wscols = [
-      { wch: 30 }, // A: Nome
-      { wch: 20 }, // B
-      { wch: 10 }, // C
-      { wch: 35 }, // D (Prefeitura)
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 35 },
     ];
     classDays.forEach(() => wscols.push({ wch: 4 }));
-    wscols.push({ wch: 30 }); // Anotações
+    wscols.push({ wch: 30 });
     ws["!cols"] = wscols;
 
-    // Adicionar à pasta de trabalho e salvar
     XLSX.utils.book_append_sheet(wb, ws, `Chamada ${currentClassData.turma}`);
     XLSX.writeFile(wb, `Relatorio_${currentClassData.turma}_${selectedMonth}.xlsx`);
   };
@@ -339,6 +370,13 @@ export const Reports: React.FC = () => {
 
       {activeTab === "resumo" && (
         <div className="reports-section">
+          {!currentClassData && !loadingReports && (
+            <div className="reports-section placeholder">Sem dados de relatórios para o mês selecionado.</div>
+          )}
+          {loadingReports && (
+            <div className="reports-section placeholder">Carregando dados de relatórios...</div>
+          )}
+          {currentClassData && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
             <div className="report-card" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white" }}>
               <h3>📊 Resumo da Turma {selectedClassId}</h3>
@@ -409,6 +447,7 @@ export const Reports: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -428,11 +467,12 @@ export const Reports: React.FC = () => {
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
+                disabled={classesData.length === 0}
               >
                 {classesData.map(c => <option key={c.turma} value={c.turma}>{c.turma}</option>)}
               </select>
             </div>
-            <button onClick={handleGenerateExcel} className="btn-primary">
+            <button onClick={handleGenerateExcel} className="btn-primary" disabled={!currentClassData}>
               Exportar relatorioChamada.xlsx
             </button>
           </div>
@@ -455,7 +495,7 @@ export const Reports: React.FC = () => {
         <div className="reports-section">
           <div className="vagas-toolbar">
             <div>
-              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "localStorage (activeStudents)" : "dados de exemplo"}
+              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "backend + ajustes locais" : "sem dados"}
             </div>
             <button className="btn-secondary" onClick={() => setStudentsSnapshot(readActiveStudents())}>
               Atualizar

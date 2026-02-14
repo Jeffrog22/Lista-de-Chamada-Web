@@ -2,9 +2,26 @@ import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
+import { getReports } from '../api';
 import './DashboardCharts.css';
 
-// Interfaces para tipagem dos dados (Mock - substituir por chamadas reais à API)
+interface ReportStudent {
+  id: string;
+  nome: string;
+  presencas: number;
+  faltas: number;
+  justificativas: number;
+  frequencia: number;
+}
+
+interface ReportClass {
+  turma: string;
+  horario: string;
+  professor: string;
+  nivel: string;
+  alunos: ReportStudent[];
+}
+
 interface ChartData {
   name: string;
   presente: number;
@@ -18,18 +35,17 @@ interface SimpleData {
 }
 
 const DashboardCharts: React.FC = () => {
-  // Filtros
   const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
-  
-  // Estados para os dados dos gráficos
+  const [month, setMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+
   const [classData, setClassData] = useState<ChartData[]>([]);
   const [levelData, setLevelData] = useState<ChartData[]>([]);
   const [timeData, setTimeData] = useState<SimpleData[]>([]);
   const [teacherData, setTeacherData] = useState<ChartData[]>([]);
   const [studentData, setStudentData] = useState<SimpleData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasData, setHasData] = useState(true);
 
-  // Cores do tema
   const COLORS = {
     presente: '#28a745',
     ausente: '#dc3545',
@@ -38,51 +54,122 @@ const DashboardCharts: React.FC = () => {
     info: '#17a2b8'
   };
 
+  const selectedMonth = `${year}-${month}`;
+
   useEffect(() => {
-    // TODO: Conectar com endpoints reais da API (ex: api.getDashboardData(year, month))
-    // Simulando dados baseados nos filtros para demonstração
-    
-    const mockClassData = [
-      { name: 'Turma A', presente: 45, ausente: 2, justificado: 1 },
-      { name: 'Turma B', presente: 38, ausente: 5, justificado: 3 },
-      { name: 'Turma C', presente: 42, ausente: 1, justificado: 0 },
-      { name: 'Turma D', presente: 30, ausente: 8, justificado: 2 },
-    ];
+    let isMounted = true;
+    setLoading(true);
 
-    const mockLevelData = [
-      { name: 'Iniciante', presente: 120, ausente: 15, justificado: 5 },
-      { name: 'Intermediário', presente: 80, ausente: 8, justificado: 4 },
-      { name: 'Avançado', presente: 40, ausente: 2, justificado: 1 },
-    ];
+    getReports({ month: selectedMonth })
+      .then((response) => {
+        if (!isMounted) return;
+        const data = Array.isArray(response.data) ? (response.data as ReportClass[]) : [];
+        setHasData(data.length > 0);
 
-    const mockTimeData = [
-      { name: '08:00', valor: 85 },
-      { name: '10:00', valor: 92 },
-      { name: '14:00', valor: 78 },
-      { name: '18:00', valor: 88 },
-      { name: '20:00', valor: 65 },
-    ];
+        const classAggregated: ChartData[] = data.map((classItem) => {
+          const presente = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
+          const ausente = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
+          const justificado = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
+          return {
+            name: classItem.turma || '-',
+            presente,
+            ausente,
+            justificado,
+          };
+        });
 
-    const mockTeacherData = [
-      { name: 'Prof. Silva', presente: 150, ausente: 10, justificado: 5 },
-      { name: 'Prof. Santos', presente: 140, ausente: 12, justificado: 8 },
-    ];
+        const levelMap = new Map<string, { presente: number; ausente: number; justificado: number }>();
+        const teacherMap = new Map<string, { presente: number; ausente: number; justificado: number }>();
+        const timeMap = new Map<string, { presentes: number; totais: number }>();
+        const studentsFlat: SimpleData[] = [];
 
-    const mockStudentData = [
-      { name: 'João Silva', valor: 100 },
-      { name: 'Maria Oliveira', valor: 95 },
-      { name: 'Pedro Santos', valor: 92 },
-      { name: 'Ana Costa', valor: 90 },
-      { name: 'Lucas Pereira', valor: 88 },
-    ];
+        data.forEach((classItem) => {
+          const levelKey = classItem.nivel || '-';
+          const teacherKey = classItem.professor || '-';
+          const timeKey = classItem.horario || '-';
 
-    setClassData(mockClassData);
-    setLevelData(mockLevelData);
-    setTimeData(mockTimeData);
-    setTeacherData(mockTeacherData);
-    setStudentData(mockStudentData);
+          const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
+          const ausentes = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
+          const justificados = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
+          const total = presentes + ausentes + justificados;
 
-  }, [year, month]);
+          const levelCurrent = levelMap.get(levelKey) || { presente: 0, ausente: 0, justificado: 0 };
+          levelMap.set(levelKey, {
+            presente: levelCurrent.presente + presentes,
+            ausente: levelCurrent.ausente + ausentes,
+            justificado: levelCurrent.justificado + justificados,
+          });
+
+          const teacherCurrent = teacherMap.get(teacherKey) || { presente: 0, ausente: 0, justificado: 0 };
+          teacherMap.set(teacherKey, {
+            presente: teacherCurrent.presente + presentes,
+            ausente: teacherCurrent.ausente + ausentes,
+            justificado: teacherCurrent.justificado + justificados,
+          });
+
+          const timeCurrent = timeMap.get(timeKey) || { presentes: 0, totais: 0 };
+          timeMap.set(timeKey, {
+            presentes: timeCurrent.presentes + presentes + justificados,
+            totais: timeCurrent.totais + total,
+          });
+
+          classItem.alunos.forEach((student) => {
+            const stTotal = (student.presencas || 0) + (student.faltas || 0) + (student.justificativas || 0);
+            const freq = stTotal > 0 ? ((student.presencas + student.justificativas) / stTotal) * 100 : 0;
+            studentsFlat.push({ name: student.nome, valor: Number(freq.toFixed(1)) });
+          });
+        });
+
+        const levelAggregated: ChartData[] = Array.from(levelMap.entries()).map(([name, value]) => ({
+          name,
+          presente: value.presente,
+          ausente: value.ausente,
+          justificado: value.justificado,
+        }));
+
+        const teacherAggregated: ChartData[] = Array.from(teacherMap.entries()).map(([name, value]) => ({
+          name,
+          presente: value.presente,
+          ausente: value.ausente,
+          justificado: value.justificado,
+        }));
+
+        const timeAggregated: SimpleData[] = Array.from(timeMap.entries())
+          .map(([name, value]) => ({
+            name,
+            valor: value.totais > 0 ? Number(((value.presentes / value.totais) * 100).toFixed(1)) : 0,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        const topStudents: SimpleData[] = studentsFlat
+          .sort((a, b) => b.valor - a.valor)
+          .slice(0, 5);
+
+        setClassData(classAggregated);
+        setLevelData(levelAggregated);
+        setTimeData(timeAggregated);
+        setTeacherData(teacherAggregated);
+        setStudentData(topStudents);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setHasData(false);
+        setClassData([]);
+        setLevelData([]);
+        setTimeData([]);
+        setTeacherData([]);
+        setStudentData([]);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMonth]);
+
+  const yearOptions = Array.from({ length: 4 }, (_, i) => String(new Date().getFullYear() - 2 + i));
 
   return (
     <div className="dashboard-charts-container">
@@ -91,21 +178,28 @@ const DashboardCharts: React.FC = () => {
         <div className="filters">
           <select value={month} onChange={(e) => setMonth(e.target.value)} className="chart-select">
             {Array.from({ length: 12 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}</option>
+              <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
+                {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
+              </option>
             ))}
           </select>
           <select value={year} onChange={(e) => setYear(e.target.value)} className="chart-select">
-            <option value="2024">2024</option>
-            <option value="2025">2025</option>
-            <option value="2026">2026</option>
+            {yearOptions.map((yearValue) => (
+              <option key={yearValue} value={yearValue}>{yearValue}</option>
+            ))}
           </select>
         </div>
       </div>
 
+      {loading && <div className="dashboard-charts-status">Carregando indicadores...</div>}
+      {!loading && !hasData && (
+        <div className="dashboard-charts-status">Sem dados de relatórios para o mês selecionado.</div>
+      )}
+
       <div className="charts-grid">
         {/* Gráfico por Turma */}
         <div className="chart-card full-width">
-          <h4>Frequência por Turma</h4>
+          <h4>Ocorrências por Turma (Presente, Ausente, Justificado)</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={classData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -122,7 +216,7 @@ const DashboardCharts: React.FC = () => {
 
         {/* Gráfico por Nível */}
         <div className="chart-card">
-          <h4>Presença por Nível</h4>
+          <h4>Ocorrências por Nível</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={levelData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
@@ -138,21 +232,21 @@ const DashboardCharts: React.FC = () => {
 
         {/* Gráfico por Horário */}
         <div className="chart-card">
-          <h4>Média de Presença por Horário (%)</h4>
+          <h4>Média de Frequência por Horário (%)</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={timeData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="valor" fill={COLORS.info} name="Presença %" />
+              <Bar dataKey="valor" fill={COLORS.info} name="Frequência % (Presença + Justificada)" />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Gráfico por Professor */}
         <div className="chart-card">
-          <h4>Presença por Professor</h4>
+          <h4>Ocorrências por Professor</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={teacherData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
@@ -169,14 +263,14 @@ const DashboardCharts: React.FC = () => {
 
         {/* Top Alunos */}
         <div className="chart-card full-width">
-          <h4>Top 5 Alunos Mais Assíduos (%)</h4>
+          <h4>Top 5 Alunos por Frequência (%)</h4>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={studentData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" domain={[0, 100]} />
               <YAxis dataKey="name" type="category" width={150} />
               <Tooltip />
-              <Bar dataKey="valor" fill={COLORS.primary} name="Frequência %" barSize={20} />
+              <Bar dataKey="valor" fill={COLORS.primary} name="Frequência % (Presença + Justificada)" barSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </div>

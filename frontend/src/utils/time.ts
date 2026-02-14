@@ -1,5 +1,8 @@
 export const maskHorarioInput = (raw: string): string => {
-  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  let digits = raw.replace(/\D/g, "").slice(0, 4);
+  if (digits.length === 3) {
+    digits = `0${digits}`;
+  }
   if (digits.length >= 3) {
     return `${digits.slice(0, 2)}:${digits.slice(2)}`;
   }

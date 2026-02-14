@@ -36,10 +36,12 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 
 // Exclusions
 export const getExcludedStudents = () => API.get("/exclusions").catch(() => ({ data: [] }));
+export const addExclusion = (data: any) => API.post("/exclusions", data);
 export const restoreStudent = (data: any) => API.post("/exclusions/restore", data).catch(() => ({ data: { ok: true } }));
+export const deleteExclusion = (data: any) => API.post("/exclusions/delete", data).catch(() => ({ data: { ok: true } }));
 
 // Reports
-export const getReports = () => API.get("/reports").catch(() => ({ data: [] }));
+export const getReports = (params?: Record<string, any>) => API.get("/reports", { params }).catch(() => ({ data: [] }));
 export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
 export const getFilters = () => API.get("/filters").catch(() => ({ data: { turmas: [], horarios: [], professores: [], meses: [], anos: [] } }));
 export const generateExcelReport = (data: any) => API.post("/reports/excel", data).catch(() => ({ data: { ok: true } }));

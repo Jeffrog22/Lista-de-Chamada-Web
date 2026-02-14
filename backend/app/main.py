@@ -80,6 +80,43 @@ class JustificationLogEntry(BaseModel):
     horario: str = ""
     professor: str = ""
 
+class ExclusionEntry(BaseModel):
+    id: Optional[str] = None
+    nome: Optional[str] = None
+    turma: Optional[str] = None
+    turmaCodigo: Optional[str] = None
+    horario: Optional[str] = None
+    professor: Optional[str] = None
+    dataExclusao: Optional[str] = None
+    motivo_exclusao: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+class ReportStudent(BaseModel):
+    id: str
+    nome: str
+    presencas: int
+    faltas: int
+    justificativas: int
+    frequencia: float
+    historico: Dict[str, str]
+    anotacoes: Optional[str] = None
+
+class ReportClass(BaseModel):
+    turma: str
+    horario: str
+    professor: str
+    nivel: str
+    alunos: List[ReportStudent]
+
+class ReportsFilterOut(BaseModel):
+    turmas: List[str]
+    horarios: List[str]
+    professores: List[str]
+    meses: List[str]
+    anos: List[str]
+
 def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     payload: List[Dict[str, Any]] = []
@@ -94,6 +131,21 @@ def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     payload.extend(items)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
+def _load_json_list(file_path: str) -> List[Dict[str, Any]]:
+    if not os.path.exists(file_path):
+        return []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, list) else []
+    except Exception:
+        return []
+
+def _save_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
 
 POOL_LOG_COLUMNS = [
     "Data",
@@ -373,6 +425,222 @@ def append_justifications_log(entries: List[JustificationLogEntry]):
         return {"ok": True, "file": file_path, "count": len(items)}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"justifications-log error: {exc}")
+
+def _normalize_text(value: Optional[str]) -> str:
+    return str(value or "").strip().lower()
+
+def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str]:
+    nome = _normalize_text(item.get("nome") or item.get("Nome"))
+    turma = _normalize_text(item.get("turma") or item.get("Turma"))
+    horario = _normalize_text(item.get("horario") or "")
+    return (nome, turma, horario)
+
+def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
+    if payload.id and str(item.get("id")) == str(payload.id):
+        return True
+    return _exclusion_key(item) == _exclusion_key(payload.dict())
+
+def _map_attendance_value(value: str) -> str:
+    normalized = _normalize_text(value)
+    if normalized == "presente":
+        return "c"
+    if normalized == "falta":
+        return "f"
+    if normalized == "justificado":
+        return "j"
+    return ""
+
+def _report_day_key(date_value: str) -> str:
+    if not date_value:
+        return ""
+    parts = str(date_value).split("-")
+    if len(parts) >= 3:
+        return parts[2].zfill(2)
+    return str(date_value).strip()
+
+def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    file_path = os.path.join(DATA_DIR, "baseChamada.json")
+    items = _load_json_list(file_path)
+    latest: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        if month and str(item.get("mes") or "") != month:
+            continue
+        key = str(item.get("turmaCodigo") or item.get("turmaLabel") or "").strip()
+        if not key:
+            continue
+        saved_at = str(item.get("saved_at") or "")
+        if key not in latest:
+            latest[key] = item
+            continue
+        existing_saved = str(latest[key].get("saved_at") or "")
+        if saved_at > existing_saved:
+            latest[key] = item
+    return latest
+
+@app.get("/exclusions")
+def list_exclusions():
+    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    return _load_json_list(file_path)
+
+@app.post("/exclusions")
+def add_exclusion(entry: ExclusionEntry):
+    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    items = _load_json_list(file_path)
+    payload = entry.dict()
+    if not payload.get("dataExclusao"):
+        payload["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
+
+    updated = False
+    for idx, item in enumerate(items):
+        if _resolve_exclusion_match(item, entry):
+            items[idx] = {**item, **payload}
+            updated = True
+            break
+    if not updated:
+        items.append(payload)
+    _save_json_list(file_path, items)
+    return {"ok": True, "updated": updated}
+
+@app.post("/exclusions/restore")
+def restore_exclusion(entry: ExclusionEntry):
+    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    items = _load_json_list(file_path)
+    restored: Optional[Dict[str, Any]] = None
+    remaining: List[Dict[str, Any]] = []
+    for item in items:
+        if restored is None and _resolve_exclusion_match(item, entry):
+            restored = item
+            continue
+        remaining.append(item)
+    _save_json_list(file_path, remaining)
+    if restored is None:
+        raise HTTPException(status_code=404, detail="Exclusion not found")
+    return {"ok": True, "restored": restored}
+
+@app.post("/exclusions/delete")
+def delete_exclusion(entry: ExclusionEntry):
+    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    items = _load_json_list(file_path)
+    remaining: List[Dict[str, Any]] = []
+    deleted = False
+    for item in items:
+        if not deleted and _resolve_exclusion_match(item, entry):
+            deleted = True
+            continue
+        remaining.append(item)
+    _save_json_list(file_path, remaining)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Exclusion not found")
+    return {"ok": True}
+
+@app.get("/filters", response_model=ReportsFilterOut)
+def get_report_filters(session: Session = Depends(get_session)) -> ReportsFilterOut:
+    classes = session.exec(select(models.ImportClass)).all()
+    turmas = sorted({(c.turma_label or c.codigo or "").strip() for c in classes if (c.turma_label or c.codigo)})
+    horarios = sorted({(c.horario or "").strip() for c in classes if c.horario})
+    professores = sorted({(c.professor or "").strip() for c in classes if c.professor})
+
+    months = sorted({str(item.get("mes") or "").strip() for item in _load_json_list(os.path.join(DATA_DIR, "baseChamada.json")) if item.get("mes")})
+    years = sorted({m.split("-")[0] for m in months if "-" in m})
+    return ReportsFilterOut(turmas=turmas, horarios=horarios, professores=professores, meses=months, anos=years)
+
+@app.get("/reports", response_model=List[ReportClass])
+def get_reports(month: Optional[str] = None, session: Session = Depends(get_session)) -> List[ReportClass]:
+    classes = session.exec(select(models.ImportClass)).all()
+    students = session.exec(select(models.ImportStudent)).all()
+
+    students_by_class: Dict[int, List[models.ImportStudent]] = {}
+    for student in students:
+        students_by_class.setdefault(student.class_id, []).append(student)
+
+    latest_logs = _load_latest_attendance_logs(month)
+    report: List[ReportClass] = []
+
+    for cls in classes:
+        turma_key = (cls.codigo or cls.turma_label or "").strip()
+        turma_label = (cls.turma_label or cls.codigo or "").strip()
+        log_entry = latest_logs.get(turma_key) or latest_logs.get(turma_label)
+
+        name_to_id = {
+            _normalize_text(s.nome): str(s.id)
+            for s in students_by_class.get(cls.id, [])
+        }
+        class_students: List[ReportStudent] = []
+
+        if log_entry:
+            registros = log_entry.get("registros") or []
+            for record in registros:
+                nome = str(record.get("aluno_nome") or "").strip()
+                attendance = record.get("attendance") or {}
+                presencas = 0
+                faltas = 0
+                justificativas = 0
+                historico: Dict[str, str] = {}
+                for date_key, value in attendance.items():
+                    mapped = _map_attendance_value(str(value))
+                    if mapped == "c":
+                        presencas += 1
+                    elif mapped == "f":
+                        faltas += 1
+                    elif mapped == "j":
+                        justificativas += 1
+                    day_key = _report_day_key(date_key)
+                    if day_key:
+                        historico[day_key] = mapped
+
+                total = presencas + faltas + justificativas
+                frequencia = round(((presencas + justificativas) / total) * 100, 1) if total else 0.0
+                class_students.append(
+                    ReportStudent(
+                        id=name_to_id.get(_normalize_text(nome), nome or "0"),
+                        nome=nome,
+                        presencas=presencas,
+                        faltas=faltas,
+                        justificativas=justificativas,
+                        frequencia=frequencia,
+                        historico=historico,
+                    )
+                )
+        else:
+            for student in students_by_class.get(cls.id, []):
+                class_students.append(
+                    ReportStudent(
+                        id=str(student.id),
+                        nome=student.nome,
+                        presencas=0,
+                        faltas=0,
+                        justificativas=0,
+                        frequencia=0.0,
+                        historico={},
+                    )
+                )
+
+        class_students.sort(key=lambda s: s.nome)
+        report.append(
+            ReportClass(
+                turma=turma_label or turma_key,
+                horario=cls.horario or "",
+                professor=cls.professor or "",
+                nivel=cls.nivel or "",
+                alunos=class_students,
+            )
+        )
+
+    report.sort(key=lambda c: (c.turma, c.horario))
+    return report
+
+@app.post("/reports")
+def generate_report(payload: Dict[str, Any], session: Session = Depends(get_session)):
+    month = str(payload.get("month") or payload.get("mes") or "").strip() or None
+    return get_reports(month=month, session=session)
+
+@app.post("/reports/consolidated")
+def generate_consolidated_report(payload: Dict[str, Any], session: Session = Depends(get_session)):
+    return generate_report(payload, session=session)
+
+@app.post("/reports/excel")
+def generate_excel_report(payload: Dict[str, Any], session: Session = Depends(get_session)):
+    return generate_report(payload, session=session)
 
 def parse_bool(value: str) -> bool:
     if value is None:
