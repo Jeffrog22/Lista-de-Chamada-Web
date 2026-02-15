@@ -275,14 +275,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 15px;
-  align-items: end;
+  align-items: flex-start;
 }
 
 .reports-filters label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: #666;
+  color: #4b5563;
   margin-bottom: 4px;
 }
 
@@ -291,6 +291,35 @@
   padding: 8px;
   border-radius: 6px;
   border: 1px solid #ddd;
+  font-size: 14px;
+}
+
+.reports-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 170px;
+}
+
+.reports-filter-note {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.reports-filter-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reports-filter-inline select {
+  min-width: 170px;
+}
+
+.reports-level-note {
+  font-size: 16px;
+  color: #4b5563;
+  white-space: nowrap;
 }
 
 .btn-secondary {

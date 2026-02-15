@@ -35,6 +35,15 @@ const formatHorario = (value: string) => {
   return value;
 };
 
+const getHorarioSortValue = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return Number.MAX_SAFE_INTEGER;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length >= 4) return Number.parseInt(digits.slice(0, 4), 10);
+  if (digits.length === 3) return Number.parseInt(`0${digits}`, 10);
+  return Number.MAX_SAFE_INTEGER;
+};
+
 const parsePeriodo = (horario: string): Periodo => {
   if (!horario) return "Todos";
   const normalized = formatHorario(horario);
@@ -185,8 +194,14 @@ export const Vacancies: React.FC = () => {
       const key = s.turmaCodigo || s.turma;
       if (key) set.add(key);
     });
-    return Array.from(set).sort();
-  }, [filteredStudents]);
+    return Array.from(set).sort((a, b) => {
+      const horarioA = turmaMeta[a]?.horario || "";
+      const horarioB = turmaMeta[b]?.horario || "";
+      const byHorario = getHorarioSortValue(horarioA) - getHorarioSortValue(horarioB);
+      if (byHorario !== 0) return byHorario;
+      return a.localeCompare(b);
+    });
+  }, [filteredStudents, turmaMeta]);
 
   const capacidadeTotal = useMemo(() => {
     return turmasFiltradas.reduce((acc, turma) => acc + (capacities[turma] ?? 20), 0);

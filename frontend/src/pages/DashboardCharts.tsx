@@ -34,6 +34,25 @@ interface SimpleData {
   valor: number;
 }
 
+const formatHorario = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.includes(':')) return raw;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
+  if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+  return raw;
+};
+
+const getHorarioSortValue = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return Number.MAX_SAFE_INTEGER;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 4) return Number.parseInt(digits.slice(0, 4), 10);
+  if (digits.length === 3) return Number.parseInt(`0${digits}`, 10);
+  return Number.MAX_SAFE_INTEGER;
+};
+
 const DashboardCharts: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
@@ -86,7 +105,7 @@ const DashboardCharts: React.FC = () => {
         data.forEach((classItem) => {
           const levelKey = classItem.nivel || '-';
           const teacherKey = classItem.professor || '-';
-          const timeKey = classItem.horario || '-';
+          const timeKey = classItem.horario ? formatHorario(classItem.horario) : '-';
 
           const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
           const ausentes = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
@@ -139,7 +158,7 @@ const DashboardCharts: React.FC = () => {
             name,
             valor: value.totais > 0 ? Number(((value.presentes / value.totais) * 100).toFixed(1)) : 0,
           }))
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .sort((a, b) => getHorarioSortValue(a.name) - getHorarioSortValue(b.name));
 
         const topStudents: SimpleData[] = studentsFlat
           .sort((a, b) => b.valor - a.valor)
@@ -236,7 +255,7 @@ const DashboardCharts: React.FC = () => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={timeData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
+              <XAxis dataKey="name" tickFormatter={(value) => formatHorario(String(value || ''))} />
               <YAxis />
               <Tooltip />
               <Bar dataKey="valor" fill={COLORS.info} name="Frequência % (Presença + Justificada)" />

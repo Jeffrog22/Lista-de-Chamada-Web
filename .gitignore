@@ -8,4 +8,8 @@ dist/
 .vscode/
 discuss/
 data/excludedStudents.json
+data/baseChamada.json
+data/baseJustificativas.json
+data/logPiscina.xlsx
+data/archive/
 

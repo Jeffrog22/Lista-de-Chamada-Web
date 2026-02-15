@@ -10,6 +10,8 @@ import requests
 from pydantic import BaseModel, conint
 import csv
 from io import StringIO
+from copy import copy
+from openpyxl import load_workbook
 from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
@@ -116,6 +118,12 @@ class ReportsFilterOut(BaseModel):
     professores: List[str]
     meses: List[str]
     anos: List[str]
+
+class ExcelExportPayload(BaseModel):
+    month: Optional[str] = None
+    turma: str
+    horario: str
+    professor: str
 
 def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -458,6 +466,66 @@ def _report_day_key(date_value: str) -> str:
         return parts[2].zfill(2)
     return str(date_value).strip()
 
+def _format_month_label(month: Optional[str]) -> str:
+    if not month or "-" not in month:
+        return str(month or "")
+    year, month_number = month.split("-", 1)
+    month_names = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+    try:
+        idx = max(1, min(12, int(month_number))) - 1
+    except Exception:
+        return str(month)
+    return f"{month_names[idx]}/{year}"
+
+def _copy_cell_style(ws, source_row: int, source_col: int, target_row: int, target_col: int) -> None:
+    src = ws.cell(row=source_row, column=source_col)
+    dst = ws.cell(row=target_row, column=target_col)
+    dst._style = copy(src._style)
+    dst.number_format = copy(src.number_format)
+    dst.protection = copy(src.protection)
+    dst.alignment = copy(src.alignment)
+    dst.fill = copy(src.fill)
+    dst.font = copy(src.font)
+    dst.border = copy(src.border)
+
+def _build_import_student_details_map(
+    session: Session,
+    turma: str,
+    horario: str,
+    professor: str,
+) -> Dict[str, Dict[str, Any]]:
+    classes = session.exec(select(models.ImportClass)).all()
+    target = None
+    turma_norm = _normalize_text(turma)
+    horario_norm = _normalize_text(horario)
+    professor_norm = _normalize_text(professor)
+    for cls in classes:
+        cls_label = cls.turma_label or cls.codigo or ""
+        if (
+            _normalize_text(cls_label) == turma_norm
+            and _normalize_text(cls.horario or "") == horario_norm
+            and _normalize_text(cls.professor or "") == professor_norm
+        ):
+            target = cls
+            break
+
+    details: Dict[str, Dict[str, Any]] = {}
+    if not target:
+        return details
+
+    students = session.exec(
+        select(models.ImportStudent).where(models.ImportStudent.class_id == target.id)
+    ).all()
+    for student in students:
+        details[_normalize_text(student.nome)] = {
+            "whatsapp": student.whatsapp or "",
+            "parq": student.parq or "",
+            "atestado": bool(student.atestado),
+            "data_nascimento": student.data_nascimento or "",
+            "data_atestado": student.data_atestado or "",
+        }
+    return details
+
 def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     file_path = os.path.join(DATA_DIR, "baseChamada.json")
     items = _load_json_list(file_path)
@@ -641,6 +709,117 @@ def generate_consolidated_report(payload: Dict[str, Any], session: Session = Dep
 @app.post("/reports/excel")
 def generate_excel_report(payload: Dict[str, Any], session: Session = Depends(get_session)):
     return generate_report(payload, session=session)
+
+@app.post("/reports/excel-file")
+def generate_excel_report_file(payload: ExcelExportPayload, session: Session = Depends(get_session)):
+    month = str(payload.month or "").strip() or None
+    reports = get_reports(month=month, session=session)
+
+    selected = next(
+        (
+            cls
+            for cls in reports
+            if _normalize_text(cls.turma) == _normalize_text(payload.turma)
+            and _normalize_text(cls.horario) == _normalize_text(payload.horario)
+            and _normalize_text(cls.professor) == _normalize_text(payload.professor)
+        ),
+        None,
+    )
+
+    if not selected:
+        raise HTTPException(status_code=404, detail="Class report not found for selected filters")
+
+    template_path = os.getenv(
+        "REPORT_TEMPLATE_PATH",
+        os.path.join(DATA_DIR, "archive", "relatorioChamada.legacy.xlsx"),
+    )
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=404, detail=f"Template file not found: {template_path}")
+
+    workbook = load_workbook(template_path)
+    ws = workbook.active
+
+    ws["A1"] = "Modalidade:"
+    ws["B1"] = "Natação"
+    ws["D1"] = "PREFEITURA MUNICIPAL DE VINHEDO"
+
+    ws["A2"] = "Local:"
+    ws["B2"] = "Piscina Bela Vista"
+    ws["D2"] = "SECRETARIA DE ESPORTE E LAZER"
+
+    ws["A3"] = "Professor:"
+    ws["B3"] = selected.professor
+
+    ws["A4"] = "Turma:"
+    ws["B4"] = selected.turma
+    ws["D4"] = "Nível:"
+    ws["E4"] = selected.nivel
+
+    ws["A5"] = "Horário:"
+    ws["B5"] = _format_horario(selected.horario or "")
+    ws["D5"] = "Mês:"
+    ws["E5"] = _format_month_label(month)
+
+    class_days = sorted({day for aluno in selected.alunos for day in (aluno.historico or {}).keys()})
+    header_row = 6
+    data_start_row = 7
+    date_col_start = 5
+
+    ws.cell(row=header_row, column=1, value="Nome")
+    ws.cell(row=header_row, column=2, value="Whatsapp")
+    ws.cell(row=header_row, column=3, value="parQ")
+    ws.cell(row=header_row, column=4, value="Aniversário")
+
+    for idx, day in enumerate(class_days):
+        target_col = date_col_start + idx
+        _copy_cell_style(ws, header_row, date_col_start, header_row, target_col)
+        ws.cell(row=header_row, column=target_col, value=day)
+
+    notes_col = date_col_start + len(class_days)
+    _copy_cell_style(ws, header_row, date_col_start, header_row, notes_col)
+    ws.cell(row=header_row, column=notes_col, value="Anotações")
+
+    details_map = _build_import_student_details_map(
+        session=session,
+        turma=selected.turma,
+        horario=selected.horario,
+        professor=selected.professor,
+    )
+
+    students_sorted = sorted(selected.alunos, key=lambda item: item.nome)
+    for idx, aluno in enumerate(students_sorted):
+        row = data_start_row + idx
+        for col in range(1, notes_col + 1):
+            _copy_cell_style(ws, data_start_row, min(col, date_col_start), row, col)
+
+        student_meta = details_map.get(_normalize_text(aluno.nome), {})
+        ws.cell(row=row, column=1, value=aluno.nome)
+        ws.cell(row=row, column=2, value=student_meta.get("whatsapp") or "")
+        if student_meta.get("atestado"):
+            ws.cell(row=row, column=3, value=student_meta.get("data_atestado") or "Com Atestado")
+        else:
+            ws.cell(row=row, column=3, value=student_meta.get("parq") or "")
+        ws.cell(row=row, column=4, value=student_meta.get("data_nascimento") or "")
+
+        for day_idx, day in enumerate(class_days):
+            value = (aluno.historico or {}).get(day, "")
+            ws.cell(row=row, column=date_col_start + day_idx, value=value)
+
+        ws.cell(row=row, column=notes_col, value=aluno.anotacoes or "")
+
+    export_dir = os.path.join(DATA_DIR, "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    safe_turma = (selected.turma or "turma").replace("/", "-").replace("\\", "-")
+    safe_month = (month or "sem-mes").replace("/", "-")
+    output_name = f"Relatorio_{safe_turma}_{safe_month}.xlsx"
+    output_path = os.path.join(export_dir, output_name)
+    workbook.save(output_path)
+
+    return FileResponse(
+        output_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=output_name,
+    )
 
 def parse_bool(value: str) -> bool:
     if value is None:

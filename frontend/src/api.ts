@@ -45,6 +45,8 @@ export const getReports = (params?: Record<string, any>) => API.get("/reports", 
 export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
 export const getFilters = () => API.get("/filters").catch(() => ({ data: { turmas: [], horarios: [], professores: [], meses: [], anos: [] } }));
 export const generateExcelReport = (data: any) => API.post("/reports/excel", data).catch(() => ({ data: { ok: true } }));
+export const downloadExcelReport = (data: any) =>
+  API.post("/reports/excel-file", data, { responseType: "blob" });
 export const generateConsolidatedReport = (data: any) => API.post("/reports/consolidated", data).catch(() => ({ data: { ok: true } }));
 
 // File Import

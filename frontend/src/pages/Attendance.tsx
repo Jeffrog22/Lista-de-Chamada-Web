@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { addExclusion, getPoolLog, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 
 interface ClassOption {
   turmaCodigo: string;
@@ -16,6 +16,37 @@ interface AttendanceRecord {
   attendance: { [date: string]: "Presente" | "Falta" | "Justificado" | "" };
   justifications?: { [date: string]: string };
   notes?: string[];
+}
+
+interface ActiveStudentMeta {
+  nome?: string;
+  turma?: string;
+  turmaCodigo?: string;
+  horario?: string;
+  professor?: string;
+  atestado?: boolean;
+  dataAtestado?: string;
+}
+
+interface ReportStudentLite {
+  nome: string;
+  historico?: Record<string, string>;
+}
+
+interface ReportClassLite {
+  turma: string;
+  horario: string;
+  professor: string;
+  alunos: ReportStudentLite[];
+}
+
+type RenewalSeverity = "yellow" | "orange" | "red";
+
+interface RenewalAlertInfo {
+  severity: RenewalSeverity;
+  color: string;
+  background: string;
+  message: string;
 }
 
 // Interface para o Log da Piscina (logPiscina.xlsx)
@@ -48,20 +79,11 @@ const WEATHER_ICONS = {
 type AttendanceHistory = AttendanceRecord[];
 
 export const Attendance: React.FC = () => {
-  // MOCK DATA - Estrutura baseada em chamadaBelaVista.xlsx
-  const defaultClassOptions: ClassOption[] = [
-    { turmaCodigo: "1A", turmaLabel: "1A", horario: "14:00", professor: "Joao Silva", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
-    { turmaCodigo: "1B", turmaLabel: "1B", horario: "15:30", professor: "Maria Santos", nivel: "Intermediario", diasSemana: ["Quarta", "Sexta"] },
-    { turmaCodigo: "2A", turmaLabel: "2A", horario: "16:30", professor: "Carlos Oliveira", nivel: "Avancado", diasSemana: ["Segunda", "Quarta"] },
-    { turmaCodigo: "2B", turmaLabel: "2B", horario: "18:00", professor: "Ana Costa", nivel: "Iniciante", diasSemana: ["Terca", "Quinta"] },
-  ];
+  const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
+  const attendanceSelectionStorageKey = "attendanceSelection";
+  const defaultClassOptions: ClassOption[] = [];
 
-  const defaultStudentsPerClass: { [key: string]: string[] } = {
-    "1A": ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa", "Pedro Ferreira"],
-    "1B": ["Roberto Alves", "Fernanda Lima", "Lucas Martins", "Beatriz Souza", "Diego Rocha"],
-    "2A": ["Amanda Silva", "Felipe Santos", "Juliana Costa", "Marcos Oliveira", "Sophia Pereira"],
-    "2B": ["Thiago Mendes", "Camila Silva", "Bruno Costa", "Larissa Santos", "Rafael Lima"],
-  };
+  const defaultStudentsPerClass: { [key: string]: string[] } = {};
 
   const parseDiasSemana = (value: string | undefined): string[] => {
     if (!value) return [];
@@ -91,6 +113,14 @@ export const Attendance: React.FC = () => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
+  const mapAttendanceValue = (value: string): "Presente" | "Falta" | "Justificado" | "" => {
+    const normalized = normalizeText(value || "");
+    if (normalized === "c" || normalized === "presente") return "Presente";
+    if (normalized === "f" || normalized === "falta") return "Falta";
+    if (normalized === "j" || normalized === "justificado") return "Justificado";
+    return "";
+  };
+
   const normalizeNumberInput = (value: unknown) => {
     if (value === null || value === undefined) return "";
     const raw = String(value).replace(",", ".").trim();
@@ -99,14 +129,78 @@ export const Attendance: React.FC = () => {
     return raw;
   };
 
+  const normalizeHorarioStoragePart = (value: string) => {
+    const digits = (value || "").replace(/\D/g, "");
+    if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
+    if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    return (value || "").trim();
+  };
+
+  const deriveAttendanceStorageAliases = (key: string) => {
+    if (!key.startsWith("attendance:")) {
+      return { tripleKeys: [key], fallbackKeys: [] as string[] };
+    }
+
+    const raw = key.slice("attendance:".length);
+    const parts = raw.split("|");
+    if (parts.length < 4) {
+      return { tripleKeys: [key], fallbackKeys: [] as string[] };
+    }
+
+    const [turmaRaw, horarioRaw, professorRaw, monthRaw] = parts;
+    const turma = (turmaRaw || "").trim();
+    const professor = (professorRaw || "").trim();
+    const month = (monthRaw || "").trim();
+    const horarioNormalized = normalizeHorarioStoragePart(horarioRaw || "");
+
+    const tripleKeys = Array.from(
+      new Set([
+        key,
+        `attendance:${turma}|${horarioRaw}|${professor}|${month}`,
+        `attendance:${turma.toLowerCase()}|${horarioNormalized}|${professor.toLowerCase()}|${month}`,
+        `attendance:${turma.toUpperCase()}|${horarioNormalized}|${professor.toUpperCase()}|${month}`,
+      ])
+    );
+
+    const fallbackKeys = Array.from(
+      new Set([
+        `attendance:${turma}|${month}`,
+        `attendance:${turma.toLowerCase()}|${month}`,
+        `attendance:${turma.toUpperCase()}|${month}`,
+      ])
+    );
+
+    return { tripleKeys, fallbackKeys };
+  };
+
   const loadAttendanceStorage = () => {
     if (!storageKey) return null as AttendanceRecord[] | null;
+
+    const parsePayload = (raw: string | null) => {
+      if (!raw) return null as AttendanceRecord[] | null;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed as AttendanceRecord[];
+        if (parsed && Array.isArray(parsed.records)) return parsed.records as AttendanceRecord[];
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
     try {
-      const raw = localStorage.getItem(storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed && Array.isArray(parsed.records)) return parsed.records as AttendanceRecord[];
+      const { tripleKeys, fallbackKeys } = deriveAttendanceStorageAliases(storageKey);
+
+      for (const key of tripleKeys) {
+        const found = parsePayload(localStorage.getItem(key));
+        if (found) return found;
+      }
+
+      for (const key of fallbackKeys) {
+        const found = parsePayload(localStorage.getItem(key));
+        if (found) return found;
+      }
+
       return null;
     } catch {
       return null;
@@ -116,7 +210,22 @@ export const Attendance: React.FC = () => {
   const saveAttendanceStorage = (records: AttendanceRecord[]) => {
     if (!storageKey) return;
     const payload = { records, updatedAt: new Date().toISOString() };
-    localStorage.setItem(storageKey, JSON.stringify(payload));
+    const serialized = JSON.stringify(payload);
+    const { tripleKeys, fallbackKeys } = deriveAttendanceStorageAliases(storageKey);
+
+    localStorage.setItem(storageKey, serialized);
+    if (tripleKeys.length > 1) {
+      localStorage.setItem(tripleKeys[1], serialized);
+    }
+    if (tripleKeys.length > 2) {
+      localStorage.setItem(tripleKeys[2], serialized);
+    }
+    if (fallbackKeys.length > 0) {
+      localStorage.setItem(fallbackKeys[0], serialized);
+    }
+    if (fallbackKeys.length > 1) {
+      localStorage.setItem(fallbackKeys[1], serialized);
+    }
   };
 
   const hasAnyMonthJustification = (justifications?: Record<string, string>) => {
@@ -176,19 +285,21 @@ export const Attendance: React.FC = () => {
 
   const getTurmaKey = (opt: ClassOption) => opt.turmaLabel || opt.turmaCodigo;
   const isSameTurma = (opt: ClassOption, turma: string) => {
-    const key = getTurmaKey(opt);
-    if (!key || !turma) return false;
-    return normalizeText(key) === normalizeText(turma);
+    if (!turma) return false;
+    const turmaNormalized = normalizeText(turma);
+    const codeNormalized = normalizeText(opt.turmaCodigo || "");
+    const labelNormalized = normalizeText(opt.turmaLabel || "");
+    return turmaNormalized === codeNormalized || turmaNormalized === labelNormalized;
   };
 
   const loadFromStorage = () => {
     try {
       const classesStr = localStorage.getItem("activeClasses");
       const studentsStr = localStorage.getItem("activeStudents");
-      if (!classesStr || !studentsStr) return null;
+      if (!classesStr && !studentsStr) return null;
 
-      const classes = JSON.parse(classesStr);
-      const students = JSON.parse(studentsStr);
+      const classes = classesStr ? JSON.parse(classesStr) : [];
+      const students = studentsStr ? JSON.parse(studentsStr) : [];
       if (!Array.isArray(classes) || !Array.isArray(students)) return null;
 
       const classOptions: ClassOption[] = classes.map((cls: any) => ({
@@ -210,17 +321,47 @@ export const Attendance: React.FC = () => {
         studentsPerClass[key].push(student.nome);
       });
 
-      return { classOptions, studentsPerClass };
+      return { classOptions, studentsPerClass, studentsMeta: students as ActiveStudentMeta[] };
+    } catch {
+      return null;
+    }
+  };
+
+  const loadAttendanceSelection = () => {
+    try {
+      const raw = localStorage.getItem(attendanceSelectionStorageKey);
+      if (!raw) return null as { turma: string; horario: string; professor: string } | null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      return {
+        turma: String(parsed.turma || ""),
+        horario: String(parsed.horario || ""),
+        professor: String(parsed.professor || ""),
+      };
     } catch {
       return null;
     }
   };
 
   const stored = loadFromStorage();
+  const storedSelection = loadAttendanceSelection();
   const [classOptions, setClassOptions] = useState<ClassOption[]>(stored?.classOptions || defaultClassOptions);
   const [studentsPerClass, setStudentsPerClass] = useState<{ [key: string]: string[] }>(
     stored?.studentsPerClass || defaultStudentsPerClass
   );
+  const [activeStudentsMeta, setActiveStudentsMeta] = useState<ActiveStudentMeta[]>(
+    stored?.studentsMeta || []
+  );
+  const [dismissedRenewalAlerts, setDismissedRenewalAlerts] = useState<Record<string, RenewalSeverity>>(() => {
+    try {
+      const raw = localStorage.getItem(renewalAlertStorageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
 
   // STATE
   const emptyClass: ClassOption = {
@@ -231,9 +372,15 @@ export const Attendance: React.FC = () => {
     nivel: "",
     diasSemana: [],
   };
-  const [selectedTurma, setSelectedTurma] = useState<string>(getTurmaKey(classOptions[0] || emptyClass) || "");
-  const [selectedHorario, setSelectedHorario] = useState<string>(classOptions[0]?.horario || "");
-  const [selectedProfessor, setSelectedProfessor] = useState<string>(classOptions[0]?.professor || "");
+  const [selectedTurma, setSelectedTurma] = useState<string>(
+    storedSelection?.turma || getTurmaKey(classOptions[0] || emptyClass) || ""
+  );
+  const [selectedHorario, setSelectedHorario] = useState<string>(
+    storedSelection?.horario || classOptions[0]?.horario || ""
+  );
+  const [selectedProfessor, setSelectedProfessor] = useState<string>(
+    storedSelection?.professor || classOptions[0]?.professor || ""
+  );
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
@@ -242,20 +389,95 @@ export const Attendance: React.FC = () => {
     if (latest.classOptions.length > 0) {
       setClassOptions(latest.classOptions);
       setStudentsPerClass(latest.studentsPerClass);
+      setActiveStudentsMeta(latest.studentsMeta || []);
       // selection handled by effects below
     }
   }, []);
 
   useEffect(() => {
+    localStorage.setItem(renewalAlertStorageKey, JSON.stringify(dismissedRenewalAlerts));
+  }, [dismissedRenewalAlerts]);
+
+  useEffect(() => {
+    const onStorage = () => {
+      try {
+        const raw = localStorage.getItem("activeStudents");
+        if (!raw) {
+          setActiveStudentsMeta([]);
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        setActiveStudentsMeta(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setActiveStudentsMeta([]);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
     if (classOptions.length === 0) return;
-    const hasTurma = classOptions.some((opt) => isSameTurma(opt, selectedTurma));
-    if (!selectedTurma || !hasTurma) {
-      const first = classOptions[0];
-      setSelectedTurma(getTurmaKey(first) || "");
-      setSelectedHorario(first.horario);
-      setSelectedProfessor(first.professor);
+
+    const currentExact = classOptions.find(
+      (opt) =>
+        isSameTurma(opt, selectedTurma) &&
+        opt.horario === selectedHorario &&
+        opt.professor === selectedProfessor
+    );
+    if (currentExact) {
+      const canonicalTurma = getTurmaKey(currentExact) || "";
+      if (canonicalTurma && selectedTurma !== canonicalTurma) {
+        setSelectedTurma(canonicalTurma);
+      }
+      return;
     }
-  }, [classOptions, selectedTurma]);
+
+    const hasCurrentSelection = classOptions.some(
+      (opt) =>
+        isSameTurma(opt, selectedTurma) &&
+        opt.horario === selectedHorario &&
+        opt.professor === selectedProfessor
+    );
+    if (hasCurrentSelection) return;
+
+    const saved = loadAttendanceSelection();
+    if (saved?.turma) {
+      const restoredExact = classOptions.find(
+        (opt) =>
+          isSameTurma(opt, saved.turma) &&
+          (!saved.horario || opt.horario === saved.horario) &&
+          (!saved.professor || opt.professor === saved.professor)
+      );
+      if (restoredExact) {
+        setSelectedTurma(getTurmaKey(restoredExact) || "");
+        setSelectedHorario(restoredExact.horario);
+        setSelectedProfessor(restoredExact.professor);
+        return;
+      }
+
+      const restoredTurma = classOptions.find((opt) => isSameTurma(opt, saved.turma));
+      if (restoredTurma) {
+        setSelectedTurma(getTurmaKey(restoredTurma) || "");
+        if (saved.horario) {
+          setSelectedHorario(saved.horario);
+        } else {
+          setSelectedHorario(restoredTurma.horario);
+        }
+        if (saved.professor) {
+          setSelectedProfessor(saved.professor);
+        } else {
+          setSelectedProfessor(restoredTurma.professor);
+        }
+        return;
+      }
+    }
+
+    const first = classOptions[0];
+    setSelectedTurma(getTurmaKey(first) || "");
+    setSelectedHorario(first.horario);
+    setSelectedProfessor(first.professor);
+  }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
 
   useEffect(() => {
     const target = localStorage.getItem("attendanceTargetTurma");
@@ -341,6 +563,138 @@ export const Attendance: React.FC = () => {
     const byTurma = classOptions.find((opt) => isSameTurma(opt, selectedTurma));
     return byTurma || classOptions[0] || emptyClass;
   }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
+
+  useEffect(() => {
+    const turmaValue = selectedClass.turmaLabel || selectedTurma || selectedClass.turmaCodigo || "";
+    const horarioValue = selectedClass.horario || selectedHorario || "";
+    const professorValue = selectedClass.professor || selectedProfessor || "";
+    if (!turmaValue) return;
+    localStorage.setItem(
+      attendanceSelectionStorageKey,
+      JSON.stringify({ turma: turmaValue, horario: horarioValue, professor: professorValue })
+    );
+  }, [selectedClass, selectedTurma, selectedHorario, selectedProfessor]);
+
+  const parseDateFlexible = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    if (raw.includes("/")) {
+      const [day, month, year] = raw.split("/").map(Number);
+      if (!day || !month || !year) return null;
+      const date = new Date(year, month - 1, day);
+      if (Number.isNaN(date.getTime())) return null;
+      return date;
+    }
+    if (raw.includes("-")) {
+      const dateOnly = raw.split("T")[0];
+      const [year, month, day] = dateOnly.split("-").map(Number);
+      if (!day || !month || !year) return null;
+      const date = new Date(year, month - 1, day);
+      if (Number.isNaN(date.getTime())) return null;
+      return date;
+    }
+    return null;
+  };
+
+  const addMonths = (base: Date, months: number) => {
+    const next = new Date(base);
+    next.setMonth(next.getMonth() + months);
+    return next;
+  };
+
+  const activeStudentByNameInClass = useMemo(() => {
+    const map = new Map<string, ActiveStudentMeta>();
+    const normalizeHorarioValue = (value: string) => {
+      const digits = (value || "").replace(/\D/g, "");
+      if (digits.length === 3) return `0${digits}`;
+      if (digits.length >= 4) return digits.slice(0, 4);
+      return digits;
+    };
+    const turmaRef = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
+    const turmaCodigoRef = normalizeText(selectedClass.turmaCodigo || "");
+    const horarioRef = normalizeHorarioValue(selectedClass.horario || selectedHorario || "");
+    const professorRef = normalizeText(selectedClass.professor || selectedProfessor || "");
+
+    activeStudentsMeta.forEach((student) => {
+      const studentName = normalizeText(student.nome || "");
+      if (!studentName) return;
+
+      const studentTurma = normalizeText(student.turma || "");
+      const studentTurmaCodigo = normalizeText(student.turmaCodigo || "");
+      const studentHorario = normalizeHorarioValue(student.horario || "");
+      const studentProfessor = normalizeText(student.professor || "");
+
+      const turmaMatches =
+        (!turmaRef && !turmaCodigoRef) ||
+        studentTurma === turmaRef ||
+        studentTurmaCodigo === turmaCodigoRef ||
+        studentTurma === turmaCodigoRef ||
+        studentTurmaCodigo === turmaRef;
+      const horarioMatches = !horarioRef || !studentHorario || studentHorario === horarioRef;
+      const professorMatches = !professorRef || !studentProfessor || studentProfessor === professorRef;
+
+      if (turmaMatches && horarioMatches && professorMatches) {
+        map.set(studentName, student);
+      }
+    });
+
+    return map;
+  }, [activeStudentsMeta, selectedClass, selectedTurma, selectedHorario, selectedProfessor]);
+
+  const buildRenewalDismissKey = (studentName: string) => {
+    const turma = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
+    const horario = normalizeText(selectedClass.horario || selectedHorario || "");
+    const professor = normalizeText(selectedClass.professor || selectedProfessor || "");
+    const name = normalizeText(studentName || "");
+    return `${name}|${turma}|${horario}|${professor}`;
+  };
+
+  const getRenewalAlertInfo = (studentName: string): RenewalAlertInfo | null => {
+    const student = activeStudentByNameInClass.get(normalizeText(studentName || ""));
+    const hasCertificateInfo = !!student?.atestado || !!String(student?.dataAtestado || "").trim();
+    if (!hasCertificateInfo || !student?.dataAtestado) return null;
+
+    const atestadoDate = parseDateFlexible(student.dataAtestado);
+    if (!atestadoDate) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const limit9 = addMonths(atestadoDate, 9);
+    const limit11 = addMonths(atestadoDate, 11);
+    const limit12 = addMonths(atestadoDate, 12);
+
+    if (today >= limit12) {
+      return {
+        severity: "red",
+        color: "#dc3545",
+        background: "#fdeaea",
+        message: "Atestado com 1 ano ou mais. Renovar atestado médico imediatamente.",
+      };
+    }
+    if (today >= limit11) {
+      return {
+        severity: "orange",
+        color: "#fd7e14",
+        background: "#fff3e6",
+        message: "Atestado com 11 meses. Renovação do atestado médico é recomendada.",
+      };
+    }
+    if (today >= limit9) {
+      return {
+        severity: "yellow",
+        color: "#b08900",
+        background: "#fff9db",
+        message: "Atestado com 9 meses. Programe a renovação do atestado médico.",
+      };
+    }
+    return null;
+  };
+
+  const dismissRenewalAlert = (studentName: string, severity: RenewalSeverity) => {
+    const key = buildRenewalDismissKey(studentName);
+    setDismissedRenewalAlerts((prev) => ({ ...prev, [key]: severity }));
+  };
 
   // Gerar datas pré-determinadas baseadas no dia da semana (DEFINIR ANTES DO STATE)
   const generateDates = (daysOfWeek: string[]) => {
@@ -447,6 +801,7 @@ export const Attendance: React.FC = () => {
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
 
   // Estados para o Modal de Justificativa
   const [showJustificationModal, setShowJustificationModal] = useState(false);
@@ -913,20 +1268,68 @@ export const Attendance: React.FC = () => {
 
   const selectedDaysKey = selectedClass.diasSemana.join("|");
   useEffect(() => {
-    const turmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
-    if (!turmaLookup) return;
-    const newDates = generateDates(selectedClass.diasSemana).map((d) => d.split(" ")[0]);
-    const storedRecords = loadAttendanceStorage();
-    const storedByName = new Map((storedRecords || []).map((item) => [item.aluno, item]));
+    let isMounted = true;
 
-    // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
-    setHistory([]);
+    const hydrateAttendance = async () => {
+      const turmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
+      if (!turmaLookup || !storageKey) {
+        if (isMounted) setHydratedStorageKey("");
+        return;
+      }
 
-    setAttendance(
-      (studentsPerClass[turmaLookup] || []).map((aluno, idx) => ({
-        id: idx + 1,
-        aluno,
-        attendance: (() => {
+      const newDates = generateDates(selectedClass.diasSemana).map((d) => d.split(" ")[0]);
+      const storedRecords = loadAttendanceStorage();
+      const storedByName = new Map(
+        (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
+      );
+
+      const backendByName = new Map<string, { attendance: Record<string, "Presente" | "Falta" | "Justificado" | ""> }>();
+
+      try {
+        const response = await getReports({ month: monthKey });
+        const reports = Array.isArray(response?.data) ? (response.data as ReportClassLite[]) : [];
+        const turmaCandidates = [selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedTurma]
+          .map((value) => normalizeText(value || ""))
+          .filter(Boolean);
+        const horarioRef = selectedClass.horario || selectedHorario || "";
+        const professorRef = normalizeText(selectedClass.professor || selectedProfessor || "");
+
+        const matchedClass = reports.find((item) => {
+          const turmaMatches = turmaCandidates.includes(normalizeText(item.turma || ""));
+          const horarioMatches = (item.horario || "") === horarioRef;
+          const professorItem = normalizeText(item.professor || "");
+          const professorMatches = !professorRef || professorItem === professorRef;
+          return turmaMatches && horarioMatches && professorMatches;
+        });
+
+        (matchedClass?.alunos || []).forEach((student) => {
+          const studentKey = normalizeText(student.nome || "");
+          if (!studentKey) return;
+          const attendanceMap = (student.historico || {}) as Record<string, string>;
+          const mappedAttendance = Object.entries(attendanceMap).reduce(
+            (acc, [dayKey, status]) => {
+              const day = String(dayKey || "").padStart(2, "0");
+              const dateKey = `${monthKey}-${day}`;
+              if (newDates.includes(dateKey)) {
+                acc[dateKey] = mapAttendanceValue(String(status || ""));
+              }
+              return acc;
+            },
+            {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
+          );
+          backendByName.set(studentKey, { attendance: mappedAttendance });
+        });
+      } catch {
+        // mantém hidratação local quando backend de relatórios indisponível
+      }
+
+      if (!isMounted) return;
+
+      // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
+      setHistory([]);
+
+      setAttendance(
+        (studentsPerClass[turmaLookup] || []).map((aluno, idx) => {
           const base = newDates.reduce(
             (acc, date) => {
               acc[date] = "";
@@ -934,19 +1337,44 @@ export const Attendance: React.FC = () => {
             },
             {} as { [date: string]: "Presente" | "Falta" | "Justificado" | "" }
           );
-          const stored = storedByName.get(aluno);
-          if (!stored) return base;
-          return { ...base, ...(stored.attendance || {}) };
-        })(),
-        justifications: storedByName.get(aluno)?.justifications || {},
-      }))
-    );
-  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass]);
+
+          const backend = backendByName.get(normalizeText(aluno));
+          const stored = storedByName.get(normalizeText(aluno));
+
+          return {
+            id: idx + 1,
+            aluno,
+            attendance: (() => {
+              const merged = {
+                ...base,
+                ...(backend?.attendance || {}),
+              };
+              const storedAttendance = stored?.attendance || {};
+              Object.entries(storedAttendance).forEach(([date, value]) => {
+                if (value) {
+                  merged[date] = value;
+                }
+              });
+              return merged;
+            })(),
+            justifications: stored?.justifications || {},
+          };
+        })
+      );
+      setHydratedStorageKey(storageKey);
+    };
+
+    hydrateAttendance();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor]);
 
   useEffect(() => {
-    if (!storageKey) return;
+    if (!storageKey || hydratedStorageKey !== storageKey) return;
     saveAttendanceStorage(attendance);
-  }, [attendance, storageKey]);
+  }, [attendance, storageKey, hydratedStorageKey]);
 
   // Ciclar entre os 4 estados
   const cycleStatus = (currentStatus: "Presente" | "Falta" | "Justificado" | "") => {
@@ -1341,6 +1769,11 @@ export const Attendance: React.FC = () => {
                   Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado") ||
                   hasAnyMonthJustification(item.justifications);
                 const showDelete = absences >= 3;
+                const renewalAlert = getRenewalAlertInfo(item.aluno);
+                const renewalDismissKey = buildRenewalDismissKey(item.aluno);
+                const dismissedSeverity = dismissedRenewalAlerts[renewalDismissKey];
+                const showRenewalAlert = !!renewalAlert && dismissedSeverity !== renewalAlert.severity;
+                const showRenewalIcon = !!renewalAlert && !showRenewalAlert;
                 return (
                 <tr
                   key={item.id}
@@ -1354,7 +1787,54 @@ export const Attendance: React.FC = () => {
                     onClick={() => handleOpenStudentModal(item.id)}
                     title="Clique para ver/adicionar anotações"
                   >
-                    <span style={{ borderBottom: "1px dashed #ccc" }}>{item.aluno}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {showRenewalIcon && renewalAlert && (
+                        <span
+                          title="renovar atestado"
+                          style={{ color: renewalAlert.color, fontWeight: 800, fontSize: "15px", lineHeight: 1 }}
+                        >
+                          ✱
+                        </span>
+                      )}
+                      <span style={{ borderBottom: "1px dashed #ccc" }}>{item.aluno}</span>
+                    </div>
+                    {showRenewalAlert && renewalAlert && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          background: renewalAlert.background,
+                          borderLeft: `3px solid ${renewalAlert.color}`,
+                          borderRadius: "6px",
+                          padding: "7px 8px",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "8px",
+                          fontSize: "12px",
+                          color: "#374151",
+                        }}
+                      >
+                        <span style={{ color: renewalAlert.color, fontWeight: 700 }}>⚠</span>
+                        <span style={{ flex: 1 }}>{renewalAlert.message}</span>
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            dismissRenewalAlert(item.aluno, renewalAlert.severity);
+                          }}
+                          title="Fechar alerta"
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#6b7280",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            padding: 0,
+                            lineHeight: 1,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </td>
                   {dateDates.map((date) => {
                     const status = item.attendance[date];

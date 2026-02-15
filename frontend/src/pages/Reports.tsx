@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
-import { getBootstrap, getReports } from "../api";
+import { downloadExcelReport, getBootstrap, getReports } from "../api";
 import "./Reports.css";
 import DashboardCharts from './DashboardCharts';
 
@@ -38,18 +37,40 @@ interface ActiveStudentLite {
   atestado?: boolean;
 }
 
+interface BootstrapClassLite {
+  codigo: string;
+  turmaLabel: string;
+  horario: string;
+  professor: string;
+  nivel: string;
+}
+
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedTurmaLabel, setSelectedTurmaLabel] = useState<string>("");
+  const [selectedHorario, setSelectedHorario] = useState<string>("");
+  const [selectedProfessor, setSelectedProfessor] = useState<string>("");
   const [loadingReports, setLoadingReports] = useState(false);
 
-  const normalizeText = (value: string) =>
-    value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
+  const formatHorario = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw.includes(":")) return raw;
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
+    if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    return raw;
+  };
+
+  const getHorarioSortValue = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return Number.MAX_SAFE_INTEGER;
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length >= 4) return Number.parseInt(digits.slice(0, 4), 10);
+    if (digits.length === 3) return Number.parseInt(`0${digits}`, 10);
+    return Number.MAX_SAFE_INTEGER;
+  };
 
   const readActiveStudents = (): ActiveStudentLite[] => {
     try {
@@ -62,22 +83,9 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const readStudentDetails = (): Record<string, ActiveStudentLite> => {
-    const list = readActiveStudents();
-    const map: Record<string, ActiveStudentLite> = {};
-    list.forEach((item) => {
-      const key = normalizeText(item.nome || "");
-      if (!key) return;
-      map[key] = item;
-    });
-    return map;
-  };
-
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
-  const [studentDetails, setStudentDetails] = useState<Record<string, ActiveStudentLite>>(() =>
-    readStudentDetails()
-  );
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
+  const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
   const [capacities, setCapacities] = useState<Record<string, number>>(() => {
     try {
       const stored = localStorage.getItem("classCapacities");
@@ -138,21 +146,20 @@ export const Reports: React.FC = () => {
           } as ActiveStudentLite;
         });
 
-        const fromBootstrapDetails: Record<string, ActiveStudentLite> = {};
-        mapped.forEach((student) => {
-          const key = normalizeText(student.nome || "");
-          if (!key) return;
-          fromBootstrapDetails[key] = student;
-        });
-
-        const fromLocalDetails = readStudentDetails();
-        setStudentDetails({ ...fromBootstrapDetails, ...fromLocalDetails });
-
         if (mapped.length > 0) {
           setStudentsSnapshot(mapped);
         } else {
           loadLocal();
         }
+
+        const mappedClasses: BootstrapClassLite[] = data.classes.map((cls) => ({
+          codigo: cls.codigo || "",
+          turmaLabel: cls.turma_label || cls.codigo || "",
+          horario: cls.horario || "",
+          professor: cls.professor || "",
+          nivel: cls.nivel || "",
+        }));
+        setBootstrapClasses(mappedClasses);
       })
       .catch(() => {
         if (isMounted) loadLocal();
@@ -167,19 +174,56 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setStudentDetails(readStudentDetails());
-  }, [studentsSnapshot]);
-
-  useEffect(() => {
     localStorage.setItem("classCapacities", JSON.stringify(capacities));
   }, [capacities]);
 
+  const turmaOptions = Array.from(new Set(classesData.map((c) => c.turma))).sort();
+
+  const horarioOptions = Array.from(
+    new Set(
+      classesData
+        .filter((c) => c.turma === selectedTurmaLabel)
+        .map((c) => c.horario)
+    )
+  ).sort((a, b) => getHorarioSortValue(a) - getHorarioSortValue(b));
+
+  const professorOptions = Array.from(
+    new Set(
+      classesData
+        .filter((c) => c.turma === selectedTurmaLabel && c.horario === selectedHorario)
+        .map((c) => c.professor)
+    )
+  ).sort();
+
   useEffect(() => {
-    if (classesData.length === 0) return;
-    if (!selectedClassId || !classesData.some((item) => item.turma === selectedClassId)) {
-      setSelectedClassId(classesData[0].turma);
+    if (turmaOptions.length === 0) {
+      setSelectedTurmaLabel("");
+      return;
     }
-  }, [classesData, selectedClassId]);
+    if (!selectedTurmaLabel || !turmaOptions.includes(selectedTurmaLabel)) {
+      setSelectedTurmaLabel(turmaOptions[0]);
+    }
+  }, [turmaOptions, selectedTurmaLabel]);
+
+  useEffect(() => {
+    if (horarioOptions.length === 0) {
+      setSelectedHorario("");
+      return;
+    }
+    if (!selectedHorario || !horarioOptions.includes(selectedHorario)) {
+      setSelectedHorario(horarioOptions[0]);
+    }
+  }, [horarioOptions, selectedHorario]);
+
+  useEffect(() => {
+    if (professorOptions.length === 0) {
+      setSelectedProfessor("");
+      return;
+    }
+    if (!selectedProfessor || !professorOptions.includes(selectedProfessor)) {
+      setSelectedProfessor(professorOptions[0]);
+    }
+  }, [professorOptions, selectedProfessor]);
 
   useEffect(() => {
     let isMounted = true;
@@ -189,9 +233,6 @@ export const Reports: React.FC = () => {
         if (!isMounted) return;
         const data = response.data as ClassStats[];
         setClassesData(Array.isArray(data) ? data : []);
-        if (Array.isArray(data) && data.length > 0 && !data.some((item) => item.turma === selectedClassId)) {
-          setSelectedClassId(data[0].turma);
-        }
       })
       .catch(() => {
         if (isMounted) setClassesData([]);
@@ -204,7 +245,36 @@ export const Reports: React.FC = () => {
     };
   }, [selectedMonth]);
 
-  const currentClassData = classesData.find((c) => c.turma === selectedClassId) || classesData[0] || null;
+  const currentClassData =
+    classesData.find(
+      (c) =>
+        c.turma === selectedTurmaLabel &&
+        c.horario === selectedHorario &&
+        c.professor === selectedProfessor
+    ) ||
+    classesData.find((c) => c.turma === selectedTurmaLabel) ||
+    classesData[0] ||
+    null;
+
+  const selectedClassCode = (() => {
+    const fromBootstrap = bootstrapClasses.find(
+      (cls) =>
+        cls.turmaLabel === (currentClassData?.turma || selectedTurmaLabel) &&
+        cls.horario === (currentClassData?.horario || selectedHorario) &&
+        cls.professor === (currentClassData?.professor || selectedProfessor)
+    );
+    if (fromBootstrap?.codigo) return fromBootstrap.codigo;
+
+    const fromStudents = studentsSnapshot.find(
+      (student) =>
+        (student.turma || "") === (currentClassData?.turma || selectedTurmaLabel) &&
+        (student.horario || "") === (currentClassData?.horario || selectedHorario) &&
+        (student.professor || "") === (currentClassData?.professor || selectedProfessor) &&
+        student.turmaCodigo
+    );
+    return fromStudents?.turmaCodigo || "-";
+  })();
+  const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
   
   // Estatísticas Gerais da Turma Selecionada
   const totalFaltas = currentClassData ? currentClassData.alunos.reduce((acc, curr) => acc + curr.faltas, 0) : 0;
@@ -253,92 +323,33 @@ export const Reports: React.FC = () => {
     setCapacities((prev) => ({ ...prev, [turma]: safeValue }));
   };
 
-  const handleGenerateExcel = () => {
+  const handleGenerateExcel = async () => {
     if (!currentClassData) {
       alert("Nenhuma turma disponível para exportação.");
       return;
     }
-
-    const wb = XLSX.utils.book_new();
-    const wsData: any[][] = [];
-
-    const classDays = Array.from(
-      new Set(currentClassData.alunos.flatMap((aluno) => Object.keys(aluno.historico || {})))
-    ).sort();
-
-    const [year, month] = selectedMonth.split("-");
-    const monthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-    const formattedMonth = `${monthNames[parseInt(month) - 1]}/${year}`;
-
-    wsData.push(["Modalidade:", "Natação", "", "PREFEITURA MUNICIPAL DE VINHEDO", ""]); 
-    wsData.push(["Local:", "Piscina Bela Vista", "", "SECRETARIA DE ESPORTE E LAZER", ""]);
-    wsData.push(["Professor:", currentClassData.professor, "", "", ""]);
-    wsData.push(["Turma:", currentClassData.turma, "", "Nível:", currentClassData.nivel]);
-    wsData.push(["Horário:", currentClassData.horario, "", "Mês:", formattedMonth]);
-
-    const headerRow = ["", "", "", "", ""]; 
-    headerRow[0] = "Nome";
-    headerRow[1] = "Whatsapp";
-    headerRow[2] = "parQ";
-    headerRow[3] = "Aniversário";
-
-    const dateColumnsStart = 4;
-    classDays.forEach((day, idx) => {
-      headerRow[dateColumnsStart + idx] = day;
-    });
-
-    headerRow[dateColumnsStart + classDays.length] = "Anotações";
-
-    wsData.push(headerRow);
-
-    currentClassData.alunos.forEach((aluno) => {
-      const extraInfo = studentDetails[normalizeText(aluno.nome)] || {};
-      const row = new Array(headerRow.length).fill("");
-      row[0] = aluno.nome;
-
-      if (extraInfo) {
-        row[1] = extraInfo.whatsapp || "";
-        row[2] = extraInfo.atestado ? (extraInfo.dataAtestado || "Com Atestado") : (extraInfo.parQ || "");
-        row[3] = extraInfo.dataNascimento || "";
-      }
-
-      classDays.forEach((day, idx) => {
-        const status = aluno.historico[day] || "";
-        row[dateColumnsStart + idx] = status;
+    try {
+      const response = await downloadExcelReport({
+        month: selectedMonth,
+        turma: currentClassData.turma,
+        horario: currentClassData.horario,
+        professor: currentClassData.professor,
       });
 
-      row[dateColumnsStart + classDays.length] = aluno.anotacoes || "";
-
-      wsData.push(row);
-    });
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // Tentativa de aplicar estilos (funciona se a biblioteca suportar estilos, ex: xlsx-js-style)
-    const boldRight = { font: { bold: true }, alignment: { horizontal: "right" } };
-    const boldLeft = { font: { bold: true }, alignment: { horizontal: "left" } };
-    const boldCenter = { font: { bold: true }, alignment: { horizontal: "center" } };
-
-    const setStyle = (cellRef: string, style: any) => {
-      if (ws[cellRef]) ws[cellRef].s = style;
-    };
-
-    ["A1", "A2", "A3", "A4", "A5"].forEach(c => setStyle(c, boldRight));
-    ["D1", "D2"].forEach(c => setStyle(c, boldLeft));
-    ["B6", "C6", "D6"].forEach(c => setStyle(c, boldCenter));
-
-    const wscols = [
-      { wch: 30 },
-      { wch: 20 },
-      { wch: 10 },
-      { wch: 35 },
-    ];
-    classDays.forEach(() => wscols.push({ wch: 4 }));
-    wscols.push({ wch: 30 });
-    ws["!cols"] = wscols;
-
-    XLSX.utils.book_append_sheet(wb, ws, `Chamada ${currentClassData.turma}`);
-    XLSX.writeFile(wb, `Relatorio_${currentClassData.turma}_${selectedMonth}.xlsx`);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_${currentClassData.turma}_${selectedMonth}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert("Falha ao gerar o relatório no template. Verifique o arquivo de referência.");
+    }
   };
 
   return (
@@ -379,7 +390,7 @@ export const Reports: React.FC = () => {
           {currentClassData && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
             <div className="report-card" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white" }}>
-              <h3>📊 Resumo da Turma {selectedClassId}</h3>
+              <h3>📊 Resumo da Turma {currentClassData?.turma || selectedTurmaLabel}</h3>
               <div style={{ display: "flex", justifyContent: "space-around", marginTop: "20px", textAlign: "center" }}>
                 <div>
                   <div style={{ fontSize: "24px", fontWeight: "bold" }}>{mediaFrequencia}%</div>
@@ -439,7 +450,7 @@ export const Reports: React.FC = () => {
               <div style={{ fontSize: "14px", lineHeight: "1.8", color: "#555" }}>
                 <p><strong>👨‍🏫 Professor:</strong> {currentClassData.professor}</p>
                 <p><strong>📚 Nível:</strong> {currentClassData.nivel}</p>
-                <p><strong>⏰ Horário:</strong> {currentClassData.horario}</p>
+                <p><strong>⏰ Horário:</strong> {formatHorario(currentClassData.horario)}</p>
                 <p><strong>👥 Total Alunos:</strong> {currentClassData.alunos.length}</p>
                 <div style={{ marginTop: "15px", padding: "10px", background: "#fffbeb", borderRadius: "6px", borderLeft: "3px solid #f39c12", fontSize: "12px" }}>
                   ⚠️ {currentClassData.alunos.filter(a => a.frequencia < 75).length} alunos abaixo de 75% de frequência.
@@ -454,7 +465,7 @@ export const Reports: React.FC = () => {
       {activeTab === "frequencias" && (
         <div className="reports-section">
           <div className="reports-filters">
-            <div>
+            <div className="reports-filter-field">
               <label>Mês</label>
               <input
                 type="month"
@@ -462,17 +473,56 @@ export const Reports: React.FC = () => {
                 onChange={(e) => setSelectedMonth(e.target.value)}
               />
             </div>
-            <div>
+            <div className="reports-filter-field">
               <label>Turma</label>
               <select
-                value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
-                disabled={classesData.length === 0}
+                value={selectedTurmaLabel}
+                onChange={(e) => setSelectedTurmaLabel(e.target.value)}
+                disabled={turmaOptions.length === 0}
               >
-                {classesData.map(c => <option key={c.turma} value={c.turma}>{c.turma}</option>)}
+                {turmaOptions.map((turma) => (
+                  <option key={turma} value={turma}>{turma}</option>
+                ))}
+              </select>
+              <div className="reports-filter-note">
+                cod.turma: <strong>{selectedClassCodeLower}</strong>
+              </div>
+            </div>
+            <div className="reports-filter-field">
+              <label>Horário</label>
+              <select
+                value={selectedHorario}
+                onChange={(e) => setSelectedHorario(e.target.value)}
+                disabled={horarioOptions.length === 0}
+              >
+                {horarioOptions.map((horario) => (
+                  <option key={horario} value={horario}>{formatHorario(horario)}</option>
+                ))}
               </select>
             </div>
-            <button onClick={handleGenerateExcel} className="btn-primary" disabled={!currentClassData}>
+            <div className="reports-filter-field">
+              <label>Professor</label>
+              <div className="reports-filter-inline">
+                <select
+                  value={selectedProfessor}
+                  onChange={(e) => setSelectedProfessor(e.target.value)}
+                  disabled={professorOptions.length === 0}
+                >
+                  {professorOptions.map((professor) => (
+                    <option key={professor} value={professor}>{professor}</option>
+                  ))}
+                </select>
+                <span className="reports-level-note">
+                  Nível: <strong>{currentClassData?.nivel || "-"}</strong>
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleGenerateExcel}
+              className="btn-primary"
+              disabled={!currentClassData}
+              style={{ marginLeft: "auto", alignSelf: "center" }}
+            >
               Exportar relatorioChamada.xlsx
             </button>
           </div>
@@ -510,7 +560,7 @@ export const Reports: React.FC = () => {
                   <span className="vagas-chip">{item.nivel}</span>
                 </div>
                 <div className="vagas-meta">
-                  <span>⏰ {item.horario}</span>
+                  <span>⏰ {formatHorario(item.horario)}</span>
                   <span>👨‍🏫 {item.professor}</span>
                 </div>
                 <div className="vagas-metric">
