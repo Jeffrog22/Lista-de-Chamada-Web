@@ -316,6 +316,93 @@
   min-width: 170px;
 }
 
+.reports-professor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.reports-professor-chip {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.reports-professor-chip.active {
+  background: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+.reports-class-grid {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.reports-class-grid-header,
+.reports-class-grid-row {
+  display: grid;
+  grid-template-columns: 132px 120px 120px;
+  align-items: center;
+  column-gap: 24px;
+  padding: 10px 12px;
+}
+
+.reports-class-grid-header {
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.reports-class-grid-row {
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #111827;
+}
+
+.reports-class-grid-row:last-child {
+  border-bottom: none;
+}
+
+.reports-class-grid-empty {
+  padding: 14px 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.reports-select-toggle-chip {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.reports-select-toggle-chip.active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.reports-export-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .reports-level-note {
   font-size: 16px;
   color: #4b5563;

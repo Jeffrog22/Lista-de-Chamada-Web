@@ -12,3 +12,4 @@ alembic
 passlib[bcrypt]
 python-jose[cryptography]
 bcrypt==3.2.2
+reportlab

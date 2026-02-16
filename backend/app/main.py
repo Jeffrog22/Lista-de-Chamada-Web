@@ -5,18 +5,29 @@ from app import crud, models
 from typing import List, Optional, Dict, Any
 import os
 import json
+import re
+from datetime import datetime, timedelta
 import pandas as pd
 import requests
-from pydantic import BaseModel, conint
+from pydantic import BaseModel, conint, Field
 import csv
-from io import StringIO
+from io import StringIO, BytesIO
 from copy import copy
 from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+
+try:
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except Exception:
+    REPORTLAB_AVAILABLE = False
 
 app = FastAPI(title="Lista-de-Chamada - API")
 
@@ -119,11 +130,17 @@ class ReportsFilterOut(BaseModel):
     meses: List[str]
     anos: List[str]
 
-class ExcelExportPayload(BaseModel):
-    month: Optional[str] = None
+class ExportClassSelection(BaseModel):
     turma: str
     horario: str
     professor: str
+
+class ExcelExportPayload(BaseModel):
+    month: Optional[str] = None
+    turma: Optional[str] = None
+    horario: Optional[str] = None
+    professor: Optional[str] = None
+    classes: List[ExportClassSelection] = Field(default_factory=list)
 
 def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -187,6 +204,20 @@ def _format_horario(value: str) -> str:
     if len(digits) >= 4:
         return f"{digits[:2]}:{digits[2:4]}"
     return raw
+
+def _format_whatsapp(value: Any) -> str:
+    raw = str(value or "").strip()
+    if raw == "":
+        return ""
+    if any(ch.isalpha() for ch in raw):
+        return ""
+
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits) == 10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return ""
 
 def _load_pool_log(file_path: str) -> pd.DataFrame:
     if os.path.exists(file_path):
@@ -466,6 +497,403 @@ def _report_day_key(date_value: str) -> str:
         return parts[2].zfill(2)
     return str(date_value).strip()
 
+def _sort_report_days(days: List[str]) -> List[str]:
+    unique_days = {str(day).strip() for day in days if str(day).strip()}
+
+    def _day_sort_key(day: str):
+        if day.isdigit():
+            return (0, int(day))
+        return (1, day)
+
+    return sorted(unique_days, key=_day_sort_key)
+
+def _resolve_export_targets(payload: ExcelExportPayload, reports: List[ReportClass]) -> List[ReportClass]:
+    requested: List[ExportClassSelection] = []
+    if payload.classes:
+        requested = payload.classes
+    elif payload.turma and payload.horario and payload.professor:
+        requested = [
+            ExportClassSelection(
+                turma=payload.turma,
+                horario=payload.horario,
+                professor=payload.professor,
+            )
+        ]
+
+    if not requested:
+        raise HTTPException(status_code=400, detail="No class selection informed")
+
+    selected: List[ReportClass] = []
+    seen_keys = set()
+    for req in requested:
+        key = (
+            _normalize_text(req.turma),
+            _normalize_text(req.horario),
+            _normalize_text(req.professor),
+        )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        found = next(
+            (
+                cls
+                for cls in reports
+                if _normalize_text(cls.turma) == key[0]
+                and _normalize_text(cls.horario) == key[1]
+                and _normalize_text(cls.professor) == key[2]
+            ),
+            None,
+        )
+        if found:
+            selected.append(found)
+
+    if not selected:
+        raise HTTPException(status_code=404, detail="Class report not found for selected filters")
+    return selected
+
+def _build_sheet_title(selected: ReportClass, existing_titles: set[str]) -> str:
+    start = _format_horario(selected.horario or "")
+    base = f"{start}|{selected.turma}"
+    try:
+        start_dt = datetime.strptime(start, "%H:%M")
+        end_dt = start_dt + timedelta(minutes=45)
+        base = f"{start_dt.strftime('%H:%M')}|{end_dt.strftime('%H:%M')}"
+    except Exception:
+        pass
+
+    safe = re.sub(r"[\[\]:*?/\\]", "-", base).strip() or "Turma"
+    safe = safe[:31]
+    candidate = safe
+    suffix = 1
+    while candidate in existing_titles:
+        suffix += 1
+        label_suffix = f"_{suffix}"
+        candidate = f"{safe[: max(1, 31 - len(label_suffix))]}{label_suffix}"
+    return candidate
+
+def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], session: Session) -> int:
+    ws["A1"] = "Modalidade:"
+    ws["B1"] = "Natação"
+    ws["D1"] = "PREFEITURA MUNICIPAL DE VINHEDO"
+
+    ws["A2"] = "Local:"
+    ws["B2"] = "Piscina Bela Vista"
+    ws["D2"] = "SECRETARIA DE ESPORTE E LAZER"
+
+    ws["A3"] = "Professor:"
+    ws["B3"] = selected.professor
+
+    ws["A4"] = "Turma:"
+    ws["B4"] = selected.turma
+    ws["D4"] = "Nível:"
+    ws["E4"] = selected.nivel
+
+    ws["A5"] = "Horário:"
+    ws["B5"] = _format_horario(selected.horario or "")
+    ws["D5"] = "Mês:"
+    ws["E5"] = _format_month_label(month)
+
+    class_days = _sort_report_days([
+        day for aluno in selected.alunos for day in (aluno.historico or {}).keys()
+    ])
+    header_row = 6
+    data_start_row = 7
+    date_col_start = 5
+
+    notes_col = None
+    for col in range(date_col_start, ws.max_column + 1):
+        header_value = str(ws.cell(row=header_row, column=col).value or "").strip()
+        header_norm = _normalize_text(header_value)
+        if header_norm in {"observacoes", "anotacoes"}:
+            notes_col = col
+            break
+
+    if notes_col is None:
+        notes_col = date_col_start + max(1, len(class_days))
+
+    date_columns = list(range(date_col_start, notes_col))
+    visible_days = class_days[:len(date_columns)]
+
+    ws.cell(row=header_row, column=1, value="Nome")
+    ws.cell(row=header_row, column=2, value="Whatsapp")
+    ws.cell(row=header_row, column=3, value="parQ")
+    ws.cell(row=header_row, column=4, value="Aniversário")
+
+    for idx, col in enumerate(date_columns):
+        _copy_cell_style(ws, header_row, date_col_start, header_row, col)
+        if idx < len(visible_days):
+            day_raw = str(visible_days[idx]).strip()
+            day_value: Any = int(day_raw) if day_raw.isdigit() else day_raw
+            ws.cell(row=header_row, column=col, value=day_value)
+        else:
+            ws.cell(row=header_row, column=col, value="")
+
+    _copy_cell_style(ws, header_row, date_col_start, header_row, notes_col)
+    ws.cell(row=header_row, column=notes_col, value="Anotações")
+
+    if ws.max_column > notes_col:
+        ws.delete_cols(notes_col + 1, ws.max_column - notes_col)
+
+    details_map = _build_import_student_details_map(
+        session=session,
+        turma=selected.turma,
+        horario=selected.horario,
+        professor=selected.professor,
+    )
+
+    students_sorted = sorted(selected.alunos, key=lambda item: item.nome)
+    full_cell_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+    for idx, aluno in enumerate(students_sorted):
+        row = data_start_row + idx
+        for col in range(1, notes_col + 1):
+            _copy_cell_style(ws, data_start_row, min(col, date_col_start), row, col)
+            ws.cell(row=row, column=col).border = full_cell_border
+
+        student_meta = details_map.get(_normalize_text(aluno.nome), {})
+        ws.cell(row=row, column=1, value=aluno.nome)
+        ws.cell(row=row, column=2, value=student_meta.get("whatsapp") or "")
+        if student_meta.get("atestado"):
+            ws.cell(row=row, column=3, value=student_meta.get("data_atestado") or "Com Atestado")
+        else:
+            ws.cell(row=row, column=3, value=student_meta.get("parq") or "")
+        ws.cell(row=row, column=4, value=student_meta.get("data_nascimento") or "")
+
+        for day_idx, day in enumerate(visible_days):
+            value = (aluno.historico or {}).get(day, "")
+            ws.cell(row=row, column=date_col_start + day_idx, value=value)
+
+        for col in date_columns[len(visible_days):]:
+            ws.cell(row=row, column=col, value="")
+
+        ws.cell(row=row, column=notes_col, value=aluno.anotacoes or "")
+
+    name_col_letter = get_column_letter(1)
+    notes_col_letter = get_column_letter(notes_col)
+    max_name_len = max([len("Nome"), *[len(str(aluno.nome or "")) for aluno in students_sorted]]) if students_sorted else len("Nome")
+    ws.column_dimensions[name_col_letter].width = min(50, max(18, max_name_len + 2))
+    current_notes_width = ws.column_dimensions[notes_col_letter].width or 0
+    ws.column_dimensions[notes_col_letter].width = max(40, current_notes_width)
+
+    end_row = data_start_row + len(students_sorted) - 1
+    if end_row < header_row:
+        end_row = header_row
+
+    for row in range(header_row, end_row + 1):
+        for col in range(1, notes_col + 1):
+            horizontal = "left" if col in (1, notes_col) else "center"
+            ws.cell(row=row, column=col).alignment = Alignment(horizontal=horizontal, vertical="center")
+
+    return len(students_sorted)
+
+def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str], session: Session) -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        raise HTTPException(status_code=500, detail="PDF export unavailable: install reportlab")
+
+    buffer = BytesIO()
+    page_width, page_height = landscape(A4)
+    pdf = canvas.Canvas(buffer, pagesize=(page_width, page_height))
+
+    margin_left = 18
+    margin_right = 18
+    margin_top = 20
+    margin_bottom = 20
+
+    table_top = page_height - 120
+    row_height = 16
+    fixed_col_widths = [140, 88, 62, 72]
+    notes_width = 168
+    min_date_col_width = 18
+
+    def _draw_header_block(selected: ReportClass):
+        y = page_height - margin_top
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left, y, "Modalidade:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 58, y, "Natação")
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left + 250, y, "PREFEITURA MUNICIPAL DE VINHEDO")
+
+        y -= 14
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left, y, "Local:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 58, y, "Piscina Bela Vista")
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left + 250, y, "SECRETARIA DE ESPORTE E LAZER")
+
+        y -= 14
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left, y, "Professor:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 58, y, str(selected.professor or ""))
+
+        y -= 14
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left, y, "Turma:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 58, y, str(selected.turma or ""))
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left + 250, y, "Nível:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 295, y, str(selected.nivel or ""))
+
+        y -= 14
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left, y, "Horário:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 58, y, _format_horario(selected.horario or ""))
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin_left + 250, y, "Mês:")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin_left + 295, y, _format_month_label(month))
+
+    def _build_columns(day_chunk: List[str]) -> List[tuple[str, float]]:
+        available_for_days = page_width - margin_left - margin_right - sum(fixed_col_widths) - notes_width
+        dynamic_width = (available_for_days / len(day_chunk)) if day_chunk else available_for_days
+        columns: List[tuple[str, float]] = [
+            ("Nome", fixed_col_widths[0]),
+            ("Whatsapp", fixed_col_widths[1]),
+            ("parQ", fixed_col_widths[2]),
+            ("Aniversário", fixed_col_widths[3]),
+        ]
+        for day in day_chunk:
+            columns.append((day, dynamic_width))
+        columns.append(("Anotações", notes_width))
+        return columns
+
+    def _draw_grid_page(selected: ReportClass, rows: List[Dict[str, Any]], day_chunk: List[str], day_range_label: str):
+        _draw_header_block(selected)
+        if day_range_label:
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawString(margin_left, table_top + 6, day_range_label)
+
+        columns = _build_columns(day_chunk)
+        x_positions = [margin_left]
+        for _, col_width in columns:
+            x_positions.append(x_positions[-1] + col_width)
+
+        y_top = table_top
+        y_bottom = margin_bottom
+        y = y_top
+
+        pdf.setFont("Helvetica-Bold", 7)
+        for col_idx, (label, _) in enumerate(columns):
+            x0 = x_positions[col_idx]
+            x1 = x_positions[col_idx + 1]
+            pdf.rect(x0, y - row_height, x1 - x0, row_height)
+            text = str(label or "")
+            if col_idx in (0, len(columns) - 1):
+                pdf.drawString(x0 + 2, y - 11, text[:28])
+            else:
+                pdf.drawCentredString((x0 + x1) / 2, y - 11, text[:10])
+
+        y -= row_height
+        pdf.setFont("Helvetica", 7)
+
+        for row in rows:
+            if y - row_height < y_bottom:
+                return False
+            for col_idx, (label, _) in enumerate(columns):
+                x0 = x_positions[col_idx]
+                x1 = x_positions[col_idx + 1]
+                pdf.rect(x0, y - row_height, x1 - x0, row_height)
+
+                value = ""
+                if label == "Nome":
+                    value = str(row.get("nome") or "")
+                elif label == "Whatsapp":
+                    value = str(row.get("whatsapp") or "")
+                elif label == "parQ":
+                    value = str(row.get("parq") or "")
+                elif label == "Aniversário":
+                    value = str(row.get("data_nascimento") or "")
+                elif label == "Anotações":
+                    value = str(row.get("anotacoes") or "")
+                elif label in day_chunk:
+                    value = str((row.get("historico") or {}).get(label, ""))
+
+                if col_idx in (0, len(columns) - 1):
+                    pdf.drawString(x0 + 2, y - 11, value[:42])
+                else:
+                    pdf.drawCentredString((x0 + x1) / 2, y - 11, value[:16])
+
+            y -= row_height
+
+        return True
+
+    for report_idx, selected in enumerate(selected_reports):
+        details_map = _build_import_student_details_map(
+            session=session,
+            turma=selected.turma,
+            horario=selected.horario,
+            professor=selected.professor,
+        )
+
+        class_days = _sort_report_days([
+            day for aluno in selected.alunos for day in (aluno.historico or {}).keys()
+        ])
+        available_for_days = page_width - margin_left - margin_right - sum(fixed_col_widths) - notes_width
+        max_date_slots_fit = max(1, int(available_for_days // min_date_col_width))
+        if class_days:
+            day_chunks = [
+                class_days[idx: idx + max_date_slots_fit]
+                for idx in range(0, len(class_days), max_date_slots_fit)
+            ]
+        else:
+            day_chunks = [[]]
+
+        students_sorted = sorted(selected.alunos, key=lambda item: item.nome)
+        rows: List[Dict[str, Any]] = []
+        for aluno in students_sorted:
+            meta = details_map.get(_normalize_text(aluno.nome), {})
+
+            rows.append(
+                {
+                    "nome": aluno.nome or "",
+                    "whatsapp": meta.get("whatsapp") or "",
+                    "parq": (meta.get("data_atestado") or "Com Atestado") if meta.get("atestado") else (meta.get("parq") or ""),
+                    "data_nascimento": meta.get("data_nascimento") or "",
+                    "historico": aluno.historico or {},
+                    "anotacoes": aluno.anotacoes or "",
+                }
+            )
+
+        if not rows:
+            rows = [{"nome": "", "whatsapp": "", "parq": "", "data_nascimento": "", "historico": {}, "anotacoes": ""}]
+
+        rows_per_page = int((table_top - margin_bottom) // row_height) - 1
+        first_page_global = report_idx == 0
+        for chunk_idx, day_chunk in enumerate(day_chunks):
+            remaining = rows
+            range_label = ""
+            if day_chunk:
+                range_label = f"Datas: {day_chunk[0]} a {day_chunk[-1]}"
+            while remaining:
+                if not first_page_global:
+                    pdf.showPage()
+                current_rows = remaining[:rows_per_page]
+                remaining = remaining[rows_per_page:]
+                label = range_label
+                if len(day_chunks) > 1:
+                    label = f"Bloco {chunk_idx + 1}/{len(day_chunks)} - {range_label}" if range_label else f"Bloco {chunk_idx + 1}/{len(day_chunks)}"
+                _draw_grid_page(
+                    selected=selected,
+                    rows=current_rows,
+                    day_chunk=day_chunk,
+                    day_range_label=label,
+                )
+                first_page_global = False
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
 def _format_month_label(month: Optional[str]) -> str:
     if not month or "-" not in month:
         return str(month or "")
@@ -518,7 +946,7 @@ def _build_import_student_details_map(
     ).all()
     for student in students:
         details[_normalize_text(student.nome)] = {
-            "whatsapp": student.whatsapp or "",
+            "whatsapp": _format_whatsapp(student.whatsapp),
             "parq": student.parq or "",
             "atestado": bool(student.atestado),
             "data_nascimento": student.data_nascimento or "",
@@ -714,20 +1142,7 @@ def generate_excel_report(payload: Dict[str, Any], session: Session = Depends(ge
 def generate_excel_report_file(payload: ExcelExportPayload, session: Session = Depends(get_session)):
     month = str(payload.month or "").strip() or None
     reports = get_reports(month=month, session=session)
-
-    selected = next(
-        (
-            cls
-            for cls in reports
-            if _normalize_text(cls.turma) == _normalize_text(payload.turma)
-            and _normalize_text(cls.horario) == _normalize_text(payload.horario)
-            and _normalize_text(cls.professor) == _normalize_text(payload.professor)
-        ),
-        None,
-    )
-
-    if not selected:
-        raise HTTPException(status_code=404, detail="Class report not found for selected filters")
+    selected_reports = _resolve_export_targets(payload, reports)
 
     template_path = os.getenv(
         "REPORT_TEMPLATE_PATH",
@@ -737,81 +1152,22 @@ def generate_excel_report_file(payload: ExcelExportPayload, session: Session = D
         raise HTTPException(status_code=404, detail=f"Template file not found: {template_path}")
 
     workbook = load_workbook(template_path)
-    ws = workbook.active
+    template_ws = workbook.active
+    target_sheets = [workbook.copy_worksheet(template_ws) for _ in selected_reports]
+    workbook.remove(template_ws)
 
-    ws["A1"] = "Modalidade:"
-    ws["B1"] = "Natação"
-    ws["D1"] = "PREFEITURA MUNICIPAL DE VINHEDO"
-
-    ws["A2"] = "Local:"
-    ws["B2"] = "Piscina Bela Vista"
-    ws["D2"] = "SECRETARIA DE ESPORTE E LAZER"
-
-    ws["A3"] = "Professor:"
-    ws["B3"] = selected.professor
-
-    ws["A4"] = "Turma:"
-    ws["B4"] = selected.turma
-    ws["D4"] = "Nível:"
-    ws["E4"] = selected.nivel
-
-    ws["A5"] = "Horário:"
-    ws["B5"] = _format_horario(selected.horario or "")
-    ws["D5"] = "Mês:"
-    ws["E5"] = _format_month_label(month)
-
-    class_days = sorted({day for aluno in selected.alunos for day in (aluno.historico or {}).keys()})
-    header_row = 6
-    data_start_row = 7
-    date_col_start = 5
-
-    ws.cell(row=header_row, column=1, value="Nome")
-    ws.cell(row=header_row, column=2, value="Whatsapp")
-    ws.cell(row=header_row, column=3, value="parQ")
-    ws.cell(row=header_row, column=4, value="Aniversário")
-
-    for idx, day in enumerate(class_days):
-        target_col = date_col_start + idx
-        _copy_cell_style(ws, header_row, date_col_start, header_row, target_col)
-        ws.cell(row=header_row, column=target_col, value=day)
-
-    notes_col = date_col_start + len(class_days)
-    _copy_cell_style(ws, header_row, date_col_start, header_row, notes_col)
-    ws.cell(row=header_row, column=notes_col, value="Anotações")
-
-    details_map = _build_import_student_details_map(
-        session=session,
-        turma=selected.turma,
-        horario=selected.horario,
-        professor=selected.professor,
-    )
-
-    students_sorted = sorted(selected.alunos, key=lambda item: item.nome)
-    for idx, aluno in enumerate(students_sorted):
-        row = data_start_row + idx
-        for col in range(1, notes_col + 1):
-            _copy_cell_style(ws, data_start_row, min(col, date_col_start), row, col)
-
-        student_meta = details_map.get(_normalize_text(aluno.nome), {})
-        ws.cell(row=row, column=1, value=aluno.nome)
-        ws.cell(row=row, column=2, value=student_meta.get("whatsapp") or "")
-        if student_meta.get("atestado"):
-            ws.cell(row=row, column=3, value=student_meta.get("data_atestado") or "Com Atestado")
-        else:
-            ws.cell(row=row, column=3, value=student_meta.get("parq") or "")
-        ws.cell(row=row, column=4, value=student_meta.get("data_nascimento") or "")
-
-        for day_idx, day in enumerate(class_days):
-            value = (aluno.historico or {}).get(day, "")
-            ws.cell(row=row, column=date_col_start + day_idx, value=value)
-
-        ws.cell(row=row, column=notes_col, value=aluno.anotacoes or "")
+    existing_titles: set[str] = set()
+    for idx, selected in enumerate(selected_reports):
+        ws = target_sheets[idx]
+        _populate_attendance_sheet(ws=ws, selected=selected, month=month, session=session)
+        sheet_title = _build_sheet_title(selected, existing_titles)
+        ws.title = sheet_title
+        existing_titles.add(sheet_title)
 
     export_dir = os.path.join(DATA_DIR, "exports")
     os.makedirs(export_dir, exist_ok=True)
-    safe_turma = (selected.turma or "turma").replace("/", "-").replace("\\", "-")
     safe_month = (month or "sem-mes").replace("/", "-")
-    output_name = f"Relatorio_{safe_turma}_{safe_month}.xlsx"
+    output_name = f"Relatorio_Multiturmas_{safe_month}.xlsx"
     output_path = os.path.join(export_dir, output_name)
     workbook.save(output_path)
 
@@ -820,6 +1176,32 @@ def generate_excel_report_file(payload: ExcelExportPayload, session: Session = D
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=output_name,
     )
+
+@app.post("/reports/chamada-pdf-file")
+def generate_chamada_pdf_file(payload: ExcelExportPayload, session: Session = Depends(get_session)):
+    month = str(payload.month or "").strip() or None
+    reports = get_reports(month=month, session=session)
+    selected_reports = _resolve_export_targets(payload, reports)
+
+    pdf_bytes = _build_chamada_pdf(selected_reports=selected_reports, month=month, session=session)
+
+    export_dir = os.path.join(DATA_DIR, "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    safe_month = (month or "sem-mes").replace("/", "-")
+    output_name = f"Relatorio_Multiturmas_{safe_month}.pdf"
+    output_path = os.path.join(export_dir, output_name)
+    with open(output_path, "wb") as f:
+        f.write(pdf_bytes)
+
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=output_name,
+    )
+
+@app.post("/reports/parq-pdf-file")
+def generate_parq_pdf_file_compat(payload: ExcelExportPayload, session: Session = Depends(get_session)):
+    return generate_chamada_pdf_file(payload=payload, session=session)
 
 def parse_bool(value: str) -> bool:
     if value is None:
@@ -956,7 +1338,7 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
                 session.add(student)
                 counters["students_created"] += 1
 
-            student.whatsapp = (row.get("whatsapp") or "").strip()
+            student.whatsapp = _format_whatsapp(row.get("whatsapp"))
             student.data_nascimento = (row.get("data_nascimento") or "").strip()
             student.data_atestado = (row.get("data_atest") or "").strip()
             student.categoria = (row.get("categoria") or "").strip()

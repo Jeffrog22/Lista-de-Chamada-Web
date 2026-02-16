@@ -47,6 +47,10 @@ export const getFilters = () => API.get("/filters").catch(() => ({ data: { turma
 export const generateExcelReport = (data: any) => API.post("/reports/excel", data).catch(() => ({ data: { ok: true } }));
 export const downloadExcelReport = (data: any) =>
   API.post("/reports/excel-file", data, { responseType: "blob" });
+export const downloadMultiClassExcelReport = (data: any) =>
+  API.post("/reports/excel-file", data, { responseType: "blob" });
+export const downloadChamadaPdfReport = (data: any) =>
+  API.post("/reports/chamada-pdf-file", data, { responseType: "blob" });
 export const generateConsolidatedReport = (data: any) => API.post("/reports/consolidated", data).catch(() => ({ data: { ok: true } }));
 
 // File Import

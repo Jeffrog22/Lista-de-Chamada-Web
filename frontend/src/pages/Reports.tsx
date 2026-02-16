@@ -1,7 +1,34 @@
-import React, { useEffect, useState } from "react";
-import { downloadExcelReport, getBootstrap, getReports } from "../api";
+import React, { Suspense, useEffect, useState } from "react";
+import { downloadChamadaPdfReport, downloadMultiClassExcelReport, getBootstrap, getReports } from "../api";
 import "./Reports.css";
-import DashboardCharts from './DashboardCharts';
+const DashboardCharts = React.lazy(() => import('./DashboardCharts'));
+
+class ReportsErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {}
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="reports-section placeholder">
+          O bloco de gráficos encontrou um erro de renderização. Recarregue a página.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface StudentStats {
   id: string;
@@ -45,12 +72,46 @@ interface BootstrapClassLite {
   nivel: string;
 }
 
+const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
+  `${item.turma}||${item.horario}||${item.professor}`;
+
+const normalizeReportsData = (payload: unknown): ClassStats[] => {
+  if (!Array.isArray(payload)) return [];
+  return payload.map((item) => {
+    const record = (item || {}) as Record<string, unknown>;
+    const alunosRaw = Array.isArray(record.alunos) ? (record.alunos as unknown[]) : [];
+    const alunos: StudentStats[] = alunosRaw.map((student) => {
+      const st = (student || {}) as Record<string, unknown>;
+      return {
+        id: String(st.id || ""),
+        nome: String(st.nome || ""),
+        presencas: Number(st.presencas || 0),
+        faltas: Number(st.faltas || 0),
+        justificativas: Number(st.justificativas || 0),
+        frequencia: Number(st.frequencia || 0),
+        historico: (st.historico && typeof st.historico === "object" ? st.historico : {}) as Record<string, string>,
+        anotacoes: st.anotacoes ? String(st.anotacoes) : undefined,
+      };
+    });
+
+    return {
+      turma: String(record.turma || ""),
+      horario: String(record.horario || ""),
+      professor: String(record.professor || ""),
+      nivel: String(record.nivel || ""),
+      alunos,
+    };
+  });
+};
+
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [selectedTurmaLabel, setSelectedTurmaLabel] = useState<string>("");
   const [selectedHorario, setSelectedHorario] = useState<string>("");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("");
+  const [selectedExportClassKeys, setSelectedExportClassKeys] = useState<string[]>([]);
+  const [hasInitializedExportSelection, setHasInitializedExportSelection] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
 
   const formatHorario = (value?: string) => {
@@ -190,10 +251,24 @@ export const Reports: React.FC = () => {
   const professorOptions = Array.from(
     new Set(
       classesData
-        .filter((c) => c.turma === selectedTurmaLabel && c.horario === selectedHorario)
+        .filter((c) => c.turma === selectedTurmaLabel)
         .map((c) => c.professor)
     )
   ).sort();
+
+  const exportClassGrid = classesData
+    .filter(
+      (c) =>
+        c.turma === selectedTurmaLabel &&
+        (!selectedProfessor || c.professor === selectedProfessor)
+    )
+    .sort(
+      (a, b) =>
+        getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario) ||
+        String(a.nivel || "").localeCompare(String(b.nivel || ""))
+    );
+
+  const allGridSelected = exportClassGrid.length > 0 && selectedExportClassKeys.length === exportClassGrid.length;
 
   useEffect(() => {
     if (turmaOptions.length === 0) {
@@ -220,10 +295,25 @@ export const Reports: React.FC = () => {
       setSelectedProfessor("");
       return;
     }
-    if (!selectedProfessor || !professorOptions.includes(selectedProfessor)) {
+    if (selectedProfessor && !professorOptions.includes(selectedProfessor)) {
       setSelectedProfessor(professorOptions[0]);
     }
   }, [professorOptions, selectedProfessor]);
+
+  useEffect(() => {
+    const availableKeys = new Set(exportClassGrid.map((item) => classSelectionKey(item)));
+    setSelectedExportClassKeys((prev) => {
+      const kept = prev.filter((key) => availableKeys.has(key));
+      if (kept.length > 0 || exportClassGrid.length === 0) return kept;
+      if (!hasInitializedExportSelection) {
+        return exportClassGrid.map((item) => classSelectionKey(item));
+      }
+      return kept;
+    });
+    if (!hasInitializedExportSelection && exportClassGrid.length > 0) {
+      setHasInitializedExportSelection(true);
+    }
+  }, [exportClassGrid, hasInitializedExportSelection]);
 
   useEffect(() => {
     let isMounted = true;
@@ -231,8 +321,7 @@ export const Reports: React.FC = () => {
     getReports({ month: selectedMonth })
       .then((response) => {
         if (!isMounted) return;
-        const data = response.data as ClassStats[];
-        setClassesData(Array.isArray(data) ? data : []);
+        setClassesData(normalizeReportsData(response.data));
       })
       .catch(() => {
         if (isMounted) setClassesData([]);
@@ -324,16 +413,19 @@ export const Reports: React.FC = () => {
   };
 
   const handleGenerateExcel = async () => {
-    if (!currentClassData) {
-      alert("Nenhuma turma disponível para exportação.");
+    const selectedClasses = exportClassGrid
+      .filter((item) => selectedExportClassKeys.includes(classSelectionKey(item)))
+      .map((item) => ({ turma: item.turma, horario: item.horario, professor: item.professor }));
+
+    if (selectedClasses.length === 0) {
+      alert("Selecione pelo menos uma turma para exportação.");
       return;
     }
+
     try {
-      const response = await downloadExcelReport({
+      const response = await downloadMultiClassExcelReport({
         month: selectedMonth,
-        turma: currentClassData.turma,
-        horario: currentClassData.horario,
-        professor: currentClassData.professor,
+        classes: selectedClasses,
       });
 
       const blob = new Blob([response.data], {
@@ -342,7 +434,7 @@ export const Reports: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Relatorio_${currentClassData.turma}_${selectedMonth}.xlsx`;
+      link.download = `Relatorio_Multiturmas_${selectedMonth}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -350,6 +442,50 @@ export const Reports: React.FC = () => {
     } catch {
       alert("Falha ao gerar o relatório no template. Verifique o arquivo de referência.");
     }
+  };
+
+  const handleGenerateChamadaPdf = async () => {
+    const selectedClasses = exportClassGrid
+      .filter((item) => selectedExportClassKeys.includes(classSelectionKey(item)))
+      .map((item) => ({ turma: item.turma, horario: item.horario, professor: item.professor }));
+
+    if (selectedClasses.length === 0) {
+      alert("Selecione pelo menos uma turma para exportação em PDF.");
+      return;
+    }
+
+    try {
+      const response = await downloadChamadaPdfReport({
+        month: selectedMonth,
+        classes: selectedClasses,
+      });
+
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_Multiturmas_${selectedMonth}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert("Falha ao gerar o PDF de chamada.");
+    }
+  };
+
+  const handleToggleAllGrid = () => {
+    if (allGridSelected) {
+      setSelectedExportClassKeys([]);
+      return;
+    }
+    setSelectedExportClassKeys(exportClassGrid.map((item) => classSelectionKey(item)));
+  };
+
+  const toggleExportClass = (key: string) => {
+    setSelectedExportClassKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
   };
 
   return (
@@ -488,42 +624,75 @@ export const Reports: React.FC = () => {
                 cod.turma: <strong>{selectedClassCodeLower}</strong>
               </div>
             </div>
-            <div className="reports-filter-field">
-              <label>Horário</label>
-              <select
-                value={selectedHorario}
-                onChange={(e) => setSelectedHorario(e.target.value)}
-                disabled={horarioOptions.length === 0}
+          </div>
+
+          <div className="reports-professor-chips">
+            <button
+              type="button"
+              className={`reports-professor-chip ${selectedProfessor === "" ? "active" : ""}`}
+              onClick={() => setSelectedProfessor("")}
+            >
+              Todos
+            </button>
+            {professorOptions.map((professor) => (
+              <button
+                key={professor}
+                type="button"
+                className={`reports-professor-chip ${selectedProfessor === professor ? "active" : ""}`}
+                onClick={() => setSelectedProfessor(professor)}
               >
-                {horarioOptions.map((horario) => (
-                  <option key={horario} value={horario}>{formatHorario(horario)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="reports-filter-field">
-              <label>Professor</label>
-              <div className="reports-filter-inline">
-                <select
-                  value={selectedProfessor}
-                  onChange={(e) => setSelectedProfessor(e.target.value)}
-                  disabled={professorOptions.length === 0}
+                {professor}
+              </button>
+            ))}
+          </div>
+
+          <div className="reports-class-grid">
+            <div className="reports-class-grid-header">
+              <span>
+                <button
+                  type="button"
+                  className={`reports-select-toggle-chip ${allGridSelected ? "active" : ""}`}
+                  onClick={handleToggleAllGrid}
                 >
-                  {professorOptions.map((professor) => (
-                    <option key={professor} value={professor}>{professor}</option>
-                  ))}
-                </select>
-                <span className="reports-level-note">
-                  Nível: <strong>{currentClassData?.nivel || "-"}</strong>
-                </span>
-              </div>
+                  {allGridSelected ? "Desmarcar todas" : "Selecionar todas"}
+                </button>
+              </span>
+              <span>Horário</span>
+              <span>Nível</span>
             </div>
+            {exportClassGrid.map((item) => {
+              const key = classSelectionKey(item);
+              return (
+                <label key={key} className="reports-class-grid-row">
+                  <input
+                    type="checkbox"
+                    checked={selectedExportClassKeys.includes(key)}
+                    onChange={() => toggleExportClass(key)}
+                  />
+                  <span>{formatHorario(item.horario)}</span>
+                  <span>{item.nivel || "-"}</span>
+                </label>
+              );
+            })}
+            {exportClassGrid.length === 0 && (
+              <div className="reports-class-grid-empty">Nenhuma turma encontrada para os filtros selecionados.</div>
+            )}
+          </div>
+
+          <div className="reports-export-actions">
             <button
               onClick={handleGenerateExcel}
               className="btn-primary"
-              disabled={!currentClassData}
-              style={{ marginLeft: "auto", alignSelf: "center" }}
+              disabled={selectedExportClassKeys.length === 0}
             >
-              Exportar relatorioChamada.xlsx
+              Exportar chamada (.xlsx)
+            </button>
+            <button
+              onClick={handleGenerateChamadaPdf}
+              className="btn-secondary"
+              disabled={selectedExportClassKeys.length === 0}
+            >
+              Exportar chamada.pdf
             </button>
           </div>
         </div>
@@ -531,7 +700,11 @@ export const Reports: React.FC = () => {
 
       {activeTab === "graficos" && (
         <div className="reports-section">
-          <DashboardCharts />
+          <ReportsErrorBoundary>
+            <Suspense fallback={<div className="reports-section placeholder">Carregando gráficos...</div>}>
+              <DashboardCharts />
+            </Suspense>
+          </ReportsErrorBoundary>
         </div>
       )}
 

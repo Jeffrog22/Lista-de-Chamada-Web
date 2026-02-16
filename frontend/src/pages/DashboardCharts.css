@@ -51,14 +51,14 @@
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .chart-card {
   background: white;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 16px;
+  border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   border: 1px solid #e9ecef;
 }
@@ -69,14 +69,212 @@
 
 .chart-card h4 {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 14px;
   color: #495057;
-  text-align: center;
+  text-align: left;
   font-weight: 600;
+}
+
+.indicators-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.indicator-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.indicator-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.indicator-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #16a34a 0%, #22c55e 100%);
+}
+
+.indicator-fill.info {
+  background: linear-gradient(90deg, #0284c7 0%, #38bdf8 100%);
+}
+
+.indicator-percent {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: right;
+}
+
+.occurrence-card {
+  position: relative;
+}
+
+.occurrence-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.occurrence-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.occurrence-chip {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+}
+
+.occurrence-chip.active {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: #ffffff;
+}
+
+.occurrence-radios {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.occurrence-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.native-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.native-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 60px;
+  align-items: center;
+  gap: 10px;
+}
+
+.native-label {
+  font-size: 12px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.native-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.native-bar-fill {
+  height: 100%;
+}
+
+.bar-primary { background: #2563eb; }
+.bar-info { background: #0891b2; }
+.bar-periodo { background: #7c3aed; }
+.bar-professor { background: #0284c7; }
+.bar-presente { background: #16a34a; }
+.bar-ausente { background: #dc2626; }
+
+.native-value {
+  font-size: 12px;
+  color: #111827;
+  text-align: right;
+  font-weight: 600;
+}
+
+.native-occurrence {
+  display: grid;
+  gap: 10px;
+}
+
+.native-occurrence-row {
+  display: grid;
+  gap: 5px;
+}
+
+.native-occurrence-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #374151;
+}
+
+.native-occurrence-track {
+  display: flex;
+  height: 11px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.native-occurrence-presente { background: #16a34a; }
+.native-occurrence-ausente { background: #dc2626; }
+.native-occurrence-justificado { background: #f59e0b; }
+
+.native-occurrence-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.native-occurrence-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.native-occurrence-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.native-occurrence-legend .lg-presente { background: #16a34a; }
+.native-occurrence-legend .lg-ausente { background: #dc2626; }
+.native-occurrence-legend .lg-justificado { background: #f59e0b; }
+
+.occurrence-axis-label {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 @media (max-width: 768px) {
   .charts-grid {
     grid-template-columns: 1fr;
+  }
+
+  .occurrence-controls {
+    flex-direction: column;
+  }
+
+  .occurrence-radios {
+    justify-content: flex-start;
   }
 }

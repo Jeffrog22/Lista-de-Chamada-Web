@@ -1,7 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
-} from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getReports } from '../api';
 import './DashboardCharts.css';
 
@@ -12,6 +9,7 @@ interface ReportStudent {
   faltas: number;
   justificativas: number;
   frequencia: number;
+  historico: { [date: string]: string };
 }
 
 interface ReportClass {
@@ -21,6 +19,33 @@ interface ReportClass {
   nivel: string;
   alunos: ReportStudent[];
 }
+
+const normalizeReportPayload = (payload: unknown): ReportClass[] => {
+  if (!Array.isArray(payload)) return [];
+  return payload.map((item) => {
+    const record = (item || {}) as Record<string, unknown>;
+    const alunosRaw = Array.isArray(record.alunos) ? (record.alunos as unknown[]) : [];
+    const alunos: ReportStudent[] = alunosRaw.map((student) => {
+      const st = (student || {}) as Record<string, unknown>;
+      return {
+        id: String(st.id || ''),
+        nome: String(st.nome || ''),
+        presencas: Number(st.presencas || 0),
+        faltas: Number(st.faltas || 0),
+        justificativas: Number(st.justificativas || 0),
+        frequencia: Number(st.frequencia || 0),
+        historico: (st.historico && typeof st.historico === 'object' ? st.historico : {}) as { [date: string]: string },
+      };
+    });
+    return {
+      turma: String(record.turma || '-'),
+      horario: String(record.horario || ''),
+      professor: String(record.professor || '-'),
+      nivel: String(record.nivel || '-'),
+      alunos,
+    };
+  });
+};
 
 interface ChartData {
   name: string;
@@ -32,6 +57,28 @@ interface ChartData {
 interface SimpleData {
   name: string;
   valor: number;
+}
+
+interface ClassSummary {
+  turma: string;
+  horario: string;
+  professor: string;
+  nivel: string;
+  presentes: number;
+  ausentes: number;
+  justificados: number;
+  total: number;
+  frequencia: number;
+  dayKeys: string[];
+}
+
+interface StudentAggregate {
+  name: string;
+  presencas: number;
+  faltas: number;
+  justificativas: number;
+  total: number;
+  frequencia: number;
 }
 
 const formatHorario = (value: string) => {
@@ -53,17 +100,57 @@ const getHorarioSortValue = (value: string) => {
   return Number.MAX_SAFE_INTEGER;
 };
 
+const normalize = (value: string) =>
+  (() => {
+    const base = String(value || '').toLowerCase();
+    if (typeof base.normalize !== 'function') return base.trim();
+    return base
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  })();
+
+const getPeriodo = (horario: string) => {
+  const digits = String(horario || '').replace(/\D/g, '');
+  const hh = digits.length >= 2 ? parseInt(digits.slice(0, 2), 10) : NaN;
+  if (Number.isNaN(hh)) return 'Não informado';
+  if (hh < 12) return 'Manhã';
+  if (hh < 18) return 'Tarde';
+  return 'Noite';
+};
+
+const getScheduleGroup = (turma: string): 'terca-quinta' | 'quarta-sexta' | 'outros' => {
+  const norm = normalize(turma);
+  if (norm.includes('terca') && norm.includes('quinta')) return 'terca-quinta';
+  if (norm.includes('quarta') && norm.includes('sexta')) return 'quarta-sexta';
+  return 'outros';
+};
+
+const weekdaysByGroup: Record<string, number[]> = {
+  'terca-quinta': [2, 4],
+  'quarta-sexta': [3, 5],
+};
+
+const countWeekdaysInMonth = (year: number, monthIndex: number, weekdays: number[]) => {
+  const d = new Date(year, monthIndex, 1);
+  let count = 0;
+  while (d.getMonth() === monthIndex) {
+    if (weekdays.includes(d.getDay())) count += 1;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+};
+
 const DashboardCharts: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
 
-  const [classData, setClassData] = useState<ChartData[]>([]);
-  const [levelData, setLevelData] = useState<ChartData[]>([]);
-  const [timeData, setTimeData] = useState<SimpleData[]>([]);
-  const [teacherData, setTeacherData] = useState<ChartData[]>([]);
-  const [studentData, setStudentData] = useState<SimpleData[]>([]);
+  const [classSummaries, setClassSummaries] = useState<ClassSummary[]>([]);
+  const [studentsAggregated, setStudentsAggregated] = useState<StudentAggregate[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasData, setHasData] = useState(true);
+  const [occurrenceProfessor, setOccurrenceProfessor] = useState<string>('');
+  const [occurrenceGroup, setOccurrenceGroup] = useState<'terca-quinta' | 'quarta-sexta'>('terca-quinta');
 
   const COLORS = {
     presente: '#28a745',
@@ -82,102 +169,65 @@ const DashboardCharts: React.FC = () => {
     getReports({ month: selectedMonth })
       .then((response) => {
         if (!isMounted) return;
-        const data = Array.isArray(response.data) ? (response.data as ReportClass[]) : [];
+        const data = normalizeReportPayload(response.data);
         setHasData(data.length > 0);
 
-        const classAggregated: ChartData[] = data.map((classItem) => {
-          const presente = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
-          const ausente = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
-          const justificado = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
-          return {
-            name: classItem.turma || '-',
-            presente,
-            ausente,
-            justificado,
-          };
-        });
-
-        const levelMap = new Map<string, { presente: number; ausente: number; justificado: number }>();
-        const teacherMap = new Map<string, { presente: number; ausente: number; justificado: number }>();
-        const timeMap = new Map<string, { presentes: number; totais: number }>();
-        const studentsFlat: SimpleData[] = [];
-
-        data.forEach((classItem) => {
-          const levelKey = classItem.nivel || '-';
-          const teacherKey = classItem.professor || '-';
-          const timeKey = classItem.horario ? formatHorario(classItem.horario) : '-';
-
+        const summaries: ClassSummary[] = data.map((classItem) => {
           const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
           const ausentes = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
           const justificados = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
           const total = presentes + ausentes + justificados;
-
-          const levelCurrent = levelMap.get(levelKey) || { presente: 0, ausente: 0, justificado: 0 };
-          levelMap.set(levelKey, {
-            presente: levelCurrent.presente + presentes,
-            ausente: levelCurrent.ausente + ausentes,
-            justificado: levelCurrent.justificado + justificados,
-          });
-
-          const teacherCurrent = teacherMap.get(teacherKey) || { presente: 0, ausente: 0, justificado: 0 };
-          teacherMap.set(teacherKey, {
-            presente: teacherCurrent.presente + presentes,
-            ausente: teacherCurrent.ausente + ausentes,
-            justificado: teacherCurrent.justificado + justificados,
-          });
-
-          const timeCurrent = timeMap.get(timeKey) || { presentes: 0, totais: 0 };
-          timeMap.set(timeKey, {
-            presentes: timeCurrent.presentes + presentes + justificados,
-            totais: timeCurrent.totais + total,
-          });
-
+          const daySet = new Set<string>();
           classItem.alunos.forEach((student) => {
-            const stTotal = (student.presencas || 0) + (student.faltas || 0) + (student.justificativas || 0);
-            const freq = stTotal > 0 ? ((student.presencas + student.justificativas) / stTotal) * 100 : 0;
-            studentsFlat.push({ name: student.nome, valor: Number(freq.toFixed(1)) });
+            Object.keys(student.historico || {}).forEach((day) => {
+              if (day) daySet.add(day);
+            });
           });
+          const frequencia = total > 0 ? Number((((presentes + justificados) / total) * 100).toFixed(1)) : 0;
+          return {
+            turma: classItem.turma || '-',
+            horario: formatHorario(classItem.horario || '-'),
+            professor: classItem.professor || '-',
+            nivel: classItem.nivel || '-',
+            presentes,
+            ausentes,
+            justificados,
+            total,
+            frequencia,
+            dayKeys: Array.from(daySet),
+          };
         });
 
-        const levelAggregated: ChartData[] = Array.from(levelMap.entries()).map(([name, value]) => ({
-          name,
-          presente: value.presente,
-          ausente: value.ausente,
-          justificado: value.justificado,
-        }));
+        const studentMap = new Map<string, Omit<StudentAggregate, 'frequencia' | 'total'>>();
+        data.forEach((classItem) => {
+          classItem.alunos.forEach((student) => {
+            const key = normalize(student.nome || '');
+            const current = studentMap.get(key) || {
+              name: student.nome || '-',
+              presencas: 0,
+              faltas: 0,
+              justificativas: 0,
+            };
+            current.presencas += student.presencas || 0;
+            current.faltas += student.faltas || 0;
+            current.justificativas += student.justificativas || 0;
+            studentMap.set(key, current);
+          });
+        });
+        const studentsAgg: StudentAggregate[] = Array.from(studentMap.values()).map((item) => {
+          const total = item.presencas + item.faltas + item.justificativas;
+          const frequencia = total > 0 ? Number((((item.presencas + item.justificativas) / total) * 100).toFixed(1)) : 0;
+          return { ...item, total, frequencia };
+        });
 
-        const teacherAggregated: ChartData[] = Array.from(teacherMap.entries()).map(([name, value]) => ({
-          name,
-          presente: value.presente,
-          ausente: value.ausente,
-          justificado: value.justificado,
-        }));
-
-        const timeAggregated: SimpleData[] = Array.from(timeMap.entries())
-          .map(([name, value]) => ({
-            name,
-            valor: value.totais > 0 ? Number(((value.presentes / value.totais) * 100).toFixed(1)) : 0,
-          }))
-          .sort((a, b) => getHorarioSortValue(a.name) - getHorarioSortValue(b.name));
-
-        const topStudents: SimpleData[] = studentsFlat
-          .sort((a, b) => b.valor - a.valor)
-          .slice(0, 5);
-
-        setClassData(classAggregated);
-        setLevelData(levelAggregated);
-        setTimeData(timeAggregated);
-        setTeacherData(teacherAggregated);
-        setStudentData(topStudents);
+        setClassSummaries(summaries);
+        setStudentsAggregated(studentsAgg);
       })
       .catch(() => {
         if (!isMounted) return;
         setHasData(false);
-        setClassData([]);
-        setLevelData([]);
-        setTimeData([]);
-        setTeacherData([]);
-        setStudentData([]);
+        setClassSummaries([]);
+        setStudentsAggregated([]);
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -188,7 +238,159 @@ const DashboardCharts: React.FC = () => {
     };
   }, [selectedMonth]);
 
+  const occurrenceProfessors = useMemo(() => {
+    return Array.from(new Set(classSummaries.map((item) => item.professor).filter(Boolean))).sort();
+  }, [classSummaries]);
+
+  useEffect(() => {
+    if (occurrenceProfessors.length === 0) {
+      setOccurrenceProfessor('');
+      return;
+    }
+    if (!occurrenceProfessor || !occurrenceProfessors.includes(occurrenceProfessor)) {
+      setOccurrenceProfessor(occurrenceProfessors[0]);
+    }
+  }, [occurrenceProfessors, occurrenceProfessor]);
+
+  const dashboardData = useMemo(() => {
+    const [yearValue, monthValue] = selectedMonth.split('-').map((part) => parseInt(part, 10));
+    const safeYear = Number.isFinite(yearValue) ? yearValue : new Date().getFullYear();
+    const safeMonthIndex = Number.isFinite(monthValue) ? Math.max(1, Math.min(12, monthValue)) - 1 : new Date().getMonth();
+
+    const sumExpected = classSummaries.reduce((acc, item) => {
+      const group = getScheduleGroup(item.turma);
+      const weekdays = weekdaysByGroup[group] || [];
+      if (weekdays.length === 0) return acc;
+      return acc + countWeekdaysInMonth(safeYear, safeMonthIndex, weekdays);
+    }, 0);
+
+    const aulasDadas = classSummaries.reduce((acc, item) => acc + item.dayKeys.length, 0);
+
+    const uniqueObservedDays = new Set<string>();
+    classSummaries.forEach((item) => item.dayKeys.forEach((day) => uniqueObservedDays.add(day)));
+
+    const activeWeekdays = new Set<number>();
+    classSummaries.forEach((item) => {
+      const group = getScheduleGroup(item.turma);
+      (weekdaysByGroup[group] || []).forEach((wd) => activeWeekdays.add(wd));
+    });
+    const totalDiasAula = countWeekdaysInMonth(safeYear, safeMonthIndex, Array.from(activeWeekdays));
+    const diasComAula = uniqueObservedDays.size;
+
+    const byGroup = (groupBy: (item: ClassSummary) => string): SimpleData[] => {
+      const map = new Map<string, { freqWeighted: number; total: number }>();
+      classSummaries.forEach((item) => {
+        const key = groupBy(item) || '-';
+        const current = map.get(key) || { freqWeighted: 0, total: 0 };
+        current.freqWeighted += item.frequencia * Math.max(1, item.total);
+        current.total += Math.max(1, item.total);
+        map.set(key, current);
+      });
+      return Array.from(map.entries()).map(([name, value]) => ({
+        name,
+        valor: value.total > 0 ? Number((value.freqWeighted / value.total).toFixed(1)) : 0,
+      }));
+    };
+
+    const frequenciaPorNivel = byGroup((item) => item.nivel).sort((a, b) => a.name.localeCompare(b.name));
+    const frequenciaPorHorario = byGroup((item) => item.horario).sort((a, b) => getHorarioSortValue(a.name) - getHorarioSortValue(b.name));
+    const frequenciaPorPeriodo = byGroup((item) => getPeriodo(item.horario));
+    const frequenciaPorProfessor = byGroup((item) => item.professor).sort((a, b) => a.name.localeCompare(b.name));
+
+    const topFrequentes = [...studentsAggregated]
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.frequencia - a.frequencia)
+      .slice(0, 5)
+      .map((item) => ({ name: item.name, valor: item.frequencia }));
+
+    const topAusentes = [...studentsAggregated]
+      .sort((a, b) => b.faltas - a.faltas)
+      .slice(0, 5)
+      .map((item) => ({ name: item.name, valor: item.faltas }));
+
+    const occurrenceClasses = classSummaries
+      .filter((item) => getScheduleGroup(item.turma) === occurrenceGroup)
+      .filter((item) => !occurrenceProfessor || item.professor === occurrenceProfessor);
+    const occurrenceMap = new Map<string, { presente: number; ausente: number; justificado: number }>();
+    occurrenceClasses.forEach((item) => {
+      const current = occurrenceMap.get(item.horario) || { presente: 0, ausente: 0, justificado: 0 };
+      current.presente += item.presentes;
+      current.ausente += item.ausentes;
+      current.justificado += item.justificados;
+      occurrenceMap.set(item.horario, current);
+    });
+    const ocorrenciaPorTurma: ChartData[] = Array.from(occurrenceMap.entries())
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => getHorarioSortValue(a.name) - getHorarioSortValue(b.name));
+
+    return {
+      aulasDadas,
+      totalAulas: sumExpected,
+      diasComAula,
+      totalDiasAula,
+      ocorrenciaPorTurma,
+      frequenciaPorNivel,
+      frequenciaPorHorario,
+      frequenciaPorPeriodo,
+      frequenciaPorProfessor,
+      topFrequentes,
+      topAusentes,
+    };
+  }, [classSummaries, studentsAggregated, selectedMonth, occurrenceGroup, occurrenceProfessor]);
+
   const yearOptions = Array.from({ length: 4 }, (_, i) => String(new Date().getFullYear() - 2 + i));
+
+  const renderFrequencyBars = (data: SimpleData[], colorClass: string, suffix = '%') => {
+    const maxValue = data.reduce((acc, item) => Math.max(acc, item.valor), 0);
+    return (
+      <div className="native-bars">
+        {data.map((item) => {
+          const width = maxValue > 0 ? (item.valor / maxValue) * 100 : 0;
+          return (
+            <div className="native-bar-row" key={`${colorClass}-${item.name}`}>
+              <span className="native-label">{item.name}</span>
+              <div className="native-bar-track">
+                <div className={`native-bar-fill ${colorClass}`} style={{ width: `${width}%` }} />
+              </div>
+              <span className="native-value">{item.valor}{suffix}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderOccurrenceBars = (data: ChartData[]) => {
+    const maxTotal = data.reduce((acc, item) => Math.max(acc, item.presente + item.ausente + item.justificado), 0);
+    return (
+      <div className="native-occurrence">
+        {data.map((item) => {
+          const total = item.presente + item.ausente + item.justificado;
+          const presenteW = maxTotal > 0 ? (item.presente / maxTotal) * 100 : 0;
+          const ausenteW = maxTotal > 0 ? (item.ausente / maxTotal) * 100 : 0;
+          const justificadoW = maxTotal > 0 ? (item.justificado / maxTotal) * 100 : 0;
+          return (
+            <div className="native-occurrence-row" key={`occ-${item.name}`}>
+              <div className="native-occurrence-top">
+                <span>{item.name}</span>
+                <span>{total}</span>
+              </div>
+              <div className="native-occurrence-track">
+                <div className="native-occurrence-presente" style={{ width: `${presenteW}%` }} />
+                <div className="native-occurrence-ausente" style={{ width: `${ausenteW}%` }} />
+                <div className="native-occurrence-justificado" style={{ width: `${justificadoW}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        <div className="native-occurrence-legend">
+          <span><i className="lg-presente" />Presente</span>
+          <span><i className="lg-ausente" />Ausente</span>
+          <span><i className="lg-justificado" />Justificado</span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="dashboard-charts-container">
@@ -215,85 +417,101 @@ const DashboardCharts: React.FC = () => {
         <div className="dashboard-charts-status">Sem dados de relatórios para o mês selecionado.</div>
       )}
 
-      <div className="charts-grid">
-        {/* Gráfico por Turma */}
-        <div className="chart-card full-width">
-          <h4>Ocorrências por Turma (Presente, Ausente, Justificado)</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={classData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="presente" fill={COLORS.presente} name="Presente" />
-              <Bar dataKey="ausente" fill={COLORS.ausente} name="Ausente" />
-              <Bar dataKey="justificado" fill={COLORS.justificado} name="Justificado" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {!loading && hasData && (
+        <div className="charts-grid">
+          <div className="chart-card indicators-card">
+            <h4>Aulas dadas</h4>
+            <div className="indicator-value">{dashboardData.aulasDadas} / {dashboardData.totalAulas}</div>
+            <div className="indicator-bar">
+              <div
+                className="indicator-fill"
+                style={{ width: `${dashboardData.totalAulas > 0 ? Math.min(100, (dashboardData.aulasDadas / dashboardData.totalAulas) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
 
-        {/* Gráfico por Nível */}
-        <div className="chart-card">
-          <h4>Ocorrências por Nível</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={levelData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={100} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="presente" fill={COLORS.presente} stackId="a" name="Presente" />
-              <Bar dataKey="ausente" fill={COLORS.ausente} stackId="a" name="Ausente" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+          <div className="chart-card indicators-card">
+            <h4>Dias de aula</h4>
+            <div className="indicator-value">{dashboardData.diasComAula} / {dashboardData.totalDiasAula}</div>
+            <div className="indicator-bar">
+              <div
+                className="indicator-fill info"
+                style={{ width: `${dashboardData.totalDiasAula > 0 ? Math.min(100, (dashboardData.diasComAula / dashboardData.totalDiasAula) * 100) : 0}%` }}
+              />
+            </div>
+            <div className="indicator-percent">
+              {dashboardData.totalDiasAula > 0 ? Math.round((dashboardData.diasComAula / dashboardData.totalDiasAula) * 100) : 0}%
+            </div>
+          </div>
 
-        {/* Gráfico por Horário */}
-        <div className="chart-card">
-          <h4>Média de Frequência por Horário (%)</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={timeData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tickFormatter={(value) => formatHorario(String(value || ''))} />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="valor" fill={COLORS.info} name="Frequência % (Presença + Justificada)" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+          <div className="chart-card full-width occurrence-card">
+            <h4>Ocorrência por turma</h4>
+            <div className="occurrence-controls">
+              <div className="occurrence-chips">
+                <button
+                  type="button"
+                  className={`occurrence-chip ${occurrenceGroup === 'terca-quinta' ? 'active' : ''}`}
+                  onClick={() => setOccurrenceGroup('terca-quinta')}
+                >
+                  Terça e Quinta
+                </button>
+                <button
+                  type="button"
+                  className={`occurrence-chip ${occurrenceGroup === 'quarta-sexta' ? 'active' : ''}`}
+                  onClick={() => setOccurrenceGroup('quarta-sexta')}
+                >
+                  Quarta e Sexta
+                </button>
+              </div>
+              <div className="occurrence-radios">
+                {occurrenceProfessors.map((professor) => (
+                  <label key={professor}>
+                    <input
+                      type="radio"
+                      name="occurrence-professor"
+                      checked={occurrenceProfessor === professor}
+                      onChange={() => setOccurrenceProfessor(professor)}
+                    />
+                    {professor}
+                  </label>
+                ))}
+              </div>
+            </div>
+            {renderOccurrenceBars(dashboardData.ocorrenciaPorTurma)}
+            <div className="occurrence-axis-label">Horários das turmas</div>
+          </div>
 
-        {/* Gráfico por Professor */}
-        <div className="chart-card">
-          <h4>Ocorrências por Professor</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={teacherData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={120} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="presente" fill={COLORS.presente} stackId="a" name="Presente" />
-              <Bar dataKey="ausente" fill={COLORS.ausente} stackId="a" name="Ausente" />
-              <Bar dataKey="justificado" fill={COLORS.justificado} stackId="a" name="Justificado" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+          <div className="chart-card">
+            <h4>Frequência por Nível</h4>
+            {renderFrequencyBars(dashboardData.frequenciaPorNivel, 'bar-primary')}
+          </div>
 
-        {/* Top Alunos */}
-        <div className="chart-card full-width">
-          <h4>Top 5 Alunos por Frequência (%)</h4>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={studentData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" domain={[0, 100]} />
-              <YAxis dataKey="name" type="category" width={150} />
-              <Tooltip />
-              <Bar dataKey="valor" fill={COLORS.primary} name="Frequência % (Presença + Justificada)" barSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="chart-card">
+            <h4>Frequência por Horário</h4>
+            {renderFrequencyBars(dashboardData.frequenciaPorHorario, 'bar-info')}
+          </div>
+
+          <div className="chart-card">
+            <h4>Frequência por Período</h4>
+            {renderFrequencyBars(dashboardData.frequenciaPorPeriodo, 'bar-periodo')}
+          </div>
+
+          <div className="chart-card">
+            <h4>Frequência por Professor</h4>
+            {renderFrequencyBars(dashboardData.frequenciaPorProfessor, 'bar-professor')}
+          </div>
+
+          <div className="chart-card">
+            <h4>Top 5 alunos mais frequentes</h4>
+            {renderFrequencyBars(dashboardData.topFrequentes, 'bar-presente')}
+          </div>
+
+          <div className="chart-card">
+            <h4>Top 5 alunos mais ausentes</h4>
+            {renderFrequencyBars(dashboardData.topAusentes, 'bar-ausente', '')}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
