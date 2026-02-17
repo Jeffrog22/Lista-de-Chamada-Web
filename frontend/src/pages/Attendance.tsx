@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { addExclusion, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, getAcademicCalendar, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import {
+  isClassBlockedByEventPeriod,
+  isDateClosedForAttendance,
+} from "../utils/academicCalendar";
+import type { AcademicCalendarEvent, AcademicCalendarSettings } from "../utils/academicCalendar";
 
 interface ClassOption {
   turmaCodigo: string;
@@ -77,6 +82,7 @@ const WEATHER_ICONS = {
 // const LON = "-47.007278";
 
 type AttendanceHistory = AttendanceRecord[];
+type ModalLogType = "aula" | "ocorrencia";
 
 export const Attendance: React.FC = () => {
   const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
@@ -493,6 +499,13 @@ export const Attendance: React.FC = () => {
     localStorage.removeItem("attendanceTargetTurma");
   }, [classOptions]);
 
+  useEffect(() => {
+    const shortcutDate = localStorage.getItem("attendanceDateShortcut");
+    if (!shortcutDate) return;
+    setSelectedDate(shortcutDate);
+    localStorage.removeItem("attendanceDateShortcut");
+  }, []);
+
   const turmaOptions = useMemo(() => {
     const map = new Map<string, { codigo: string; label: string }>();
     classOptions.forEach((opt) => {
@@ -776,6 +789,22 @@ export const Attendance: React.FC = () => {
     return base.slice(0, 7);
   }, [dateDates, selectedDate]);
 
+  useEffect(() => {
+    getAcademicCalendar({ month: monthKey })
+      .then((response) => {
+        const payload = (response?.data || {}) as {
+          settings?: AcademicCalendarSettings | null;
+          events?: AcademicCalendarEvent[];
+        };
+        setCalendarSettings(payload.settings || null);
+        setCalendarEvents(Array.isArray(payload.events) ? payload.events : []);
+      })
+      .catch(() => {
+        setCalendarSettings(null);
+        setCalendarEvents([]);
+      });
+  }, [monthKey]);
+
   const classKey = useMemo(() => {
     const turmaKey = selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || "";
     const horarioKey = selectedClass.horario || selectedHorario || "";
@@ -819,6 +848,8 @@ export const Attendance: React.FC = () => {
   const [modalDate, setModalDate] = useState(""); // Data selecionada (YYYY-MM-DD)
   const [modalStep, setModalStep] = useState<"select" | "aula" | "ocorrencia">("select");
   const [climaPrefillApplied, setClimaPrefillApplied] = useState(false);
+  const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
@@ -831,13 +862,11 @@ export const Attendance: React.FC = () => {
     incidentNote: "",
     incidentImpact: "aula" as "aula" | "dia",
     personalType: "Medico" as "Medico" | "Particular",
-    logType: "aula" as PoolLogEntry["nota"]
+    logType: "aula" as ModalLogType
   });
 
   const cloroLocked =
-    poolData.logType === "feriado" ||
-    poolData.logType === "ponte-feriado" ||
-    (poolData.logType === "ocorrencia" && poolData.incidentType !== "Manutencao");
+    poolData.logType === "ocorrencia" && poolData.incidentType !== "Manutencao";
 
   useEffect(() => {
     if (cloroLocked && poolData.cloroEnabled) {
@@ -876,6 +905,109 @@ export const Attendance: React.FC = () => {
     localStorage.setItem(climaCacheKey(date), JSON.stringify(payload));
   };
 
+  const toMinutes = (time?: string) => {
+    const raw = String(time || "").trim();
+    if (!raw) return null;
+    const [h, m] = raw.split(":").map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return h * 60 + m;
+  };
+
+  const normalizeHorarioForMinutes = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw.includes(":")) {
+      const [hh, mm] = raw.split(":");
+      return `${String(hh || "").padStart(2, "0").slice(0, 2)}:${String(mm || "").padStart(2, "0").slice(0, 2)}`;
+    }
+    const digits = raw.replace(/\D/g, "");
+    if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
+    if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    return raw;
+  };
+
+  const getHolidayBridgeEventForDate = (date: string) => {
+    return calendarEvents.find(
+      (event) => event.date === date && (event.type === "feriado" || event.type === "ponte")
+    );
+  };
+
+  const getAllDayMeetingEventForDate = (date: string) => {
+    return calendarEvents.find(
+      (event) => event.date === date && event.type === "reuniao" && !!event.allDay
+    );
+  };
+
+  const getBlockingMeetingEventForDate = (date: string) => {
+    const classStart = toMinutes(normalizeHorarioForMinutes(selectedClass.horario || selectedHorario));
+    if (classStart === null) return null as AcademicCalendarEvent | null;
+
+    const dayMeetings = calendarEvents.filter(
+      (event) => event.date === date && event.type === "reuniao"
+    );
+
+    return (
+      dayMeetings.find((event) => {
+        if (event.allDay) return true;
+        const eventStart = toMinutes(event.startTime);
+        const eventEnd = toMinutes(event.endTime);
+        if (eventStart === null || eventEnd === null) return false;
+        return classStart >= eventStart && classStart < eventEnd;
+      }) || null
+    );
+  };
+
+  const buildHolidayBridgeReason = (event: AcademicCalendarEvent) => {
+    const eventLabel = event.type === "feriado" ? "Feriado" : "Ponte";
+    const description = String(event.description || "").trim();
+    return description ? `${eventLabel}: ${description}` : eventLabel;
+  };
+
+  const buildMeetingReason = (event: AcademicCalendarEvent) => {
+    const description = String(event.description || "").trim();
+    return description ? `Reunião: ${description}` : "Reunião";
+  };
+
+  const applyCalendarClosureJustification = async (date: string, reasonLabel: string) => {
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setAttendance((prev) =>
+      prev.map((student) => ({
+        ...student,
+        attendance: { ...student.attendance, [date]: "Justificado" },
+        justifications: { ...(student.justifications || {}), [date]: reasonLabel },
+      }))
+    );
+
+    try {
+      const entries = attendance.map((student) => ({
+        aluno_nome: student.aluno,
+        data: date,
+        motivo: reasonLabel,
+        turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
+        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+        horario: selectedClass.horario || selectedHorario || "",
+        professor: selectedClass.professor || selectedProfessor || "",
+      }));
+      await saveJustificationLog(entries);
+    } catch {
+      // ignore to avoid blocking UI
+    }
+  };
+
+  const applyHolidayBridgeJustification = async (date: string, event: AcademicCalendarEvent) => {
+    await applyCalendarClosureJustification(date, buildHolidayBridgeReason(event));
+  };
+
+  const applyAllDayMeetingJustification = async (date: string, event: AcademicCalendarEvent) => {
+    await applyCalendarClosureJustification(date, buildMeetingReason(event));
+  };
+
+  const getModalLogTypeLabel = () => {
+    if (poolData.logType === "aula") return "AULA";
+    if (poolData.logType === "ocorrencia") return "OCORRÊNCIA";
+    return "";
+  };
+
   const buildIconsFromApi = (apiData: { temp: string; condition: string }) => {
     const autoIcons: string[] = [];
     if (apiData.condition === "Ceu Limpo") autoIcons.push("Sol");
@@ -892,6 +1024,28 @@ export const Attendance: React.FC = () => {
 
   const handleDateClick = async (date: string) => {
     setSelectedDate(date);
+
+    const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
+    if (holidayBridgeEvent) {
+      await applyHolidayBridgeJustification(date, holidayBridgeEvent);
+      return;
+    }
+
+    const allDayMeetingEvent = getAllDayMeetingEventForDate(date);
+    if (allDayMeetingEvent) {
+      await applyAllDayMeetingJustification(date, allDayMeetingEvent);
+      return;
+    }
+
+    const classBlockedByMeeting = isClassBlockedByEventPeriod(
+      date,
+      selectedClass.horario || selectedHorario,
+      calendarEvents
+    );
+    if (classBlockedByMeeting) {
+      return;
+    }
+
     setModalDate(date);
     setModalStep("select");
     setClimaPrefillApplied(false);
@@ -940,6 +1094,7 @@ export const Attendance: React.FC = () => {
 
       const cloroValue = data.cloroPpm;
       const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
+      const modalLogType: ModalLogType = data.nota === "ocorrencia" ? "ocorrencia" : "aula";
       setPoolData(prev => ({
         ...prev,
         tempExterna: normalizeNumberInput(data.tempExterna),
@@ -950,16 +1105,14 @@ export const Attendance: React.FC = () => {
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
         incidentNote: "",
         incidentImpact: "aula",
-        logType: (data.nota as PoolLogEntry["nota"]) || "aula",
+        logType: modalLogType,
       }));
       setClimaPrefillApplied(true);
 
-      if (data.nota === "ocorrencia") {
+      if (modalLogType === "ocorrencia") {
         setModalStep("ocorrencia");
-      } else if (data.nota === "aula") {
-        setModalStep("aula");
       } else {
-        setModalStep("select");
+        setModalStep("aula");
       }
 
       setShowDateModal(true);
@@ -1107,19 +1260,18 @@ export const Attendance: React.FC = () => {
     return "normal";
   };
 
-  const handleSaveLog = async (logTypeOverride?: PoolLogEntry["nota"] | React.MouseEvent<HTMLButtonElement>) => {
+  const handleSaveLog = async (logTypeOverride?: ModalLogType | React.MouseEvent<HTMLButtonElement>) => {
     const effectiveLogType = typeof logTypeOverride === "string" ? logTypeOverride : poolData.logType;
     const statusSugerido = getSuggestedStatus();
     const isOccurrence = effectiveLogType === "ocorrencia";
     const occurrenceImpact = poolData.incidentImpact;
     const reasonLabel = isOccurrence
       ? `Ocorrencia (${occurrenceImpact}): ${poolData.incidentType || poolData.personalType}`
-      : (effectiveLogType === "aula" ? "Condicoes Climaticas" : effectiveLogType);
+      : "Condicoes Climaticas";
     
-    // Lógica para Feriado/Ponte/Justificada
+    // Lógica para aula justificada e ocorrência
     const shouldTreatOccurrenceAsDay = isOccurrence && occurrenceImpact === "dia";
     const shouldMassJustify =
-      ["feriado", "ponte-feriado"].includes(effectiveLogType) ||
       (effectiveLogType === "aula" && statusSugerido === "justificada") ||
       shouldTreatOccurrenceAsDay;
     const shouldAddJustificationNote = shouldMassJustify || isOccurrence;
@@ -1384,6 +1536,10 @@ export const Attendance: React.FC = () => {
   };
 
   const handleStatusChange = (id: number, date: string) => {
+    const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
+    const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
+    if (dayClosed || classBlockedByMeeting) return;
+
     // Salva o estado atual no histórico antes de modificar
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
 
@@ -1735,6 +1891,18 @@ export const Attendance: React.FC = () => {
                 {dateDates.map((date) => {
                   const dayNum = date.split("-")[2];
                   const isSelected = date === selectedDate;
+                  const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
+                  const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
+                  const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
+                  const meetingEvent = getBlockingMeetingEventForDate(date);
+                  const isLockedDate = dayClosed || classBlockedByMeeting;
+                  const headerTooltip = holidayBridgeEvent
+                    ? buildHolidayBridgeReason(holidayBridgeEvent)
+                    : meetingEvent
+                      ? buildMeetingReason(meetingEvent)
+                    : isLockedDate
+                      ? "Data bloqueada para registro de chamada"
+                      : "";
                   return (
                     <th
                       key={date}
@@ -1747,8 +1915,13 @@ export const Attendance: React.FC = () => {
                         fontSize: "14px",
                         minWidth: "70px",
                         width: "70px",
-                        background: isSelected ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                        background: isLockedDate
+                          ? "rgba(220, 53, 69, 0.25)"
+                          : isSelected
+                            ? "rgba(255, 255, 255, 0.2)"
+                            : "transparent",
                       }}
+                      title={headerTooltip}
                     >
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.1, width: "100%" }}>
                         <span style={{ fontSize: "10px", fontWeight: "normal", marginBottom: "2px" }}>📅</span>
@@ -1838,6 +2011,18 @@ export const Attendance: React.FC = () => {
                   </td>
                   {dateDates.map((date) => {
                     const status = item.attendance[date];
+                    const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
+                    const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
+                    const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
+                    const meetingEvent = getBlockingMeetingEventForDate(date);
+                    const isLockedDate = dayClosed || classBlockedByMeeting;
+                    const cellTooltip = holidayBridgeEvent
+                      ? buildHolidayBridgeReason(holidayBridgeEvent)
+                      : meetingEvent
+                        ? buildMeetingReason(meetingEvent)
+                      : isLockedDate
+                        ? "Registro bloqueado por recesso/férias/agenda"
+                        : "";
                     let buttonLabel = "-";
                     let buttonColor = "#e8e8e8";
                     let buttonTextColor = "#666";
@@ -1860,13 +2045,14 @@ export const Attendance: React.FC = () => {
                       <td key={date} style={{ padding: "8px", textAlign: "center" }}>
                         <button
                           onClick={() => handleStatusChange(item.id, date)}
+                          disabled={isLockedDate}
                           style={{
                             background: buttonColor,
                             color: buttonTextColor,
                             border: "1px solid #ddd",
                             padding: "8px 14px",
                             borderRadius: "6px",
-                            cursor: "pointer",
+                            cursor: isLockedDate ? "not-allowed" : "pointer",
                             fontWeight: 700,
                             fontSize: "14px",
                             transition: "all 0.15s ease",
@@ -1876,13 +2062,17 @@ export const Attendance: React.FC = () => {
                             alignItems: "center",
                             justifyContent: "center",
                             lineHeight: "1",
+                            opacity: isLockedDate ? 0.45 : 1,
                           }}
                           onMouseEnter={(e) => {
+                            if (isLockedDate) return;
                             (e.target as HTMLButtonElement).style.transform = "scale(1.05)";
                           }}
                           onMouseLeave={(e) => {
+                            if (isLockedDate) return;
                             (e.target as HTMLButtonElement).style.transform = "scale(1)";
                           }}
+                          title={cellTooltip}
                         >
                           {buttonLabel}
                         </button>
@@ -2187,11 +2377,14 @@ export const Attendance: React.FC = () => {
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
           background: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1200
         }}>
+          {(() => {
+            const modalLogTypeLabel = getModalLogTypeLabel();
+            return (
           <div style={{ background: "white", padding: "25px", borderRadius: "16px", width: "450px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
               <h3 style={{ margin: 0, color: "#2c3e50" }}>
                 {modalDate.split("-").reverse().join("/")}
-                {modalStep !== "select" && <span style={{ fontSize: "14px", color: "#666", marginLeft: "10px" }}>({poolData.logType.toUpperCase()})</span>}
+                {modalStep !== "select" && !!modalLogTypeLabel && <span style={{ fontSize: "14px", color: "#666", marginLeft: "10px" }}>({modalLogTypeLabel})</span>}
               </h3>
               <button onClick={() => setShowDateModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
             </div>
@@ -2206,18 +2399,6 @@ export const Attendance: React.FC = () => {
                 <button className="btn-option" style={{ background: "#ffc107", color: "#333", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
                   onClick={() => { setPoolData(p => ({...p, logType: "ocorrencia", cloroEnabled: false, incidentImpact: "aula" })); setModalStep("ocorrencia"); }}>
                   ⚠️ Ocorrência
-                </button>
-                <button className="btn-option" style={{ background: "#17a2b8", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "feriado"})); handleSaveLog("feriado"); }}>
-                  🎉 Feriado
-                </button>
-                <button className="btn-option" style={{ background: "#6c757d", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "ponte-feriado"})); handleSaveLog("ponte-feriado"); }}>
-                  🌉 Ponte
-                </button>
-                <button className="btn-option" style={{ gridColumn: "1 / -1", background: "#28a745", color: "white", padding: "15px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => { setPoolData(p => ({...p, logType: "reuniao"})); handleSaveLog("reuniao"); }}>
-                  🤝 Reunião
                 </button>
               </div>
             )}
@@ -2457,6 +2638,8 @@ export const Attendance: React.FC = () => {
               </div>
             )}
           </div>
+            );
+          })()}
         </div>
       )}
     </div>

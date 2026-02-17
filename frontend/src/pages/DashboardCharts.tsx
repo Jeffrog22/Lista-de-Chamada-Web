@@ -152,14 +152,6 @@ const DashboardCharts: React.FC = () => {
   const [occurrenceProfessor, setOccurrenceProfessor] = useState<string>('');
   const [occurrenceGroup, setOccurrenceGroup] = useState<'terca-quinta' | 'quarta-sexta'>('terca-quinta');
 
-  const COLORS = {
-    presente: '#28a745',
-    ausente: '#dc3545',
-    justificado: '#ffc107',
-    primary: '#007bff',
-    info: '#17a2b8'
-  };
-
   const selectedMonth = `${year}-${month}`;
 
   useEffect(() => {

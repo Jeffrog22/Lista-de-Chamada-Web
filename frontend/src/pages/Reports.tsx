@@ -1,5 +1,19 @@
 import React, { Suspense, useEffect, useState } from "react";
-import { downloadChamadaPdfReport, downloadMultiClassExcelReport, getBootstrap, getReports } from "../api";
+import {
+  deleteAcademicCalendarEvent,
+  downloadChamadaPdfReport,
+  downloadMultiClassExcelReport,
+  getAcademicCalendar,
+  getBootstrap,
+  getReports,
+  saveAcademicCalendarEvent,
+  saveAcademicCalendarSettings,
+} from "../api";
+import {
+  isDateClosedForAttendance,
+  isWithinRange,
+} from "../utils/academicCalendar";
+import type { AcademicCalendarEvent, AcademicCalendarSettings } from "../utils/academicCalendar";
 import "./Reports.css";
 const DashboardCharts = React.lazy(() => import('./DashboardCharts'));
 
@@ -72,6 +86,24 @@ interface BootstrapClassLite {
   nivel: string;
 }
 
+interface CalendarEventForm {
+  date: string;
+  type: "feriado" | "ponte" | "reuniao" | "evento";
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
+  description: string;
+}
+
+interface ClassPlannedStats {
+  key: string;
+  turma: string;
+  horario: string;
+  professor: string;
+  previstas: number;
+  dadas: number;
+}
+
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${item.turma}||${item.horario}||${item.professor}`;
 
@@ -104,6 +136,39 @@ const normalizeReportsData = (payload: unknown): ClassStats[] => {
   });
 };
 
+const monthRange = (month: string) => {
+  const [yearStr, monthStr] = month.split("-");
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const first = new Date(year, monthIndex, 1);
+  const last = new Date(year, monthIndex + 1, 0);
+  return { first, last };
+};
+
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const weekdayMonToSun = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const monthOptions = [
+  { value: "01", label: "Janeiro" },
+  { value: "02", label: "Fevereiro" },
+  { value: "03", label: "Março" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Maio" },
+  { value: "06", label: "Junho" },
+  { value: "07", label: "Julho" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Setembro" },
+  { value: "10", label: "Outubro" },
+  { value: "11", label: "Novembro" },
+  { value: "12", label: "Dezembro" },
+];
+
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -112,7 +177,46 @@ export const Reports: React.FC = () => {
   const [selectedProfessor, setSelectedProfessor] = useState<string>("");
   const [selectedExportClassKeys, setSelectedExportClassKeys] = useState<string[]>([]);
   const [hasInitializedExportSelection, setHasInitializedExportSelection] = useState(false);
-  const [loadingReports, setLoadingReports] = useState(false);
+  const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
+  const [bankHours, setBankHours] = useState<Array<{ teacher: string; hours: number }>>([]);
+  const [savingCalendarSettings, setSavingCalendarSettings] = useState(false);
+  const [periodsCollapsed, setPeriodsCollapsed] = useState(false);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [eventForm, setEventForm] = useState<CalendarEventForm>({
+    date: "",
+    type: "feriado",
+    allDay: true,
+    startTime: "",
+    endTime: "",
+    description: "",
+  });
+
+  const [selectedYear, selectedMonthNumber] = selectedMonth.split("-");
+
+  const updateCalendarPeriod = (nextYear: string, nextMonth: string) => {
+    if (!nextYear || !nextMonth) return;
+    setSelectedMonth(`${nextYear}-${nextMonth}`);
+  };
+
+  const shiftSelectedMonth = (offset: number) => {
+    const [yearPart, monthPart] = selectedMonth.split("-");
+    const baseDate = new Date(Number(yearPart), Number(monthPart) - 1, 1);
+    baseDate.setMonth(baseDate.getMonth() + offset);
+    const nextYear = String(baseDate.getFullYear());
+    const nextMonth = String(baseDate.getMonth() + 1).padStart(2, "0");
+    updateCalendarPeriod(nextYear, nextMonth);
+  };
+
+  const goToCurrentMonth = () => {
+    const now = new Date();
+    const yearNow = String(now.getFullYear());
+    const monthNow = String(now.getMonth() + 1).padStart(2, "0");
+    updateCalendarPeriod(yearNow, monthNow);
+  };
+
+  const yearOptions = Array.from({ length: 9 }, (_, idx) => String(new Date().getFullYear() - 4 + idx));
 
   const formatHorario = (value?: string) => {
     const raw = String(value || "").trim();
@@ -317,7 +421,6 @@ export const Reports: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    setLoadingReports(true);
     getReports({ month: selectedMonth })
       .then((response) => {
         if (!isMounted) return;
@@ -325,14 +428,265 @@ export const Reports: React.FC = () => {
       })
       .catch(() => {
         if (isMounted) setClassesData([]);
-      })
-      .finally(() => {
-        if (isMounted) setLoadingReports(false);
       });
     return () => {
       isMounted = false;
     };
   }, [selectedMonth]);
+
+  useEffect(() => {
+    getAcademicCalendar({ month: selectedMonth })
+      .then((response) => {
+        const payload = (response?.data || {}) as {
+          settings?: AcademicCalendarSettings | null;
+          events?: AcademicCalendarEvent[];
+          bankHours?: Array<{ teacher?: string; hours?: number }>;
+        };
+
+        const [selectedYear] = selectedMonth.split("-");
+        const year = Number(selectedYear);
+        const defaultSettings: AcademicCalendarSettings = {
+          schoolYear: year,
+          inicioAulas: `${selectedYear}-01-01`,
+          feriasInvernoInicio: `${selectedYear}-07-01`,
+          feriasInvernoFim: `${selectedYear}-07-31`,
+          terminoAulas: `${selectedYear}-12-31`,
+        };
+
+        const incomingSettings = payload.settings || null;
+        setCalendarSettings(incomingSettings || defaultSettings);
+        setPeriodsCollapsed(Boolean(incomingSettings));
+        setCalendarEvents(Array.isArray(payload.events) ? payload.events : []);
+        setBankHours(
+          Array.isArray(payload.bankHours)
+            ? payload.bankHours.map((item) => ({
+                teacher: String(item.teacher || ""),
+                hours: Number(item.hours || 0),
+              }))
+            : []
+        );
+      })
+      .catch(() => {
+        const [selectedYear] = selectedMonth.split("-");
+        setCalendarSettings({
+          schoolYear: Number(selectedYear),
+          inicioAulas: `${selectedYear}-01-01`,
+          feriasInvernoInicio: `${selectedYear}-07-01`,
+          feriasInvernoFim: `${selectedYear}-07-31`,
+          terminoAulas: `${selectedYear}-12-31`,
+        });
+        setPeriodsCollapsed(false);
+        setCalendarEvents([]);
+        setBankHours([]);
+      });
+  }, [selectedMonth]);
+
+  const handleSaveCalendarSettings = async () => {
+    if (!calendarSettings) return;
+    setSavingCalendarSettings(true);
+    try {
+      await saveAcademicCalendarSettings(calendarSettings);
+      alert("Períodos salvos com sucesso.");
+      setPeriodsCollapsed(true);
+    } catch {
+      alert("Falha ao salvar períodos.");
+    } finally {
+      setSavingCalendarSettings(false);
+    }
+  };
+
+  const handleOpenEventModal = (date: string, type: CalendarEventForm["type"] = "feriado") => {
+    const defaultAllDay = type === "reuniao" || type === "feriado" || type === "ponte";
+    setEventForm({
+      date,
+      type,
+      allDay: defaultAllDay,
+      startTime: "",
+      endTime: "",
+      description: "",
+    });
+    setEventModalOpen(true);
+  };
+
+  const handleSaveEvent = async () => {
+    const teacherProfileRaw = localStorage.getItem("teacherProfile");
+    let teacherName = "";
+    if (teacherProfileRaw) {
+      try {
+        teacherName = JSON.parse(teacherProfileRaw)?.name || "";
+      } catch {
+        teacherName = "";
+      }
+    }
+
+    if (eventForm.type === "reuniao" && !eventForm.allDay && (!eventForm.startTime || !eventForm.endTime)) {
+      alert("Informe início e término para reunião por período.");
+      return;
+    }
+    if (eventForm.type === "evento" && (!eventForm.startTime || !eventForm.endTime)) {
+      alert("Informe início e término para evento.");
+      return;
+    }
+
+    try {
+      await saveAcademicCalendarEvent({
+        ...eventForm,
+        teacher: teacherName || selectedProfessor || currentClassData?.professor || "",
+      });
+      const refresh = await getAcademicCalendar({ month: selectedMonth });
+      const payload = (refresh?.data || {}) as {
+        events?: AcademicCalendarEvent[];
+        bankHours?: Array<{ teacher?: string; hours?: number }>;
+      };
+      setCalendarEvents(Array.isArray(payload.events) ? payload.events : []);
+      setBankHours(
+        Array.isArray(payload.bankHours)
+          ? payload.bankHours.map((item) => ({
+              teacher: String(item.teacher || ""),
+              hours: Number(item.hours || 0),
+            }))
+          : []
+      );
+      setEventModalOpen(false);
+    } catch {
+      alert("Falha ao salvar evento no calendário.");
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    try {
+      await deleteAcademicCalendarEvent(id);
+      const refresh = await getAcademicCalendar({ month: selectedMonth });
+      const payload = (refresh?.data || {}) as {
+        events?: AcademicCalendarEvent[];
+        bankHours?: Array<{ teacher?: string; hours?: number }>;
+      };
+      setCalendarEvents(Array.isArray(payload.events) ? payload.events : []);
+      setBankHours(
+        Array.isArray(payload.bankHours)
+          ? payload.bankHours.map((item) => ({
+              teacher: String(item.teacher || ""),
+              hours: Number(item.hours || 0),
+            }))
+          : []
+      );
+    } catch {
+      alert("Não foi possível remover o registro.");
+    }
+  };
+
+  const selectedMonthDates = (() => {
+    const { first, last } = monthRange(selectedMonth);
+    const days: Date[] = [];
+    const cursor = new Date(first);
+    while (cursor <= last) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  })();
+
+  const selectedMonthDateKeys = selectedMonthDates.map((date) => toDateKey(date));
+
+  const calendarGridCells = (() => {
+    if (selectedMonthDates.length === 0) return [] as Array<Date | null>;
+    const firstWeekday = selectedMonthDates[0].getDay();
+    const leadingEmpty = (firstWeekday + 6) % 7;
+    const cells: Array<Date | null> = [];
+    for (let i = 0; i < leadingEmpty; i += 1) cells.push(null);
+    selectedMonthDates.forEach((d) => cells.push(d));
+    return cells;
+  })();
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    setSelectedCalendarDate((prev) => {
+      if (prev && prev.startsWith(`${selectedMonth}-`)) return prev;
+      if (today.startsWith(`${selectedMonth}-`)) return today;
+      return selectedMonthDateKeys[0] || "";
+    });
+  }, [selectedMonth, selectedMonthDateKeys]);
+
+  const plannedClassDays = selectedMonthDateKeys.filter((dateKey) =>
+    !isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents)
+  );
+
+  const plannedYearDateKeys = (() => {
+    const year = Number(selectedYear);
+    if (!Number.isFinite(year)) return [] as string[];
+
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
+    const keys: string[] = [];
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      keys.push(toDateKey(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return keys;
+  })();
+
+  const plannedYearDays = plannedYearDateKeys.filter((dateKey) =>
+    !isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents)
+  );
+
+  const plannedYearCurrentDays = (() => {
+    const currentYear = new Date().getFullYear();
+    const selectedYearNumber = Number(selectedYear);
+    if (!Number.isFinite(selectedYearNumber)) return 0;
+    if (selectedYearNumber < currentYear) return plannedYearDays.length;
+    if (selectedYearNumber > currentYear) return 0;
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    return plannedYearDays.filter((dateKey) => dateKey <= todayKey).length;
+  })();
+
+  const plannedDaysProgress = {
+    atual: plannedYearCurrentDays,
+    total: plannedYearDays.length,
+    pct:
+      plannedYearDays.length > 0
+        ? Math.min(100, Math.round((plannedYearCurrentDays / plannedYearDays.length) * 100))
+        : 0,
+  };
+
+  const classPlannedStats: ClassPlannedStats[] = classesData.map((cls) => {
+    const key = classSelectionKey(cls);
+    const previstas = plannedClassDays.length;
+    const dadas = cls.alunos.reduce((acc, aluno) => {
+      return (
+        acc +
+        Object.entries(aluno.historico || {}).filter(([day, status]) => {
+          const dayKey = `${selectedMonth}-${String(day).padStart(2, "0")}`;
+          return plannedClassDays.includes(dayKey) && ["c", "j"].includes(String(status || "").toLowerCase());
+        }).length
+      );
+    }, 0);
+    return {
+      key,
+      turma: cls.turma,
+      horario: cls.horario,
+      professor: cls.professor,
+      previstas,
+      dadas,
+    };
+  });
+
+  const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
+  const totalCancelamentosElegiveis = calendarEvents.filter((event) => {
+    const normalizedDescription = String(event.description || "").toLowerCase();
+    if (event.type === "feriado" || event.type === "ponte") return true;
+    return climateCancellationKeywords.some((keyword) => normalizedDescription.includes(keyword));
+  }).length;
+
+  const totalAulasDadas = classPlannedStats.reduce((acc, item) => acc + item.dadas, 0);
+  const totalAulasPrevistas = classPlannedStats.reduce((acc, item) => acc + item.previstas, 0);
+  const aproveitamentoAulas =
+    totalAulasPrevistas > 0
+      ? Math.max(0, Math.min(100, Math.round(((totalAulasDadas - totalCancelamentosElegiveis) / totalAulasPrevistas) * 100)))
+      : 0;
+
+  const selectedDateEvents = calendarEvents.filter((event) => event.date === selectedCalendarDate);
 
   const currentClassData =
     classesData.find(
@@ -365,20 +719,6 @@ export const Reports: React.FC = () => {
   })();
   const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
   
-  // Estatísticas Gerais da Turma Selecionada
-  const totalFaltas = currentClassData ? currentClassData.alunos.reduce((acc, curr) => acc + curr.faltas, 0) : 0;
-  const totalJustificativas = currentClassData
-    ? currentClassData.alunos.reduce((acc, curr) => acc + curr.justificativas, 0)
-    : 0;
-  const mediaFrequencia =
-    currentClassData && currentClassData.alunos.length > 0
-      ? (currentClassData.alunos.reduce((acc, curr) => acc + curr.frequencia, 0) / currentClassData.alunos.length).toFixed(1)
-      : "0";
-
-  const totalAlunosTurma = currentClassData ? currentClassData.alunos.length : 0;
-  const capacidadeTurma = 20;
-  const ocupacaoPct = capacidadeTurma > 0 ? Math.min(100, Math.round((totalAlunosTurma / capacidadeTurma) * 100)) : 0;
-
   const classesByTurma = classesData.reduce<Record<string, ClassStats>>((acc, item) => {
     acc[item.turma] = item;
     return acc;
@@ -517,83 +857,358 @@ export const Reports: React.FC = () => {
 
       {activeTab === "resumo" && (
         <div className="reports-section">
-          {!currentClassData && !loadingReports && (
-            <div className="reports-section placeholder">Sem dados de relatórios para o mês selecionado.</div>
-          )}
-          {loadingReports && (
-            <div className="reports-section placeholder">Carregando dados de relatórios...</div>
-          )}
-          {currentClassData && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px", marginBottom: "40px" }}>
-            <div className="report-card" style={{ background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", color: "white" }}>
-              <h3>📊 Resumo da Turma {currentClassData?.turma || selectedTurmaLabel}</h3>
-              <div style={{ display: "flex", justifyContent: "space-around", marginTop: "20px", textAlign: "center" }}>
-                <div>
-                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{mediaFrequencia}%</div>
-                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Frequência Média</div>
+          <div className="reports-summary-layout">
+            <div className="reports-summary-main">
+              <div className={`report-card reports-period-card ${periodsCollapsed ? "is-collapsed" : ""}`}>
+                <div className="reports-period-header-row">
+                  <h3>Períodos Letivos</h3>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setPeriodsCollapsed((prev) => !prev)}
+                  >
+                    {periodsCollapsed ? "Editar" : "Recolher"}
+                  </button>
                 </div>
-                <div>
-                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalFaltas}</div>
-                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Total Faltas</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "24px", fontWeight: "bold" }}>{totalJustificativas}</div>
-                  <div style={{ fontSize: "12px", opacity: 0.8 }}>Justificativas</div>
-                </div>
+                {!periodsCollapsed && (
+                  <>
+                    <div className="reports-period-grid">
+                      <div className="reports-filter-field">
+                        <label>Início das aulas</label>
+                        <input
+                          type="date"
+                          value={calendarSettings?.inicioAulas || ""}
+                          onChange={(e) =>
+                            setCalendarSettings((prev) =>
+                              prev ? { ...prev, inicioAulas: e.target.value } : prev
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="reports-filter-field">
+                        <label>Férias de inverno (início)</label>
+                        <input
+                          type="date"
+                          value={calendarSettings?.feriasInvernoInicio || ""}
+                          onChange={(e) =>
+                            setCalendarSettings((prev) =>
+                              prev ? { ...prev, feriasInvernoInicio: e.target.value } : prev
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="reports-filter-field">
+                        <label>Férias de inverno (fim)</label>
+                        <input
+                          type="date"
+                          value={calendarSettings?.feriasInvernoFim || ""}
+                          onChange={(e) =>
+                            setCalendarSettings((prev) =>
+                              prev ? { ...prev, feriasInvernoFim: e.target.value } : prev
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="reports-filter-field">
+                        <label>Término das aulas</label>
+                        <input
+                          type="date"
+                          value={calendarSettings?.terminoAulas || ""}
+                          onChange={(e) =>
+                            setCalendarSettings((prev) =>
+                              prev ? { ...prev, terminoAulas: e.target.value } : prev
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="reports-period-actions">
+                      <button className="btn-primary" onClick={handleSaveCalendarSettings} disabled={savingCalendarSettings}>
+                        {savingCalendarSettings ? "Salvando..." : "Salvar períodos"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
-              <div style={{ marginTop: "18px" }}>
-                <div style={{ fontSize: "12px", opacity: 0.8, marginBottom: "6px" }}>
-                  Ocupação da turma: {ocupacaoPct}%
-                </div>
-                <div style={{ background: "rgba(255,255,255,0.25)", height: "6px", borderRadius: "999px", overflow: "hidden" }}>
-                  <div style={{ width: `${ocupacaoPct}%`, height: "100%", background: "rgba(255,255,255,0.9)" }} />
-                </div>
-              </div>
-            </div>
 
-            <div className="report-card" style={{ background: "white", border: "1px solid #eee" }}>
-              <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
-                Desempenho por Aluno
-              </h3>
-              <div style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "5px" }}>
-                {currentClassData.alunos.map(aluno => (
-                  <div key={aluno.id} style={{ marginBottom: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
-                      <span>{aluno.nome}</span>
-                      <span style={{ fontWeight: "bold", color: aluno.frequencia < 75 ? "#dc3545" : "#28a745" }}>
-                        {aluno.frequencia}%
-                      </span>
-                    </div>
-                    <div style={{ width: "100%", background: "#eee", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
-                      <div style={{ 
-                        width: `${aluno.frequencia}%`, 
-                        background: aluno.frequencia < 75 ? "#dc3545" : "#28a745",
-                        height: "100%" 
-                      }}></div>
-                    </div>
-                    <div style={{ fontSize: "11px", color: "#999", marginTop: "2px" }}>
-                      {aluno.presencas} Presenças | {aluno.faltas} Faltas | {aluno.justificativas} Justif.
+              <div className="report-card reports-calendar-card">
+                <div className="reports-calendar-header">
+                  <div className="reports-calendar-title-row">
+                    <h3>Calendário</h3>
+                    <div className="reports-calendar-period-filter">
+                      <button
+                        type="button"
+                        className="reports-calendar-nav-btn"
+                        onClick={() => shiftSelectedMonth(-1)}
+                        aria-label="Mês anterior"
+                        title="Mês anterior"
+                      >
+                        ◀
+                      </button>
+                      <select
+                        value={selectedMonthNumber}
+                        onChange={(e) => updateCalendarPeriod(selectedYear, e.target.value)}
+                      >
+                        {monthOptions.map((monthOpt) => (
+                          <option key={monthOpt.value} value={monthOpt.value}>
+                            {monthOpt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => updateCalendarPeriod(e.target.value, selectedMonthNumber)}
+                      >
+                        {yearOptions.map((yearOpt) => (
+                          <option key={yearOpt} value={yearOpt}>
+                            {yearOpt}
+                          </option>
+                        ))}
+                      </select>
+                        <button
+                          type="button"
+                          className="reports-calendar-today-btn"
+                          onClick={goToCurrentMonth}
+                        >
+                          Hoje
+                        </button>
+                        <button
+                          type="button"
+                          className="reports-calendar-nav-btn"
+                          onClick={() => shiftSelectedMonth(1)}
+                          aria-label="Próximo mês"
+                          title="Próximo mês"
+                        >
+                          ▶
+                        </button>
                     </div>
                   </div>
-                ))}
+                  <p>Selecione uma data no calendário e registre na lateral por tipo.</p>
+                </div>
+                <div className="reports-calendar-content">
+                  <div>
+                    <div className="reports-calendar-weekdays">
+                      {weekdayMonToSun.map((day) => (
+                        <span key={day}>{day}</span>
+                      ))}
+                    </div>
+                    <div className="reports-calendar-grid">
+                    {calendarGridCells.map((dateObj, index) => {
+                      if (!dateObj) {
+                        return <div key={`empty-${index}`} className="reports-calendar-day is-empty" />;
+                      }
+                      const dateKey = toDateKey(dateObj);
+                      const dayEvents = calendarEvents.filter((event) => event.date === dateKey);
+                      const isClosed = isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents);
+                      const isWinterBreak = isWithinRange(
+                        dateKey,
+                        calendarSettings?.feriasInvernoInicio,
+                        calendarSettings?.feriasInvernoFim
+                      );
+                      return (
+                        <div
+                          key={dateKey}
+                          className={`reports-calendar-day ${isClosed ? "is-closed" : ""} ${isWinterBreak ? "is-winter" : ""} ${selectedCalendarDate === dateKey ? "is-selected" : ""}`}
+                          onClick={() => setSelectedCalendarDate(dateKey)}
+                        >
+                          <div className="reports-calendar-day-top">
+                            <strong>{String(dateObj.getDate()).padStart(2, "0")}</strong>
+                            <span>{weekdayShort[dateObj.getDay()]}</span>
+                          </div>
+                          <div className="reports-calendar-tags">
+                            {isWinterBreak && <span className="reports-mini-tag">férias</span>}
+                            {!isWinterBreak && isClosed && <span className="reports-mini-tag">recesso</span>}
+                            {dayEvents.slice(0, 1).map((event) => (
+                              <span key={event.id} className="reports-mini-tag">
+                                {event.type}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    </div>
+                  </div>
+                  <div className="reports-calendar-actions">
+                    <div className="reports-calendar-selected-date">
+                      Data selecionada: <strong>{selectedCalendarDate || "-"}</strong>
+                    </div>
+                    <div className="reports-record-chips">
+                      {(["feriado", "ponte", "reuniao", "evento"] as CalendarEventForm["type"][]).map((type) => (
+                        <button
+                          key={type}
+                          className="reports-record-chip"
+                          disabled={!selectedCalendarDate}
+                          onClick={() => selectedCalendarDate && handleOpenEventModal(selectedCalendarDate, type)}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="reports-class-metrics">
+                      {selectedDateEvents.length === 0 && (
+                        <div className="reports-section placeholder">Sem registros para a data selecionada.</div>
+                      )}
+                      {selectedDateEvents.map((event) => (
+                        <div key={event.id} className="reports-class-metric-row">
+                          <strong>{event.type}</strong>
+                          <span>{event.description || "Sem descrição"}</span>
+                          {(event.type === "reuniao" || event.type === "evento") && !event.allDay && event.startTime && event.endTime && (
+                            <span>{event.startTime} às {event.endTime}</span>
+                          )}
+                          <button className="btn-secondary" onClick={() => handleDeleteEvent(event.id)}>
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="report-card" style={{ background: "#fff", border: "1px solid #eee" }}>
-              <h3 style={{ color: "#333", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px" }}>
-                Dados da Aula
-              </h3>
-              <div style={{ fontSize: "14px", lineHeight: "1.8", color: "#555" }}>
-                <p><strong>👨‍🏫 Professor:</strong> {currentClassData.professor}</p>
-                <p><strong>📚 Nível:</strong> {currentClassData.nivel}</p>
-                <p><strong>⏰ Horário:</strong> {formatHorario(currentClassData.horario)}</p>
-                <p><strong>👥 Total Alunos:</strong> {currentClassData.alunos.length}</p>
-                <div style={{ marginTop: "15px", padding: "10px", background: "#fffbeb", borderRadius: "6px", borderLeft: "3px solid #f39c12", fontSize: "12px" }}>
-                  ⚠️ {currentClassData.alunos.filter(a => a.frequencia < 75).length} alunos abaixo de 75% de frequência.
+            <div className="reports-summary-side">
+              <div className="report-card">
+                <h3>Dias previstos</h3>
+                <div className="reports-kpi-line">
+                  <span>{plannedDaysProgress.atual}/{plannedDaysProgress.total} dias de aula no ano</span>
+                  <span>{plannedDaysProgress.pct}%</span>
+                </div>
+                <div className="vagas-bar">
+                  <div className="vagas-bar-fill" style={{ width: `${plannedDaysProgress.pct}%` }} />
+                </div>
+                <div className="vagas-footer">ano letivo {selectedYear}</div>
+              </div>
+
+              <div className="report-card">
+                <h3>Aulas por turma/horário/professor</h3>
+                <div className="reports-class-metrics">
+                  {classPlannedStats.map((item) => (
+                    <div key={item.key} className="reports-class-metric-row">
+                      <strong>{item.turma}</strong>
+                      <span>{formatHorario(item.horario)} - {item.professor}</span>
+                      <span>Previstas: {item.previstas}</span>
+                      <span>Dadas: {item.dadas}</span>
+                    </div>
+                  ))}
+                  {classPlannedStats.length === 0 && <div className="reports-section placeholder">Sem turmas carregadas.</div>}
+                </div>
+              </div>
+
+              <div className="report-card">
+                <h3>Aproveitamento das aulas dadas</h3>
+                <div className="reports-kpi-line">
+                  <span>Considerando clima, cloro, ocorrências, feriados e pontes</span>
+                  <strong>{aproveitamentoAulas}%</strong>
+                </div>
+                <div className="vagas-bar">
+                  <div className="vagas-bar-fill" style={{ width: `${aproveitamentoAulas}%` }} />
+                </div>
+                <div className="vagas-footer">
+                  Cancelamentos elegíveis: {totalCancelamentosElegiveis} | Previstas: {totalAulasPrevistas} | Dadas: {totalAulasDadas}
+                </div>
+              </div>
+
+              <div className="report-card">
+                <h3>Banco de horas (eventos)</h3>
+                <div className="reports-class-metrics">
+                  {bankHours.length === 0 && <div className="reports-section placeholder">Sem eventos com horas no mês.</div>}
+                  {bankHours.map((item, idx) => (
+                    <div key={`${item.teacher}-${idx}`} className="reports-class-metric-row">
+                      <strong>{item.teacher || "Professor"}</strong>
+                      <span>{item.hours.toFixed(2)} h</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
+
+          {eventModalOpen && (
+            <div className="reports-event-modal-backdrop" onClick={() => setEventModalOpen(false)}>
+              <div className="reports-event-modal" onClick={(e) => e.stopPropagation()}>
+                <h3>Registro de calendário</h3>
+                <div className="reports-filter-field">
+                  <label>Data</label>
+                  <input
+                    type="date"
+                    value={eventForm.date}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, date: e.target.value }))}
+                  />
+                </div>
+                <div className="reports-filter-field">
+                  <label>Tipo</label>
+                  <select
+                    value={eventForm.type}
+                    onChange={(e) => {
+                      const nextType = e.target.value as CalendarEventForm["type"];
+                      setEventForm((prev) => ({
+                        ...prev,
+                        type: nextType,
+                        allDay: nextType === "reuniao" ? prev.allDay : true,
+                        startTime: nextType === "feriado" || nextType === "ponte" ? "" : prev.startTime,
+                        endTime: nextType === "feriado" || nextType === "ponte" ? "" : prev.endTime,
+                      }));
+                    }}
+                  >
+                    <option value="feriado">Feriado</option>
+                    <option value="ponte">Ponte</option>
+                    <option value="reuniao">Reunião</option>
+                    <option value="evento">Evento</option>
+                  </select>
+                </div>
+
+                {eventForm.type === "reuniao" && (
+                  <label className="reports-checkbox-inline">
+                    <input
+                      type="checkbox"
+                      checked={eventForm.allDay}
+                      onChange={(e) => setEventForm((prev) => ({ ...prev, allDay: e.target.checked }))}
+                    />
+                    Dia todo (cancela todas as aulas na chamada)
+                  </label>
+                )}
+
+                {(eventForm.type === "evento" || (eventForm.type === "reuniao" && !eventForm.allDay)) && (
+                  <div className="reports-period-grid">
+                    <div className="reports-filter-field">
+                      <label>Hora início</label>
+                      <input
+                        type="time"
+                        value={eventForm.startTime}
+                        onChange={(e) => setEventForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                      />
+                    </div>
+                    <div className="reports-filter-field">
+                      <label>Hora término</label>
+                      <input
+                        type="time"
+                        value={eventForm.endTime}
+                        onChange={(e) => setEventForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="reports-filter-field">
+                  <label>Descrição</label>
+                  <input
+                    type="text"
+                    value={eventForm.description}
+                    onChange={(e) => setEventForm((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Observação do registro"
+                  />
+                </div>
+
+                <div className="reports-period-actions">
+                  <button className="btn-secondary" onClick={() => setEventModalOpen(false)}>
+                    Cancelar
+                  </button>
+                  <button className="btn-primary" onClick={handleSaveEvent}>
+                    Salvar registro
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

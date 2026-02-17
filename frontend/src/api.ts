@@ -76,6 +76,25 @@ export const saveAttendanceLog = (data: any) =>
 export const saveJustificationLog = (data: any) =>
   API.post("/justifications-log", data);
 
+// Academic calendar (reports summary)
+export const getAcademicCalendar = (params?: Record<string, any>) =>
+  API.get("/academic-calendar", { params }).catch(() => ({
+    data: {
+      settings: null,
+      events: [],
+      bankHours: [],
+    },
+  }));
+
+export const saveAcademicCalendarSettings = (data: any) =>
+  API.put("/academic-calendar/settings", data).catch(() => ({ data: { ok: false } }));
+
+export const saveAcademicCalendarEvent = (data: any) =>
+  API.post("/academic-calendar/events", data).catch(() => ({ data: { ok: false } }));
+
+export const deleteAcademicCalendarEvent = (eventId: string) =>
+  API.delete(`/academic-calendar/events/${encodeURIComponent(eventId)}`).catch(() => ({ data: { ok: false } }));
+
 // Import backend (multi-unit)
 export const getBootstrap = (unitId?: number) =>
   API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);

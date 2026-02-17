@@ -1,0 +1,35 @@
+{
+  "settings": {
+    "schoolYear": 2026,
+    "inicioAulas": "2026-02-03",
+    "feriasInvernoInicio": "2026-06-30",
+    "feriasInvernoFim": "2026-07-24",
+    "terminoAulas": "2026-12-11",
+    "updated_at": "2026-02-17T01:00:55.972859"
+  },
+  "events": [
+    {
+      "id": "f7d6f50d-22e4-4639-a682-4ff0d02568db",
+      "date": "2026-02-17",
+      "type": "feriado",
+      "allDay": true,
+      "startTime": "",
+      "endTime": "",
+      "description": "Carnaval",
+      "teacher": "Jefferson",
+      "created_at": "2026-02-17T01:27:22.064813"
+    },
+    {
+      "id": "728d57c4-ae90-4036-a89d-d6b0e6fb7589",
+      "date": "2026-02-18",
+      "type": "ponte",
+      "allDay": true,
+      "startTime": "",
+      "endTime": "",
+      "description": "Carnaval",
+      "teacher": "Jefferson",
+      "created_at": "2026-02-17T03:34:42.476864"
+    }
+  ],
+  "bankHours": []
+}

@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 import os
 import json
 import re
+import uuid
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
@@ -142,6 +143,22 @@ class ExcelExportPayload(BaseModel):
     professor: Optional[str] = None
     classes: List[ExportClassSelection] = Field(default_factory=list)
 
+class AcademicCalendarSettingsPayload(BaseModel):
+    schoolYear: int
+    inicioAulas: str
+    feriasInvernoInicio: str
+    feriasInvernoFim: str
+    terminoAulas: str
+
+class AcademicCalendarEventPayload(BaseModel):
+    date: str
+    type: str
+    allDay: Optional[bool] = False
+    startTime: Optional[str] = ""
+    endTime: Optional[str] = ""
+    description: Optional[str] = ""
+    teacher: Optional[str] = ""
+
 def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     payload: List[Dict[str, Any]] = []
@@ -171,6 +188,52 @@ def _save_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
+
+def _academic_calendar_file() -> str:
+    return os.path.join(DATA_DIR, "academicCalendar.json")
+
+def _load_academic_calendar_state() -> Dict[str, Any]:
+    file_path = _academic_calendar_file()
+    if not os.path.exists(file_path):
+        return {"settings": None, "events": [], "bankHours": []}
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            return {"settings": None, "events": [], "bankHours": []}
+        settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else None
+        events = payload.get("events") if isinstance(payload.get("events"), list) else []
+        bank_hours = payload.get("bankHours") if isinstance(payload.get("bankHours"), list) else []
+        return {"settings": settings, "events": events, "bankHours": bank_hours}
+    except Exception:
+        return {"settings": None, "events": [], "bankHours": []}
+
+def _save_academic_calendar_state(state: Dict[str, Any]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    file_path = _academic_calendar_file()
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+def _month_bounds(month: str) -> tuple[str, str]:
+    year, month_num = month.split("-")
+    start = datetime(int(year), int(month_num), 1)
+    if int(month_num) == 12:
+        next_month = datetime(int(year) + 1, 1, 1)
+    else:
+        next_month = datetime(int(year), int(month_num) + 1, 1)
+    end = next_month - timedelta(days=1)
+    return (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+
+def _hours_from_interval(start_time: str, end_time: str) -> float:
+    try:
+        start = datetime.strptime(start_time, "%H:%M")
+        end = datetime.strptime(end_time, "%H:%M")
+        minutes = (end - start).total_seconds() / 60
+        if minutes <= 0:
+            return 0.0
+        return round(minutes / 60, 2)
+    except Exception:
+        return 0.0
 
 POOL_LOG_COLUMNS = [
     "Data",
@@ -1039,6 +1102,116 @@ def get_report_filters(session: Session = Depends(get_session)) -> ReportsFilter
     months = sorted({str(item.get("mes") or "").strip() for item in _load_json_list(os.path.join(DATA_DIR, "baseChamada.json")) if item.get("mes")})
     years = sorted({m.split("-")[0] for m in months if "-" in m})
     return ReportsFilterOut(turmas=turmas, horarios=horarios, professores=professores, meses=months, anos=years)
+
+@app.get("/academic-calendar")
+def get_academic_calendar(month: Optional[str] = None):
+    state = _load_academic_calendar_state()
+    events = state.get("events") or []
+    bank_hours = state.get("bankHours") or []
+
+    if month:
+        try:
+            month_start, month_end = _month_bounds(month)
+            events = [
+                item
+                for item in events
+                if month_start <= str(item.get("date") or "") <= month_end
+            ]
+            bank_hours = [
+                item
+                for item in bank_hours
+                if month_start <= str(item.get("date") or "") <= month_end
+            ]
+        except Exception:
+            pass
+
+    return {
+        "settings": state.get("settings"),
+        "events": events,
+        "bankHours": bank_hours,
+    }
+
+@app.put("/academic-calendar/settings")
+def save_academic_calendar_settings(payload: AcademicCalendarSettingsPayload):
+    state = _load_academic_calendar_state()
+    state["settings"] = {
+        "schoolYear": payload.schoolYear,
+        "inicioAulas": payload.inicioAulas,
+        "feriasInvernoInicio": payload.feriasInvernoInicio,
+        "feriasInvernoFim": payload.feriasInvernoFim,
+        "terminoAulas": payload.terminoAulas,
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    _save_academic_calendar_state(state)
+    return {"ok": True, "settings": state["settings"]}
+
+@app.post("/academic-calendar/events")
+def save_academic_calendar_event(payload: AcademicCalendarEventPayload):
+    if payload.type not in {"feriado", "ponte", "reuniao", "evento"}:
+        raise HTTPException(status_code=400, detail="Tipo de evento inválido")
+
+    if payload.type == "reuniao" and not payload.allDay:
+        if not payload.startTime or not payload.endTime:
+            raise HTTPException(status_code=400, detail="Reunião por período exige horário de início e término")
+
+    if payload.type == "evento":
+        if not payload.startTime or not payload.endTime:
+            raise HTTPException(status_code=400, detail="Evento exige horário de início e término")
+
+    state = _load_academic_calendar_state()
+    events = state.get("events") or []
+    bank_hours = state.get("bankHours") or []
+
+    event_id = str(uuid.uuid4())
+    event = {
+        "id": event_id,
+        "date": payload.date,
+        "type": payload.type,
+        "allDay": bool(payload.allDay),
+        "startTime": payload.startTime or "",
+        "endTime": payload.endTime or "",
+        "description": payload.description or "",
+        "teacher": payload.teacher or "",
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    events.append(event)
+
+    if payload.type == "evento":
+        hours = _hours_from_interval(payload.startTime or "", payload.endTime or "")
+        if hours > 0:
+            bank_hours.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "eventId": event_id,
+                    "date": payload.date,
+                    "teacher": payload.teacher or "",
+                    "description": payload.description or "Evento",
+                    "startTime": payload.startTime or "",
+                    "endTime": payload.endTime or "",
+                    "hours": hours,
+                    "created_at": datetime.utcnow().isoformat(),
+                }
+            )
+
+    state["events"] = events
+    state["bankHours"] = bank_hours
+    _save_academic_calendar_state(state)
+    return {"ok": True, "event": event}
+
+@app.delete("/academic-calendar/events/{event_id}")
+def delete_academic_calendar_event(event_id: str):
+    state = _load_academic_calendar_state()
+    events = state.get("events") or []
+    bank_hours = state.get("bankHours") or []
+
+    existing_len = len(events)
+    state["events"] = [item for item in events if str(item.get("id")) != str(event_id)]
+    if len(state["events"]) == existing_len:
+        raise HTTPException(status_code=404, detail="Evento não encontrado")
+
+    state["bankHours"] = [item for item in bank_hours if str(item.get("eventId")) != str(event_id)]
+    _save_academic_calendar_state(state)
+    return {"ok": True}
 
 @app.get("/reports", response_model=List[ReportClass])
 def get_reports(month: Optional[str] = None, session: Session = Depends(get_session)) -> List[ReportClass]:
