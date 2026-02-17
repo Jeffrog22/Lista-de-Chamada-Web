@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
@@ -95,17 +95,57 @@ interface CalendarEventForm {
   description: string;
 }
 
-interface ClassPlannedStats {
-  key: string;
-  turma: string;
+interface SummaryLessonsByHorario {
   horario: string;
-  professor: string;
   previstas: number;
-  dadas: number;
+  registradas: number;
 }
 
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${item.turma}||${item.horario}||${item.professor}`;
+
+const normalizeText = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const getSummaryScheduleGroup = (turmaLabel: string): "terca-quinta" | "quarta-sexta" | "outros" => {
+  const normalized = normalizeText(turmaLabel);
+  if (normalized.includes("terca") && normalized.includes("quinta")) return "terca-quinta";
+  if (normalized.includes("quarta") && normalized.includes("sexta")) return "quarta-sexta";
+  return "outros";
+};
+
+const weekdaysBySummaryGroup: Record<string, number[]> = {
+  "terca-quinta": [2, 4],
+  "quarta-sexta": [3, 5],
+};
+
+const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedMonthIndex: number) => {
+  const raw = String(rawDay || "").trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const parsed = new Date(`${raw}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+    const [dd, mm, yyyy] = raw.split("/").map(Number);
+    const parsed = new Date(yyyy, mm - 1, dd);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (/^\d{1,2}$/.test(raw)) {
+    const day = Number(raw);
+    const parsed = new Date(selectedYear, selectedMonthIndex, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
+};
 
 const normalizeReportsData = (payload: unknown): ClassStats[] => {
   if (!Array.isArray(payload)) return [];
@@ -194,6 +234,7 @@ export const Reports: React.FC = () => {
   });
 
   const [selectedYear, selectedMonthNumber] = selectedMonth.split("-");
+  const [showAproveitamentoDetails, setShowAproveitamentoDetails] = useState(false);
 
   const updateCalendarPeriod = (nextYear: string, nextMonth: string) => {
     if (!nextYear || !nextMonth) return;
@@ -251,6 +292,8 @@ export const Reports: React.FC = () => {
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
+  const [summaryTurmaToggle, setSummaryTurmaToggle] = useState<"terca-quinta" | "quarta-sexta">("terca-quinta");
+  const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<"Daniela" | "Jefferson">("Daniela");
   const [capacities, setCapacities] = useState<Record<string, number>>(() => {
     try {
       const stored = localStorage.getItem("classCapacities");
@@ -611,6 +654,25 @@ export const Reports: React.FC = () => {
     !isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents)
   );
 
+  const selectedMonthLimits = useMemo(() => {
+    const [yearStr, monthStr] = selectedMonth.split("-");
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+    const monthStart = new Date(year, monthIndex, 1);
+    const monthEnd = new Date(year, monthIndex + 1, 0);
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const effectiveEnd = todayOnly < monthStart ? null : (todayOnly < monthEnd ? todayOnly : monthEnd);
+    return { year, monthIndex, monthStart, effectiveEnd };
+  }, [selectedMonth]);
+
+  const plannedClassDaysUntilCurrent = useMemo(() => {
+    const { effectiveEnd } = selectedMonthLimits;
+    if (!effectiveEnd) return [] as string[];
+    const endKey = toDateKey(effectiveEnd);
+    return plannedClassDays.filter((dateKey) => dateKey <= endKey);
+  }, [plannedClassDays, selectedMonthLimits]);
+
   const plannedYearDateKeys = (() => {
     const year = Number(selectedYear);
     if (!Number.isFinite(year)) return [] as string[];
@@ -650,40 +712,161 @@ export const Reports: React.FC = () => {
         : 0,
   };
 
-  const classPlannedStats: ClassPlannedStats[] = classesData.map((cls) => {
-    const key = classSelectionKey(cls);
-    const previstas = plannedClassDays.length;
-    const dadas = cls.alunos.reduce((acc, aluno) => {
-      return (
-        acc +
-        Object.entries(aluno.historico || {}).filter(([day, status]) => {
-          const dayKey = `${selectedMonth}-${String(day).padStart(2, "0")}`;
-          return plannedClassDays.includes(dayKey) && ["c", "j"].includes(String(status || "").toLowerCase());
-        }).length
-      );
-    }, 0);
+  const summaryLessonsByHorario = useMemo(() => {
+    const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
+    if (!effectiveEnd) {
+      return {
+        byHorario: [] as SummaryLessonsByHorario[],
+        totalPrevistas: 0,
+        totalRegistradas: 0,
+      };
+    }
+
+    const selectedWeekdays = weekdaysBySummaryGroup[summaryTurmaToggle] || [];
+    const endKey = toDateKey(effectiveEnd);
+    const filteredClasses = classesData.filter(
+      (cls) =>
+        getSummaryScheduleGroup(cls.turma) === summaryTurmaToggle &&
+        normalizeText(cls.professor) === normalizeText(summaryProfessorToggle)
+    );
+
+    const byHorarioMap = new Map<string, { previstas: number; registradas: number }>();
+
+    filteredClasses.forEach((cls) => {
+      const horarioKey = formatHorario(cls.horario || "") || "Sem horário";
+      const current = byHorarioMap.get(horarioKey) || { previstas: 0, registradas: 0 };
+
+      const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
+        const date = new Date(`${dateKey}T00:00:00`);
+        return selectedWeekdays.includes(date.getDay());
+      }).length;
+
+      const recordedDays = new Set<string>();
+      cls.alunos.forEach((aluno) => {
+        Object.entries(aluno.historico || {}).forEach(([rawDay, status]) => {
+          const normalizedStatus = String(status || "").toLowerCase();
+          if (!["c", "f", "j"].includes(normalizedStatus)) return;
+          const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
+          if (!parsed) return;
+          const parsedKey = toDateKey(parsed);
+          if (parsedKey > endKey) return;
+          if (!plannedClassDaysUntilCurrent.includes(parsedKey)) return;
+          if (!selectedWeekdays.includes(parsed.getDay())) return;
+          recordedDays.add(parsedKey);
+        });
+      });
+
+      current.previstas += previstas;
+      current.registradas += recordedDays.size;
+      byHorarioMap.set(horarioKey, current);
+    });
+
+    const byHorario = Array.from(byHorarioMap.entries())
+      .map(([horario, values]) => ({
+        horario,
+        previstas: values.previstas,
+        registradas: values.registradas,
+      }))
+      .sort((a, b) => getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario));
+
     return {
-      key,
-      turma: cls.turma,
-      horario: cls.horario,
-      professor: cls.professor,
-      previstas,
-      dadas,
+      byHorario,
+      totalPrevistas: byHorario.reduce((acc, item) => acc + item.previstas, 0),
+      totalRegistradas: byHorario.reduce((acc, item) => acc + item.registradas, 0),
     };
-  });
+  }, [classesData, plannedClassDaysUntilCurrent, selectedMonthLimits, summaryProfessorToggle, summaryTurmaToggle]);
+
+  const classTotalsUntilCurrent = useMemo(() => {
+    const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
+    if (!effectiveEnd) return { previstas: 0, dadas: 0 };
+    const endKey = toDateKey(effectiveEnd);
+
+    let previstasTotal = 0;
+    let dadasTotal = 0;
+
+    classesData.forEach((cls) => {
+      const scheduleGroup = getSummaryScheduleGroup(cls.turma);
+      const weekdays = weekdaysBySummaryGroup[scheduleGroup] || [];
+      if (weekdays.length === 0) return;
+
+      const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
+        const date = new Date(`${dateKey}T00:00:00`);
+        return weekdays.includes(date.getDay());
+      }).length;
+
+      const recordedDays = new Set<string>();
+      cls.alunos.forEach((aluno) => {
+        Object.entries(aluno.historico || {}).forEach(([rawDay, status]) => {
+          const normalizedStatus = String(status || "").toLowerCase();
+          if (!["c", "f", "j"].includes(normalizedStatus)) return;
+          const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
+          if (!parsed) return;
+          const parsedKey = toDateKey(parsed);
+          if (parsedKey > endKey) return;
+          if (!plannedClassDaysUntilCurrent.includes(parsedKey)) return;
+          if (!weekdays.includes(parsed.getDay())) return;
+          recordedDays.add(parsedKey);
+        });
+      });
+
+      previstasTotal += previstas;
+      dadasTotal += recordedDays.size;
+    });
+
+    return { previstas: previstasTotal, dadas: dadasTotal };
+  }, [classesData, plannedClassDaysUntilCurrent, selectedMonthLimits]);
 
   const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
-  const totalCancelamentosElegiveis = calendarEvents.filter((event) => {
-    const normalizedDescription = String(event.description || "").toLowerCase();
-    if (event.type === "feriado" || event.type === "ponte") return true;
-    return climateCancellationKeywords.some((keyword) => normalizedDescription.includes(keyword));
-  }).length;
+  const totalCancelamentosElegiveis = useMemo(() => {
+    const { effectiveEnd } = selectedMonthLimits;
+    if (!effectiveEnd || plannedClassDaysUntilCurrent.length === 0) return 0;
 
-  const totalAulasDadas = classPlannedStats.reduce((acc, item) => acc + item.dadas, 0);
-  const totalAulasPrevistas = classPlannedStats.reduce((acc, item) => acc + item.previstas, 0);
+    const endKey = toDateKey(effectiveEnd);
+    const eligibleDateKeys = new Set<string>();
+
+    calendarEvents.forEach((event) => {
+      const dateKey = String(event.date || "");
+      if (!dateKey.startsWith(`${selectedMonth}-`)) return;
+      if (dateKey > endKey) return;
+
+      const normalizedDescription = normalizeText(String(event.description || ""));
+      const eligibleByType = event.type === "feriado" || event.type === "ponte";
+      const eligibleByDescription = climateCancellationKeywords.some((keyword) =>
+        normalizedDescription.includes(keyword)
+      );
+
+      if (eligibleByType || eligibleByDescription) {
+        eligibleDateKeys.add(dateKey);
+      }
+    });
+
+    if (eligibleDateKeys.size === 0) return 0;
+
+    let canceledClassLessons = 0;
+
+    classesData.forEach((cls) => {
+      const scheduleGroup = getSummaryScheduleGroup(cls.turma);
+      const weekdays = weekdaysBySummaryGroup[scheduleGroup] || [];
+      if (weekdays.length === 0) return;
+
+      plannedClassDaysUntilCurrent.forEach((dateKey) => {
+        if (!eligibleDateKeys.has(dateKey)) return;
+        const date = new Date(`${dateKey}T00:00:00`);
+        if (weekdays.includes(date.getDay())) {
+          canceledClassLessons += 1;
+        }
+      });
+    });
+
+    return canceledClassLessons;
+  }, [calendarEvents, classesData, plannedClassDaysUntilCurrent, selectedMonth, selectedMonthLimits]);
+
+  const totalAulasDadas = classTotalsUntilCurrent.dadas;
+  const totalAulasPrevistas = classTotalsUntilCurrent.previstas;
+  const totalAulasPrevistasValidas = Math.max(0, totalAulasPrevistas - totalCancelamentosElegiveis);
   const aproveitamentoAulas =
-    totalAulasPrevistas > 0
-      ? Math.max(0, Math.min(100, Math.round(((totalAulasDadas - totalCancelamentosElegiveis) / totalAulasPrevistas) * 100)))
+    totalAulasPrevistasValidas > 0
+      ? Math.max(0, Math.min(100, Math.round((totalAulasDadas / totalAulasPrevistasValidas) * 100)))
       : 0;
 
   const selectedDateEvents = calendarEvents.filter((event) => event.date === selectedCalendarDate);
@@ -1080,21 +1263,6 @@ export const Reports: React.FC = () => {
               </div>
 
               <div className="report-card">
-                <h3>Aulas por turma/horário/professor</h3>
-                <div className="reports-class-metrics">
-                  {classPlannedStats.map((item) => (
-                    <div key={item.key} className="reports-class-metric-row">
-                      <strong>{item.turma}</strong>
-                      <span>{formatHorario(item.horario)} - {item.professor}</span>
-                      <span>Previstas: {item.previstas}</span>
-                      <span>Dadas: {item.dadas}</span>
-                    </div>
-                  ))}
-                  {classPlannedStats.length === 0 && <div className="reports-section placeholder">Sem turmas carregadas.</div>}
-                </div>
-              </div>
-
-              <div className="report-card">
                 <h3>Aproveitamento das aulas dadas</h3>
                 <div className="reports-kpi-line">
                   <span>Considerando clima, cloro, ocorrências, feriados e pontes</span>
@@ -1104,9 +1272,92 @@ export const Reports: React.FC = () => {
                   <div className="vagas-bar-fill" style={{ width: `${aproveitamentoAulas}%` }} />
                 </div>
                 <div className="vagas-footer">
-                  Cancelamentos elegíveis: {totalCancelamentosElegiveis} | Previstas: {totalAulasPrevistas} | Dadas: {totalAulasDadas}
+                  Cancelamentos elegíveis: {totalCancelamentosElegiveis} | Previstas válidas: {totalAulasPrevistasValidas} | Dadas: {totalAulasDadas}
+                </div>
+                <div className="reports-kpi-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setShowAproveitamentoDetails((prev) => !prev)}
+                    aria-expanded={showAproveitamentoDetails}
+                  >
+                    {showAproveitamentoDetails ? "Ocultar detalhes" : "Detalhes"}
+                  </button>
                 </div>
               </div>
+
+              {showAproveitamentoDetails && (
+                <div className="report-card">
+                  <h3>Aulas previstas x registradas</h3>
+                  <div className="reports-kpi-line">
+                    <span>{summaryLessonsByHorario.totalRegistradas}/{summaryLessonsByHorario.totalPrevistas}</span>
+                    <strong>
+                      {summaryLessonsByHorario.totalPrevistas > 0
+                        ? Math.round((summaryLessonsByHorario.totalRegistradas / summaryLessonsByHorario.totalPrevistas) * 100)
+                        : 0}%
+                    </strong>
+                  </div>
+                  <div className="reports-summary-toggles">
+                    <div className="reports-summary-toggle-group">
+                      <button
+                        type="button"
+                        className={`reports-summary-toggle-chip ${summaryTurmaToggle === "terca-quinta" ? "active" : ""}`}
+                        onClick={() => setSummaryTurmaToggle("terca-quinta")}
+                      >
+                        Terça e Quinta
+                      </button>
+                      <button
+                        type="button"
+                        className={`reports-summary-toggle-chip ${summaryTurmaToggle === "quarta-sexta" ? "active" : ""}`}
+                        onClick={() => setSummaryTurmaToggle("quarta-sexta")}
+                      >
+                        Quarta e Sexta
+                      </button>
+                    </div>
+
+                    <div className="reports-summary-toggle-group">
+                      <button
+                        type="button"
+                        className={`reports-summary-toggle-chip ${summaryProfessorToggle === "Daniela" ? "active" : ""}`}
+                        onClick={() => setSummaryProfessorToggle("Daniela")}
+                      >
+                        Daniela
+                      </button>
+                      <button
+                        type="button"
+                        className={`reports-summary-toggle-chip ${summaryProfessorToggle === "Jefferson" ? "active" : ""}`}
+                        onClick={() => setSummaryProfessorToggle("Jefferson")}
+                      >
+                        Jefferson
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="reports-summary-bars">
+                    {summaryLessonsByHorario.byHorario.map((item) => {
+                      const progressPct = item.previstas > 0
+                        ? Math.min(100, (item.registradas / item.previstas) * 100)
+                        : 0;
+
+                      return (
+                        <div className="reports-summary-bar-row" key={`${item.horario}-${summaryTurmaToggle}-${summaryProfessorToggle}`}>
+                          <div className="reports-summary-y-label">{item.horario}</div>
+                          <div className="reports-summary-bar-single">
+                            <div className="reports-summary-line-track">
+                              <div className="reports-summary-line-fill registradas" style={{ width: `${progressPct}%` }} />
+                            </div>
+                            <span className="reports-summary-line-value">{item.registradas}/{item.previstas}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {summaryLessonsByHorario.byHorario.length === 0 && (
+                      <div className="reports-section placeholder">Sem dados para os filtros selecionados.</div>
+                    )}
+                  </div>
+                  <div className="vagas-footer">Eixo Y: horários</div>
+                </div>
+              )}
 
               <div className="report-card">
                 <h3>Banco de horas (eventos)</h3>

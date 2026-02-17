@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getReports } from '../api';
+import { getAcademicCalendar, getReports } from '../api';
+import { isDateClosedForAttendance } from '../utils/academicCalendar';
+import type { AcademicCalendarEvent, AcademicCalendarSettings } from '../utils/academicCalendar';
 import './DashboardCharts.css';
 
 interface ReportStudent {
@@ -70,6 +72,7 @@ interface ClassSummary {
   total: number;
   frequencia: number;
   dayKeys: string[];
+  historicoEntries: Array<{ day: string; status: string }>;
 }
 
 interface StudentAggregate {
@@ -131,22 +134,46 @@ const weekdaysByGroup: Record<string, number[]> = {
   'quarta-sexta': [3, 5],
 };
 
-const countWeekdaysInMonth = (year: number, monthIndex: number, weekdays: number[]) => {
-  const d = new Date(year, monthIndex, 1);
-  let count = 0;
-  while (d.getMonth() === monthIndex) {
-    if (weekdays.includes(d.getDay())) count += 1;
-    d.setDate(d.getDate() + 1);
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedMonthIndex: number) => {
+  const raw = String(rawDay || '').trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const parsed = new Date(`${raw}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
-  return count;
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+    const [dd, mm, yyyy] = raw.split('/').map(Number);
+    const parsed = new Date(yyyy, mm - 1, dd);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (/^\d{1,2}$/.test(raw)) {
+    const day = Number(raw);
+    const parsed = new Date(selectedYear, selectedMonthIndex, day);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
 };
 
 const DashboardCharts: React.FC = () => {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+  const [dateScope, setDateScope] = useState<'mensal' | 'ate-hoje'>('mensal');
 
   const [classSummaries, setClassSummaries] = useState<ClassSummary[]>([]);
   const [studentsAggregated, setStudentsAggregated] = useState<StudentAggregate[]>([]);
+  const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasData, setHasData] = useState(true);
   const [occurrenceProfessor, setOccurrenceProfessor] = useState<string>('');
@@ -170,9 +197,11 @@ const DashboardCharts: React.FC = () => {
           const justificados = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
           const total = presentes + ausentes + justificados;
           const daySet = new Set<string>();
+          const historicoEntries: Array<{ day: string; status: string }> = [];
           classItem.alunos.forEach((student) => {
-            Object.keys(student.historico || {}).forEach((day) => {
+            Object.entries(student.historico || {}).forEach(([day, status]) => {
               if (day) daySet.add(day);
+              historicoEntries.push({ day, status: String(status || '') });
             });
           });
           const frequencia = total > 0 ? Number((((presentes + justificados) / total) * 100).toFixed(1)) : 0;
@@ -187,6 +216,7 @@ const DashboardCharts: React.FC = () => {
             total,
             frequencia,
             dayKeys: Array.from(daySet),
+            historicoEntries,
           };
         });
 
@@ -230,6 +260,29 @@ const DashboardCharts: React.FC = () => {
     };
   }, [selectedMonth]);
 
+  useEffect(() => {
+    let isMounted = true;
+    getAcademicCalendar({ month: selectedMonth })
+      .then((response) => {
+        if (!isMounted) return;
+        const payload = (response?.data || {}) as {
+          settings?: AcademicCalendarSettings | null;
+          events?: AcademicCalendarEvent[];
+        };
+        setCalendarSettings(payload.settings || null);
+        setCalendarEvents(Array.isArray(payload.events) ? payload.events : []);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setCalendarSettings(null);
+        setCalendarEvents([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMonth]);
+
   const occurrenceProfessors = useMemo(() => {
     return Array.from(new Set(classSummaries.map((item) => item.professor).filter(Boolean))).sort();
   }, [classSummaries]);
@@ -248,25 +301,93 @@ const DashboardCharts: React.FC = () => {
     const [yearValue, monthValue] = selectedMonth.split('-').map((part) => parseInt(part, 10));
     const safeYear = Number.isFinite(yearValue) ? yearValue : new Date().getFullYear();
     const safeMonthIndex = Number.isFinite(monthValue) ? Math.max(1, Math.min(12, monthValue)) - 1 : new Date().getMonth();
+    const monthStart = new Date(safeYear, safeMonthIndex, 1);
+    const monthEnd = new Date(safeYear, safeMonthIndex + 1, 0);
+    const today = new Date();
+    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const effectiveEnd =
+      dateScope === 'mensal'
+        ? monthEnd
+        : (todayOnly < monthStart ? null : (todayOnly < monthEnd ? todayOnly : monthEnd));
 
-    const sumExpected = classSummaries.reduce((acc, item) => {
+    const plannedClassDaysUntilCurrent = (() => {
+      if (!effectiveEnd) return [] as string[];
+      const result: string[] = [];
+      const cursor = new Date(monthStart);
+      while (cursor <= effectiveEnd) {
+        const dateKey = toDateKey(cursor);
+        if (!isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents)) {
+          result.push(dateKey);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return result;
+    })();
+
+    const plannedClassDaySet = new Set(plannedClassDaysUntilCurrent);
+
+    const getExpectedForClass = (item: ClassSummary) => {
       const group = getScheduleGroup(item.turma);
       const weekdays = weekdaysByGroup[group] || [];
-      if (weekdays.length === 0) return acc;
-      return acc + countWeekdaysInMonth(safeYear, safeMonthIndex, weekdays);
-    }, 0);
+      if (weekdays.length === 0) return 0;
+      return plannedClassDaysUntilCurrent.filter((dateKey) => {
+        const d = new Date(`${dateKey}T00:00:00`);
+        return weekdays.includes(d.getDay());
+      }).length;
+    };
 
-    const aulasDadas = classSummaries.reduce((acc, item) => acc + item.dayKeys.length, 0);
+    const getRegisteredForClass = (item: ClassSummary) => {
+      const group = getScheduleGroup(item.turma);
+      const weekdays = weekdaysByGroup[group] || [];
+      if (weekdays.length === 0) return 0;
+
+      const uniqueRecorded = new Set<string>();
+      item.historicoEntries.forEach(({ day, status }) => {
+        const normalizedStatus = String(status || '').toLowerCase();
+        if (!['c', 'f', 'j'].includes(normalizedStatus)) return;
+
+        const parsed = parseHistoricoDayToDate(day, safeYear, safeMonthIndex);
+        if (!parsed) return;
+
+        const parsedKey = toDateKey(parsed);
+        if (!plannedClassDaySet.has(parsedKey)) return;
+        if (!weekdays.includes(parsed.getDay())) return;
+        uniqueRecorded.add(parsedKey);
+      });
+
+      return uniqueRecorded.size;
+    };
+
+    const sumExpected = classSummaries.reduce((acc, item) => acc + getExpectedForClass(item), 0);
+
+    const aulasDadas = classSummaries.reduce((acc, item) => acc + getRegisteredForClass(item), 0);
 
     const uniqueObservedDays = new Set<string>();
-    classSummaries.forEach((item) => item.dayKeys.forEach((day) => uniqueObservedDays.add(day)));
+    classSummaries.forEach((item) => {
+      const group = getScheduleGroup(item.turma);
+      const weekdays = weekdaysByGroup[group] || [];
+      item.historicoEntries.forEach(({ day, status }) => {
+        const normalizedStatus = String(status || '').toLowerCase();
+        if (!['c', 'f', 'j'].includes(normalizedStatus)) return;
+
+        const parsed = parseHistoricoDayToDate(day, safeYear, safeMonthIndex);
+        if (!parsed) return;
+        const parsedKey = toDateKey(parsed);
+        if (!plannedClassDaySet.has(parsedKey)) return;
+        if (!weekdays.includes(parsed.getDay())) return;
+        uniqueObservedDays.add(parsedKey);
+      });
+    });
 
     const activeWeekdays = new Set<number>();
     classSummaries.forEach((item) => {
       const group = getScheduleGroup(item.turma);
       (weekdaysByGroup[group] || []).forEach((wd) => activeWeekdays.add(wd));
     });
-    const totalDiasAula = countWeekdaysInMonth(safeYear, safeMonthIndex, Array.from(activeWeekdays));
+    const totalDiasAula = plannedClassDaysUntilCurrent.filter((dateKey) => {
+      const d = new Date(`${dateKey}T00:00:00`);
+      return activeWeekdays.has(d.getDay());
+    }).length;
     const diasComAula = uniqueObservedDays.size;
 
     const byGroup = (groupBy: (item: ClassSummary) => string): SimpleData[] => {
@@ -328,7 +449,16 @@ const DashboardCharts: React.FC = () => {
       topFrequentes,
       topAusentes,
     };
-  }, [classSummaries, studentsAggregated, selectedMonth, occurrenceGroup, occurrenceProfessor]);
+  }, [
+    calendarEvents,
+    calendarSettings,
+    classSummaries,
+    dateScope,
+    studentsAggregated,
+    selectedMonth,
+    occurrenceGroup,
+    occurrenceProfessor,
+  ]);
 
   const yearOptions = Array.from({ length: 4 }, (_, i) => String(new Date().getFullYear() - 2 + i));
 
@@ -401,6 +531,13 @@ const DashboardCharts: React.FC = () => {
               <option key={yearValue} value={yearValue}>{yearValue}</option>
             ))}
           </select>
+          <button
+            type="button"
+            className={`chart-scope-btn ${dateScope === 'ate-hoje' ? 'active' : ''}`}
+            onClick={() => setDateScope((prev) => (prev === 'mensal' ? 'ate-hoje' : 'mensal'))}
+          >
+            {dateScope === 'mensal' ? 'Ver até hoje' : 'Ver mensal'}
+          </button>
         </div>
       </div>
 
@@ -411,17 +548,6 @@ const DashboardCharts: React.FC = () => {
 
       {!loading && hasData && (
         <div className="charts-grid">
-          <div className="chart-card indicators-card">
-            <h4>Aulas dadas</h4>
-            <div className="indicator-value">{dashboardData.aulasDadas} / {dashboardData.totalAulas}</div>
-            <div className="indicator-bar">
-              <div
-                className="indicator-fill"
-                style={{ width: `${dashboardData.totalAulas > 0 ? Math.min(100, (dashboardData.aulasDadas / dashboardData.totalAulas) * 100) : 0}%` }}
-              />
-            </div>
-          </div>
-
           <div className="chart-card indicators-card">
             <h4>Dias de aula</h4>
             <div className="indicator-value">{dashboardData.diasComAula} / {dashboardData.totalDiasAula}</div>
@@ -436,8 +562,19 @@ const DashboardCharts: React.FC = () => {
             </div>
           </div>
 
+          <div className="chart-card indicators-card">
+            <h4>Aulas dadas</h4>
+            <div className="indicator-value">{dashboardData.aulasDadas} / {dashboardData.totalAulas}</div>
+            <div className="indicator-bar">
+              <div
+                className="indicator-fill"
+                style={{ width: `${dashboardData.totalAulas > 0 ? Math.min(100, (dashboardData.aulasDadas / dashboardData.totalAulas) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+
           <div className="chart-card full-width occurrence-card">
-            <h4>Ocorrência por turma</h4>
+            <h4>Registros por turma</h4>
             <div className="occurrence-controls">
               <div className="occurrence-chips">
                 <button

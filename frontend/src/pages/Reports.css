@@ -518,6 +518,110 @@
   gap: 8px;
 }
 
+.reports-summary-toggles {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.reports-summary-toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reports-summary-toggle-chip {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  cursor: pointer;
+}
+
+.reports-summary-toggle-chip.active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.reports-summary-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.reports-summary-bar-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.reports-summary-y-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.9;
+}
+
+.reports-summary-bar-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.reports-summary-bar-single {
+  display: grid;
+  grid-template-columns: 1fr 56px;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-summary-line {
+  display: grid;
+  grid-template-columns: 86px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-summary-line-label {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.reports-summary-line-track {
+  height: 9px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.reports-summary-line-fill {
+  height: 100%;
+}
+
+.reports-summary-line-fill.previstas {
+  background: #2563eb;
+}
+
+.reports-summary-line-fill.registradas {
+  background: #16a34a;
+}
+
+.reports-summary-line-value {
+  font-size: 12px;
+  color: #111827;
+  text-align: right;
+  font-weight: 600;
+}
+
+.reports-kpi-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .reports-period-card h3,
 .reports-calendar-card h3 {
   margin: 0 0 10px;
