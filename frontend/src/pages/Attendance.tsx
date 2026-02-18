@@ -1266,8 +1266,8 @@ export const Attendance: React.FC = () => {
     const isOccurrence = effectiveLogType === "ocorrencia";
     const occurrenceImpact = poolData.incidentImpact;
     const reasonLabel = isOccurrence
-      ? `Ocorrencia (${occurrenceImpact}): ${poolData.incidentType || poolData.personalType}`
-      : "Condicoes Climaticas";
+      ? `Ocorrência (${occurrenceImpact}): ${poolData.incidentType || poolData.personalType}`
+      : "Condições Climáticas";
     
     // Lógica para aula justificada e ocorrência
     const shouldTreatOccurrenceAsDay = isOccurrence && occurrenceImpact === "dia";

@@ -6,5 +6,7 @@ services:
     volumes:
       - ./backend:/app
       - ./data:/app/data
+    env_file:
+      - ./backend/.env
     environment:
       - SECRET_KEY=sua_chave_secreta_desenvolvimento

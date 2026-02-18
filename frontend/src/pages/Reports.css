@@ -779,6 +779,10 @@
   background: #f5f3ff;
 }
 
+.reports-calendar-day.is-weather-alert {
+  border-color: #93c5fd;
+}
+
 .reports-calendar-day.is-selected {
   border-color: #007bff;
   box-shadow: 0 0 0 1px #007bff;
@@ -792,20 +796,47 @@
   color: #4b5563;
 }
 
-.reports-calendar-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-height: 14px;
+.reports-calendar-weather-loading {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d1d5db;
+  display: inline-block;
 }
 
-.reports-mini-tag {
-  background: #eff6ff;
-  color: #1e40af;
+.reports-calendar-indicators {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 16px;
+}
+
+.reports-calendar-climate-indicator {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.reports-calendar-climate-indicator.is-alert {
+  filter: saturate(1.15);
+}
+
+.reports-calendar-status-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 600;
+  display: inline-block;
+}
+
+.reports-calendar-status-dot.is-recesso {
+  background: #dc2626;
+}
+
+.reports-calendar-status-dot.is-reuniao {
+  background: #7c3aed;
+}
+
+.reports-calendar-status-dot.is-evento {
+  background: #0ea5e9;
 }
 
 .reports-calendar-actions {

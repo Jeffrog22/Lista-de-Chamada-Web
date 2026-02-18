@@ -6,6 +6,7 @@ import {
   getAcademicCalendar,
   getBootstrap,
   getReports,
+  getWeather,
   saveAcademicCalendarEvent,
   saveAcademicCalendarSettings,
 } from "../api";
@@ -84,6 +85,7 @@ interface BootstrapClassLite {
   horario: string;
   professor: string;
   nivel: string;
+  capacidade: number;
 }
 
 interface CalendarEventForm {
@@ -101,6 +103,11 @@ interface SummaryLessonsByHorario {
   registradas: number;
 }
 
+interface WeatherSnapshot {
+  temp: string;
+  condition: string;
+}
+
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${item.turma}||${item.horario}||${item.professor}`;
 
@@ -110,6 +117,91 @@ const normalizeText = (value: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+
+const isWeatherAlertCondition = (condition: string) => {
+  const normalized = normalizeText(condition);
+  return ["chuv", "temporal", "tempest", "trovo", "frio", "vento"].some((keyword) =>
+    normalized.includes(keyword)
+  );
+};
+
+const getWeatherIcon = (condition: string) => {
+  const normalized = normalizeText(condition);
+  if (!normalized) return "☁️";
+  if (normalized.includes("temporal") || normalized.includes("tempest") || normalized.includes("trovo")) return "⛈️";
+  if (normalized.includes("chuv")) return "🌧️";
+  if (normalized.includes("sol")) return "☀️";
+  if (normalized.includes("parcial")) return "⛅";
+  if (normalized.includes("nublado")) return "☁️";
+  if (normalized.includes("vento")) return "💨";
+  if (normalized.includes("frio")) return "🥶";
+  return "🌡️";
+};
+
+const weatherCacheKey = (date: string) => `reportsClimaCache:${date}`;
+
+const getWeatherCache = (date: string): WeatherSnapshot | null => {
+  try {
+    const raw = localStorage.getItem(weatherCacheKey(date));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WeatherSnapshot>;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed.temp || !parsed.condition) return null;
+    return {
+      temp: String(parsed.temp),
+      condition: String(parsed.condition),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const setWeatherCache = (date: string, snapshot: WeatherSnapshot) => {
+  localStorage.setItem(weatherCacheKey(date), JSON.stringify(snapshot));
+};
+
+const fetchWeatherSnapshot = async (dateKey: string) => {
+  try {
+    const response = await getWeather(dateKey);
+    const payload = (response?.data || {}) as Partial<WeatherSnapshot>;
+    const snapshot: WeatherSnapshot = {
+      temp: String(payload.temp || "26"),
+      condition: String(payload.condition || "Parcialmente Nublado"),
+    };
+    setWeatherCache(dateKey, snapshot);
+    return { dateKey, snapshot };
+  } catch {
+    return {
+      dateKey,
+      snapshot: {
+        temp: "-",
+        condition: "Indisponível",
+      },
+    };
+  }
+};
+
+const fetchWeatherWithConcurrency = async (dates: string[], limit: number) => {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const results: Array<{ dateKey: string; snapshot: WeatherSnapshot }> = [];
+  let cursor = 0;
+
+  const runWorker = async () => {
+    while (cursor < dates.length) {
+      const current = dates[cursor];
+      cursor += 1;
+      const entry = await fetchWeatherSnapshot(current);
+      results.push(entry);
+    }
+  };
+
+  const workers = Array.from(
+    { length: Math.min(safeLimit, dates.length) },
+    () => runWorker()
+  );
+  await Promise.all(workers);
+  return results;
+};
 
 const getSummaryScheduleGroup = (turmaLabel: string): "terca-quinta" | "quarta-sexta" | "outros" => {
   const normalized = normalizeText(turmaLabel);
@@ -192,6 +284,8 @@ const toDateKey = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
+const getCurrentLocalDateKey = () => toDateKey(new Date());
+
 const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const weekdayMonToSun = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const monthOptions = [
@@ -211,7 +305,7 @@ const monthOptions = [
 
 export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentLocalDateKey().slice(0, 7));
   const [selectedTurmaLabel, setSelectedTurmaLabel] = useState<string>("");
   const [selectedHorario, setSelectedHorario] = useState<string>("");
   const [selectedProfessor, setSelectedProfessor] = useState<string>("");
@@ -221,6 +315,8 @@ export const Reports: React.FC = () => {
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   const [bankHours, setBankHours] = useState<Array<{ teacher: string; hours: number }>>([]);
   const [savingCalendarSettings, setSavingCalendarSettings] = useState(false);
+  const [loadingWeatherMonth, setLoadingWeatherMonth] = useState(false);
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherSnapshot>>({});
   const [periodsCollapsed, setPeriodsCollapsed] = useState(false);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [eventModalOpen, setEventModalOpen] = useState(false);
@@ -251,10 +347,10 @@ export const Reports: React.FC = () => {
   };
 
   const goToCurrentMonth = () => {
-    const now = new Date();
-    const yearNow = String(now.getFullYear());
-    const monthNow = String(now.getMonth() + 1).padStart(2, "0");
+    const todayKey = getCurrentLocalDateKey();
+    const [yearNow, monthNow] = todayKey.split("-");
     updateCalendarPeriod(yearNow, monthNow);
+    setSelectedCalendarDate(todayKey);
   };
 
   const yearOptions = Array.from({ length: 9 }, (_, idx) => String(new Date().getFullYear() - 4 + idx));
@@ -278,38 +374,16 @@ export const Reports: React.FC = () => {
     return Number.MAX_SAFE_INTEGER;
   };
 
-  const readActiveStudents = (): ActiveStudentLite[] => {
-    try {
-      const stored = localStorage.getItem("activeStudents");
-      if (!stored) return [];
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
+  const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
   const [summaryTurmaToggle, setSummaryTurmaToggle] = useState<"terca-quinta" | "quarta-sexta">("terca-quinta");
   const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<"Daniela" | "Jefferson">("Daniela");
-  const [capacities, setCapacities] = useState<Record<string, number>>(() => {
-    try {
-      const stored = localStorage.getItem("classCapacities");
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  });
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadLocal = () => setStudentsSnapshot(readActiveStudents());
-
+  const refreshVacanciesSnapshot = (isMounted?: () => boolean) => {
     getBootstrap()
       .then((response) => {
-        if (!isMounted) return;
+        if (isMounted && !isMounted()) return;
         const data = response.data as {
           classes: Array<{
             id: number;
@@ -318,6 +392,7 @@ export const Reports: React.FC = () => {
             horario: string;
             professor: string;
             nivel: string;
+            capacidade: number;
           }>;
           students: Array<{
             id: number;
@@ -354,36 +429,32 @@ export const Reports: React.FC = () => {
           } as ActiveStudentLite;
         });
 
-        if (mapped.length > 0) {
-          setStudentsSnapshot(mapped);
-        } else {
-          loadLocal();
-        }
-
         const mappedClasses: BootstrapClassLite[] = data.classes.map((cls) => ({
           codigo: cls.codigo || "",
           turmaLabel: cls.turma_label || cls.codigo || "",
           horario: cls.horario || "",
           professor: cls.professor || "",
           nivel: cls.nivel || "",
+          capacidade: Number(cls.capacidade || 0),
         }));
+
+        setStudentsSnapshot(mapped);
         setBootstrapClasses(mappedClasses);
       })
       .catch(() => {
-        if (isMounted) loadLocal();
+        if (isMounted && !isMounted()) return;
+        setStudentsSnapshot([]);
+        setBootstrapClasses([]);
       });
-
-    const onStorage = () => loadLocal();
-    window.addEventListener("storage", onStorage);
-    return () => {
-      isMounted = false;
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
+  };
 
   useEffect(() => {
-    localStorage.setItem("classCapacities", JSON.stringify(capacities));
-  }, [capacities]);
+    let mounted = true;
+    refreshVacanciesSnapshot(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const turmaOptions = Array.from(new Set(classesData.map((c) => c.turma))).sort();
 
@@ -618,7 +689,7 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const selectedMonthDates = (() => {
+  const selectedMonthDates = useMemo(() => {
     const { first, last } = monthRange(selectedMonth);
     const days: Date[] = [];
     const cursor = new Date(first);
@@ -627,11 +698,14 @@ export const Reports: React.FC = () => {
       cursor.setDate(cursor.getDate() + 1);
     }
     return days;
-  })();
+  }, [selectedMonth]);
 
-  const selectedMonthDateKeys = selectedMonthDates.map((date) => toDateKey(date));
+  const selectedMonthDateKeys = useMemo(
+    () => selectedMonthDates.map((date) => toDateKey(date)),
+    [selectedMonthDates]
+  );
 
-  const calendarGridCells = (() => {
+  const calendarGridCells = useMemo(() => {
     if (selectedMonthDates.length === 0) return [] as Array<Date | null>;
     const firstWeekday = selectedMonthDates[0].getDay();
     const leadingEmpty = (firstWeekday + 6) % 7;
@@ -639,16 +713,67 @@ export const Reports: React.FC = () => {
     for (let i = 0; i < leadingEmpty; i += 1) cells.push(null);
     selectedMonthDates.forEach((d) => cells.push(d));
     return cells;
-  })();
+  }, [selectedMonthDates]);
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getCurrentLocalDateKey();
     setSelectedCalendarDate((prev) => {
       if (prev && prev.startsWith(`${selectedMonth}-`)) return prev;
       if (today.startsWith(`${selectedMonth}-`)) return today;
       return selectedMonthDateKeys[0] || "";
     });
   }, [selectedMonth, selectedMonthDateKeys]);
+
+  useEffect(() => {
+    if (selectedMonthDateKeys.length === 0) {
+      setWeatherByDate({});
+      setLoadingWeatherMonth(false);
+      return;
+    }
+
+    let isMounted = true;
+    const cachedMap: Record<string, WeatherSnapshot> = {};
+    const missingDates: string[] = [];
+
+    selectedMonthDateKeys.forEach((dateKey) => {
+      const cached = getWeatherCache(dateKey);
+      if (cached) {
+        cachedMap[dateKey] = cached;
+      } else {
+        missingDates.push(dateKey);
+      }
+    });
+
+    setWeatherByDate(cachedMap);
+
+    if (missingDates.length === 0) {
+      setLoadingWeatherMonth(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setLoadingWeatherMonth(true);
+
+    fetchWeatherWithConcurrency(missingDates, 5)
+      .then((entries) => {
+        if (!isMounted) return;
+        setWeatherByDate((prev) => {
+          const next = { ...prev };
+          entries.forEach((item) => {
+            next[item.dateKey] = item.snapshot;
+          });
+          return next;
+        });
+      })
+      .finally(() => {
+        if (isMounted) setLoadingWeatherMonth(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMonthDateKeys]);
 
   const plannedClassDays = selectedMonthDateKeys.filter((dateKey) =>
     !isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents)
@@ -699,7 +824,7 @@ export const Reports: React.FC = () => {
     if (selectedYearNumber < currentYear) return plannedYearDays.length;
     if (selectedYearNumber > currentYear) return 0;
 
-    const todayKey = new Date().toISOString().slice(0, 10);
+    const todayKey = getCurrentLocalDateKey();
     return plannedYearDays.filter((dateKey) => dateKey <= todayKey).length;
   })();
 
@@ -870,6 +995,7 @@ export const Reports: React.FC = () => {
       : 0;
 
   const selectedDateEvents = calendarEvents.filter((event) => event.date === selectedCalendarDate);
+  const selectedDateWeather = selectedCalendarDate ? weatherByDate[selectedCalendarDate] : null;
 
   const currentClassData =
     classesData.find(
@@ -914,26 +1040,22 @@ export const Reports: React.FC = () => {
 
   const vagasResumo = turmas.map((turma) => {
     const meta = classesByTurma[turma];
+    const bootstrapMeta = bootstrapClasses.find((item) => item.turmaLabel === turma || item.codigo === turma);
     const total = studentsSnapshot.length > 0
       ? studentsSnapshot.filter((s) => s.turma === turma).length
       : (meta?.alunos.length || 0);
-    const capacity = capacities[turma] ?? 20;
+    const capacity = Math.max(0, Number(bootstrapMeta?.capacidade || 0));
     const pct = capacity > 0 ? Math.min(100, Math.round((total / capacity) * 100)) : 0;
     return {
       turma,
-      horario: meta?.horario || "-",
-      professor: meta?.professor || "-",
-      nivel: meta?.nivel || "-",
+      horario: bootstrapMeta?.horario || meta?.horario || "-",
+      professor: bootstrapMeta?.professor || meta?.professor || "-",
+      nivel: bootstrapMeta?.nivel || meta?.nivel || "-",
       total,
       capacity,
       pct,
     };
   });
-
-  const handleCapacityChange = (turma: string, value: number) => {
-    const safeValue = Number.isNaN(value) ? 0 : Math.max(0, value);
-    setCapacities((prev) => ({ ...prev, [turma]: safeValue }));
-  };
 
   const handleGenerateExcel = async () => {
     const selectedClasses = exportClassGrid
@@ -1180,6 +1302,9 @@ export const Reports: React.FC = () => {
                         return <div key={`empty-${index}`} className="reports-calendar-day is-empty" />;
                       }
                       const dateKey = toDateKey(dateObj);
+                      const dayWeather = weatherByDate[dateKey];
+                      const isWeatherLoadingForDay = loadingWeatherMonth && !dayWeather;
+                      const hasWeatherAlert = dayWeather ? isWeatherAlertCondition(dayWeather.condition) : false;
                       const dayEvents = calendarEvents.filter((event) => event.date === dateKey);
                       const isClosed = isDateClosedForAttendance(dateKey, calendarSettings, calendarEvents);
                       const isWinterBreak = isWithinRange(
@@ -1187,24 +1312,107 @@ export const Reports: React.FC = () => {
                         calendarSettings?.feriasInvernoInicio,
                         calendarSettings?.feriasInvernoFim
                       );
+                      const dayHolidayBridgeEvents = dayEvents.filter(
+                        (event) => event.type === "feriado" || event.type === "ponte"
+                      );
+                      const dayMeetingEvents = dayEvents.filter((event) => event.type === "reuniao");
+                      const dayGenericEvents = dayEvents.filter((event) => event.type === "evento");
+                      const hasRecessoIndicator = isWinterBreak || isClosed || dayHolidayBridgeEvents.length > 0;
+                      const hasMeetingIndicator = dayMeetingEvents.length > 0;
+                      const hasEventIndicator = dayGenericEvents.length > 0;
+
+                      const buildDescriptionTooltip = (label: string, descriptions: string[], fallback: string) => {
+                        const uniqueDescriptions = Array.from(
+                          new Set(
+                            descriptions
+                              .map((description) => String(description || "").trim())
+                              .filter(Boolean)
+                          )
+                        );
+                        if (uniqueDescriptions.length === 0) return `${label}: ${fallback}`;
+                        return `${label}: ${uniqueDescriptions.join(" | ")}`;
+                      };
+
+                      const recessoTooltip = (() => {
+                        const periodLabels: string[] = [];
+                        if (isWinterBreak) periodLabels.push("Férias de inverno");
+                        if (!isWinterBreak && isClosed && dayHolidayBridgeEvents.length === 0) {
+                          periodLabels.push("Recesso");
+                        }
+
+                        const eventDescriptions = dayHolidayBridgeEvents.flatMap((event) => {
+                          const typeLabel = event.type === "ponte" ? "Ponte" : "Feriado";
+                          const rawDescription = String(event.description || "").trim();
+                          if (!rawDescription) return [typeLabel];
+                          return [typeLabel, rawDescription];
+                        });
+
+                        return buildDescriptionTooltip(
+                          "Recesso",
+                          [...periodLabels, ...eventDescriptions],
+                          "Sem descrição"
+                        );
+                      })();
+
+                      const meetingTooltip = buildDescriptionTooltip(
+                        "Reunião",
+                        dayMeetingEvents.map((event) => event.description || ""),
+                        "Sem descrição"
+                      );
+
+                      const eventTooltip = buildDescriptionTooltip(
+                        "Evento",
+                        dayGenericEvents.map((event) => event.description || ""),
+                        "Sem descrição"
+                      );
+
                       return (
                         <div
                           key={dateKey}
-                          className={`reports-calendar-day ${isClosed ? "is-closed" : ""} ${isWinterBreak ? "is-winter" : ""} ${selectedCalendarDate === dateKey ? "is-selected" : ""}`}
+                          className={`reports-calendar-day ${isClosed ? "is-closed" : ""} ${isWinterBreak ? "is-winter" : ""} ${hasWeatherAlert ? "is-weather-alert" : ""} ${selectedCalendarDate === dateKey ? "is-selected" : ""}`}
                           onClick={() => setSelectedCalendarDate(dateKey)}
                         >
                           <div className="reports-calendar-day-top">
                             <strong>{String(dateObj.getDate()).padStart(2, "0")}</strong>
                             <span>{weekdayShort[dateObj.getDay()]}</span>
                           </div>
-                          <div className="reports-calendar-tags">
-                            {isWinterBreak && <span className="reports-mini-tag">férias</span>}
-                            {!isWinterBreak && isClosed && <span className="reports-mini-tag">recesso</span>}
-                            {dayEvents.slice(0, 1).map((event) => (
-                              <span key={event.id} className="reports-mini-tag">
-                                {event.type}
+                          <div className="reports-calendar-indicators">
+                            {dayWeather && (
+                              <span
+                                className={`reports-calendar-climate-indicator ${hasWeatherAlert ? "is-alert" : ""}`}
+                                title={`${dayWeather.condition} · ${dayWeather.temp}°C`}
+                              >
+                                {getWeatherIcon(dayWeather.condition)}
                               </span>
-                            ))}
+                            )}
+                            {isWeatherLoadingForDay && (
+                              <span
+                                className="reports-calendar-weather-loading"
+                                title="Carregando clima"
+                                aria-label="Carregando clima"
+                              />
+                            )}
+                            {hasRecessoIndicator && (
+                              <span
+                                className="reports-calendar-status-dot is-recesso"
+                                title={recessoTooltip}
+                                aria-label={recessoTooltip}
+                              />
+                            )}
+                            {hasMeetingIndicator && (
+                              <span
+                                className="reports-calendar-status-dot is-reuniao"
+                                title={meetingTooltip}
+                                aria-label={meetingTooltip}
+                              />
+                            )}
+                            {hasEventIndicator && (
+                              <span
+                                className="reports-calendar-status-dot is-evento"
+                                title={eventTooltip}
+                                aria-label={eventTooltip}
+                              />
+                            )}
                           </div>
                         </div>
                       );
@@ -1213,7 +1421,19 @@ export const Reports: React.FC = () => {
                   </div>
                   <div className="reports-calendar-actions">
                     <div className="reports-calendar-selected-date">
-                      Data selecionada: <strong>{selectedCalendarDate || "-"}</strong>
+                      Data selecionada: <strong>{selectedCalendarDate ? selectedCalendarDate.split("-").reverse().join("/") : "-"}</strong>
+                    </div>
+                    <div className="reports-calendar-selected-date">
+                      {!selectedCalendarDate && <span>Selecione um dia para consultar o clima.</span>}
+                      {selectedCalendarDate && loadingWeatherMonth && !selectedDateWeather && <span>Consultando clima...</span>}
+                      {selectedCalendarDate && selectedDateWeather && (
+                        <>
+                          <strong>Clima (API): </strong>
+                          <span>
+                            {selectedDateWeather.condition} · {selectedDateWeather.temp}°C
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="reports-record-chips">
                       {(["feriado", "ponte", "reuniao", "evento"] as CalendarEventForm["type"][]).map((type) => (
@@ -1584,9 +1804,9 @@ export const Reports: React.FC = () => {
         <div className="reports-section">
           <div className="vagas-toolbar">
             <div>
-              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "backend + ajustes locais" : "sem dados"}
+              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "backend (bootstrap)" : "sem dados"}
             </div>
-            <button className="btn-secondary" onClick={() => setStudentsSnapshot(readActiveStudents())}>
+            <button className="btn-secondary" onClick={() => refreshVacanciesSnapshot()}>
               Atualizar
             </button>
           </div>
@@ -1610,15 +1830,6 @@ export const Reports: React.FC = () => {
                   <div className="vagas-bar-fill" style={{ width: `${item.pct}%` }} />
                 </div>
                 <div className="vagas-footer">{item.pct}% ocupada</div>
-                <div className="vagas-capacity">
-                  <label>Capacidade</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={item.capacity}
-                    onChange={(e) => handleCapacityChange(item.turma, parseInt(e.target.value, 10))}
-                  />
-                </div>
               </div>
             ))}
           </div>

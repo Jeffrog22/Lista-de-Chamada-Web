@@ -22,6 +22,7 @@ from app.auth import get_password_hash, create_access_token, authenticate_user, 
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 try:
     from reportlab.lib.pagesizes import A4, landscape
@@ -34,6 +35,9 @@ app = FastAPI(title="Lista-de-Chamada - API")
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(BASE_DIR, "data")
+
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
 
 origins = [
     "http://localhost:3000",

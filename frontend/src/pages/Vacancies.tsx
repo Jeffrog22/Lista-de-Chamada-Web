@@ -8,7 +8,6 @@ interface ActiveStudentLite {
   id?: string;
   nome?: string;
   nivel?: string;
-  categoria?: string;
   turma?: string;
   turmaCodigo?: string;
   horario?: string;
@@ -19,7 +18,18 @@ interface TurmaMeta {
   turmaLabel: string;
   horario: string;
   nivel: string;
-  categoria: string;
+  professor: string;
+  capacidade: number;
+}
+
+interface BootstrapClassLite {
+  id: number;
+  codigo: string;
+  turmaLabel: string;
+  horario: string;
+  nivel: string;
+  professor: string;
+  capacidade: number;
 }
 
 const formatHorario = (value: string) => {
@@ -52,180 +62,231 @@ const parsePeriodo = (horario: string): Periodo => {
   return hour < 12 ? "Manha" : "Tarde";
 };
 
-const readActiveStudents = (): ActiveStudentLite[] => {
-  try {
-    const stored = localStorage.getItem("activeStudents");
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
+const normalizeText = (value: string) => String(value || "").trim().toLowerCase();
 
-const readCapacities = (): Record<string, number> => {
-  try {
-    const stored = localStorage.getItem("classCapacities");
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
+const buildClassKey = (turmaLabel: string, horario: string, nivel: string) =>
+  `${normalizeText(turmaLabel)}||${normalizeText(formatHorario(horario))}||${normalizeText(nivel)}`;
+
+const formatNivelLabel = (nivel: string) => {
+  const raw = String(nivel || "").trim();
+  if (!raw) return "-";
+  const normalized = raw.replace(/^(nivel\s*)/i, "").trim();
+  const spaced = normalized.replace(/^(\d+)([A-Za-z])$/, "$1 $2");
+  return `Nível ${spaced}`;
 };
 
 export const Vacancies: React.FC = () => {
-  const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>(() => readActiveStudents());
-  const [capacities, setCapacities] = useState<Record<string, number>>(() => readCapacities());
+  const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
+  const [classesSnapshot, setClassesSnapshot] = useState<BootstrapClassLite[]>([]);
+  const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
 
   const [nivelFiltro, setNivelFiltro] = useState<string>("Todos");
-  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("Todos");
+  const [turmaLabelFiltro, setTurmaLabelFiltro] = useState<string>("Todos");
   const [periodoFiltro, setPeriodoFiltro] = useState<Periodo>("Todos");
 
   useEffect(() => {
     let isMounted = true;
 
-    const fetchSnapshot = () => {
-      getBootstrap()
-        .then((response) => {
-          if (!isMounted) return;
-          const data = response.data as {
-            classes: Array<{
-              id: number;
-              codigo: string;
-              turma_label: string;
-              horario: string;
-              professor: string;
-              nivel: string;
-              faixa_etaria: string;
-            }>;
-            students: Array<{
-              id: number;
-              class_id: number;
-              nome: string;
-              categoria: string;
-              nivel: string;
-              horario: string;
-            }>;
-          };
+    getBootstrap()
+      .then((response) => {
+        if (!isMounted) return;
+        const data = response.data as {
+          classes: Array<{
+            id: number;
+            codigo: string;
+            turma_label: string;
+            horario: string;
+            professor: string;
+            nivel: string;
+            faixa_etaria: string;
+            capacidade: number;
+          }>;
+          students: Array<{
+            id: number;
+            class_id: number;
+            nome: string;
+            categoria: string;
+            nivel: string;
+            horario: string;
+          }>;
+        };
 
-          const classById = new Map<number, (typeof data.classes)[number]>();
-          data.classes.forEach((cls) => classById.set(cls.id, cls));
+        const classById = new Map<number, (typeof data.classes)[number]>();
+        data.classes.forEach((cls) => classById.set(cls.id, cls));
 
-          const mapped = data.students.map((student) => {
-            const cls = classById.get(student.class_id);
-            return {
-              id: String(student.id),
-              nome: student.nome,
-              nivel: cls?.nivel || student.nivel || "",
-              categoria: student.categoria || cls?.faixa_etaria || "",
-              turma: cls?.turma_label || cls?.codigo || "",
-              turmaCodigo: cls?.codigo || "",
-              horario: cls?.horario || "",
-            } as ActiveStudentLite;
-          });
-
-          if (mapped.length > 0) {
-            setStudentsSnapshot(mapped);
-          } else {
-            setStudentsSnapshot(readActiveStudents());
-          }
-        })
-        .catch(() => {
-          if (isMounted) setStudentsSnapshot(readActiveStudents());
+        const mappedStudents = data.students.map((student) => {
+          const cls = classById.get(student.class_id);
+          return {
+            id: String(student.id),
+            nome: student.nome,
+            nivel: cls?.nivel || student.nivel || "",
+            turma: cls?.turma_label || cls?.codigo || "",
+            turmaCodigo: cls?.codigo || "",
+            horario: cls?.horario || "",
+          } as ActiveStudentLite;
         });
-    };
 
-    fetchSnapshot();
-    const intervalId = window.setInterval(() => {
-      fetchSnapshot();
-      setCapacities(readCapacities());
-    }, 2000);
+        const mappedClasses: BootstrapClassLite[] = data.classes.map((cls) => ({
+          id: cls.id,
+          codigo: cls.codigo || "",
+          turmaLabel: cls.turma_label || cls.codigo || "",
+          horario: cls.horario || "",
+          nivel: cls.nivel || "",
+          professor: cls.professor || "",
+          capacidade: Number(cls.capacidade || 0),
+        }));
+
+        setStudentsSnapshot(mappedStudents);
+        setClassesSnapshot(mappedClasses);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setStudentsSnapshot([]);
+        setClassesSnapshot([]);
+      });
 
     return () => {
       isMounted = false;
-      window.clearInterval(intervalId);
     };
   }, []);
 
   const turmaMeta = useMemo(() => {
     const meta: Record<string, TurmaMeta> = {};
-    studentsSnapshot.forEach((student) => {
-      const key = student.turmaCodigo || student.turma;
+    classesSnapshot.forEach((cls) => {
+      const turmaLabel = cls.turmaLabel || cls.codigo || "";
+      const key = buildClassKey(turmaLabel, cls.horario || "", cls.nivel || "");
       if (!key) return;
-      if (!meta[key]) {
-        meta[key] = {
-          turma: key,
-          turmaLabel: student.turma || key,
-          horario: student.horario || "-",
-          nivel: student.nivel || "-",
-          categoria: student.categoria || "-",
-        };
-      }
+      const resolvedProfessor =
+        cls.professor ||
+        classesSnapshot.find(
+          (candidate) =>
+            buildClassKey(candidate.turmaLabel || candidate.codigo || "", candidate.horario || "", candidate.nivel || "") === key &&
+            String(candidate.professor || "").trim()
+        )?.professor ||
+        "-";
+
+      meta[key] = {
+        turma: key,
+        turmaLabel,
+        horario: cls.horario || "-",
+        nivel: cls.nivel || "-",
+        professor: resolvedProfessor,
+        capacidade: Math.max(0, Number(cls.capacidade || 0)),
+      };
     });
     return meta;
-  }, [studentsSnapshot]);
+  }, [classesSnapshot]);
 
   const niveis = useMemo(() => {
     const unique = new Set<string>();
-    studentsSnapshot.forEach((s) => s.nivel && unique.add(s.nivel));
+    classesSnapshot.forEach((item) => item.nivel && unique.add(item.nivel));
     return ["Todos", ...Array.from(unique).sort()];
-  }, [studentsSnapshot]);
+  }, [classesSnapshot]);
 
-  const categorias = useMemo(() => {
+  const turmaLabels = useMemo(() => {
     const unique = new Set<string>();
-    studentsSnapshot.forEach((s) => s.categoria && unique.add(s.categoria));
+    classesSnapshot.forEach((item) => item.turmaLabel && unique.add(item.turmaLabel));
     return ["Todos", ...Array.from(unique).sort()];
-  }, [studentsSnapshot]);
+  }, [classesSnapshot]);
 
-  const filteredStudents = useMemo(() => {
-    return studentsSnapshot.filter((student) => {
-      if (nivelFiltro !== "Todos" && student.nivel !== nivelFiltro) return false;
-      if (categoriaFiltro !== "Todos" && student.categoria !== categoriaFiltro) return false;
+  const filteredClasses = useMemo(() => {
+    return classesSnapshot.filter((item) => {
+      if (nivelFiltro !== "Todos" && item.nivel !== nivelFiltro) return false;
+      if (turmaLabelFiltro !== "Todos" && item.turmaLabel !== turmaLabelFiltro) return false;
       if (periodoFiltro !== "Todos") {
-        const periodo = parsePeriodo(student.horario || "");
+        const periodo = parsePeriodo(item.horario || "");
         if (periodo !== periodoFiltro) return false;
       }
       return true;
     });
-  }, [studentsSnapshot, nivelFiltro, categoriaFiltro, periodoFiltro]);
+  }, [classesSnapshot, nivelFiltro, turmaLabelFiltro, periodoFiltro]);
 
   const turmasFiltradas = useMemo(() => {
-    const set = new Set<string>();
-    filteredStudents.forEach((s) => {
-      const key = s.turmaCodigo || s.turma;
-      if (key) set.add(key);
-    });
-    return Array.from(set).sort((a, b) => {
+    return filteredClasses
+      .map((item) => buildClassKey(item.turmaLabel || item.codigo || "", item.horario || "", item.nivel || ""))
+      .filter(Boolean)
+      .sort((a, b) => {
       const horarioA = turmaMeta[a]?.horario || "";
       const horarioB = turmaMeta[b]?.horario || "";
       const byHorario = getHorarioSortValue(horarioA) - getHorarioSortValue(horarioB);
       if (byHorario !== 0) return byHorario;
       return a.localeCompare(b);
     });
-  }, [filteredStudents, turmaMeta]);
+  }, [filteredClasses, turmaMeta]);
 
   const capacidadeTotal = useMemo(() => {
-    return turmasFiltradas.reduce((acc, turma) => acc + (capacities[turma] ?? 20), 0);
-  }, [turmasFiltradas, capacities]);
+    return turmasFiltradas.reduce((acc, turma) => acc + (turmaMeta[turma]?.capacidade || 0), 0);
+  }, [turmasFiltradas, turmaMeta]);
 
-  const alunosAtivos = filteredStudents.length;
-  const vagasDisponiveis = capacidadeTotal - alunosAtivos;
+  const studentsCountByClassKey = useMemo(() => {
+    const counts: Record<string, number> = {};
+    studentsSnapshot.forEach((student) => {
+      const key = buildClassKey(student.turma || "", student.horario || "", student.nivel || "");
+      if (!key) return;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [studentsSnapshot]);
+
+  const alunosAtivos = useMemo(
+    () => turmasFiltradas.reduce((acc, turma) => acc + (studentsCountByClassKey[turma] || 0), 0),
+    [turmasFiltradas, studentsCountByClassKey]
+  );
+
+  const vagasDisponiveis = useMemo(() => {
+    return turmasFiltradas.reduce((acc, turma) => {
+      const meta = turmaMeta[turma];
+      const capacity = Math.max(0, Number(meta?.capacidade || 0));
+      const total = studentsCountByClassKey[turma] || 0;
+      if (total >= capacity) return acc;
+      return acc + (capacity - total);
+    }, 0);
+  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+
+  const vagasExcedentes = useMemo(() => {
+    return turmasFiltradas.reduce((acc, turma) => {
+      const meta = turmaMeta[turma];
+      const capacity = Math.max(0, Number(meta?.capacidade || 0));
+      const total = studentsCountByClassKey[turma] || 0;
+      if (total <= capacity) return acc;
+      return acc + (total - capacity);
+    }, 0);
+  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+
+  const turmasComVagasDisponiveis = useMemo(() => {
+    return turmasFiltradas
+      .map((turma) => {
+        const meta = turmaMeta[turma];
+        const capacity = Math.max(0, Number(meta?.capacidade || 0));
+        const total = studentsCountByClassKey[turma] || 0;
+        const vagas = Math.max(0, capacity - total);
+        return {
+          turma,
+          turmaLabel: meta?.turmaLabel || turma,
+          nivel: formatNivelLabel(meta?.nivel || ""),
+          horario: meta?.horario ? formatHorario(meta.horario) : "-",
+          professor: meta?.professor || "-",
+          vagas,
+          total,
+          capacity,
+        };
+      })
+      .filter((item) => item.vagas > 0)
+      .sort((a, b) => b.vagas - a.vagas || a.turmaLabel.localeCompare(b.turmaLabel));
+  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   return (
     <div className="vagas-root">
       <div className="vagas-header">
         <div>
           <h2>Gestao de Vagas</h2>
-          <p>Leitura em tempo real do cadastro ativo para analise de ocupacao.</p>
-        </div>
-        <div className="vagas-status">
-          <span>Atualizacao a cada 2s</span>
-          <span className="dot" />
+          <p>Leitura da base oficial via backend para analise de ocupacao.</p>
         </div>
       </div>
 
       <div className="vagas-filters">
         <div className="filter-block">
-          <label>Nivel / Categoria</label>
+          <label>Nivel</label>
           <select value={nivelFiltro} onChange={(e) => setNivelFiltro(e.target.value)}>
             {niveis.map((nivel) => (
               <option key={nivel} value={nivel}>{nivel}</option>
@@ -233,10 +294,10 @@ export const Vacancies: React.FC = () => {
           </select>
         </div>
         <div className="filter-block">
-          <label>Categoria</label>
-          <select value={categoriaFiltro} onChange={(e) => setCategoriaFiltro(e.target.value)}>
-            {categorias.map((categoria) => (
-              <option key={categoria} value={categoria}>{categoria}</option>
+          <label>Turma</label>
+          <select value={turmaLabelFiltro} onChange={(e) => setTurmaLabelFiltro(e.target.value)}>
+            {turmaLabels.map((turmaLabel) => (
+              <option key={turmaLabel} value={turmaLabel}>{turmaLabel}</option>
             ))}
           </select>
         </div>
@@ -260,19 +321,53 @@ export const Vacancies: React.FC = () => {
         <div className="vagas-card">
           <span className="label">Capacidade Total</span>
           <strong>{capacidadeTotal}</strong>
-          <small>Somatorio das turmas filtradas</small>
+          <small>Somatório das turmas filtradas</small>
         </div>
         <div className="vagas-card">
           <span className="label">Alunos Ativos</span>
           <strong>{alunosAtivos}</strong>
           <small>Matriculados nas turmas filtradas</small>
         </div>
-        <div className={`vagas-card highlight ${vagasDisponiveis <= 0 ? "danger" : ""}`}>
-          <span className="label">Vagas Disponiveis</span>
+        <button
+          type="button"
+          className={`vagas-card vagas-card-button highlight ${vagasDisponiveis <= 0 ? "danger" : ""} ${showVagasDisponiveisDetalhe ? "active" : ""}`}
+          onClick={() => setShowVagasDisponiveisDetalhe((prev) => !prev)}
+          aria-expanded={showVagasDisponiveisDetalhe}
+        >
+          <span className="label">Vagas Disponíveis</span>
           <strong>{vagasDisponiveis}</strong>
-          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Vagas remanescentes"}</small>
+          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por turma"}</small>
+        </button>
+        <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
+          <span className="label">Vagas Excedentes</span>
+          <strong>{vagasExcedentes}</strong>
+          <small>{vagasExcedentes > 0 ? "Acima da capacidade" : "Sem excedentes"}</small>
         </div>
       </div>
+
+      {showVagasDisponiveisDetalhe && (
+        <div className="vagas-detail-box">
+          <h3>Turmas com vagas disponíveis</h3>
+          {turmasComVagasDisponiveis.length === 0 ? (
+            <div className="empty-state">Nenhuma turma com vaga para os filtros selecionados.</div>
+          ) : (
+            <div className="vagas-detail-list">
+              {turmasComVagasDisponiveis.map((item) => (
+                <div key={item.turma} className="vagas-detail-row">
+                  <div>
+                    <strong>{item.turmaLabel} | {item.nivel}</strong>
+                    <span>{item.horario} - {item.professor}</span>
+                  </div>
+                  <div className="vagas-detail-meta">
+                    <span>{item.vagas} vagas</span>
+                    <span>{item.total}/{item.capacity}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="vagas-list">
         {turmasFiltradas.length === 0 ? (
@@ -280,17 +375,16 @@ export const Vacancies: React.FC = () => {
         ) : (
           turmasFiltradas.map((turma) => {
             const meta = turmaMeta[turma];
-            const total = filteredStudents.filter((s) => (s.turmaCodigo || s.turma) === turma).length;
-            const capacity = capacities[turma] ?? 20;
+            const total = studentsCountByClassKey[turma] || 0;
+            const capacity = meta?.capacidade || 0;
             const pct = capacity > 0 ? Math.min(100, Math.round((total / capacity) * 100)) : 0;
             return (
               <div key={turma} className="vagas-row">
                 <div>
-                  <strong>Turma {meta?.turmaLabel || turma}</strong>
-                  <span>{meta?.nivel || "-"} | {meta?.categoria || "-"}</span>
+                  <strong>{meta?.turmaLabel || turma} | {formatNivelLabel(meta?.nivel || "")}</strong>
+                  <span>{meta?.horario ? formatHorario(meta.horario) : "-"} - {meta?.professor || "-"}</span>
                 </div>
                 <div className="vagas-row-meta">
-                  <span>{meta?.horario ? formatHorario(meta.horario) : "-"}</span>
                   <span>{total}/{capacity}</span>
                 </div>
                 <div className="vagas-row-bar">

@@ -114,6 +114,16 @@
   gap: 6px;
 }
 
+.vagas-card-button {
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vagas-card-button.active {
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.25), 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
 .vagas-card strong {
   font-size: 28px;
   color: var(--vagas-text);
@@ -140,6 +150,51 @@
 
 .vagas-card small {
   color: var(--vagas-muted);
+}
+
+.vagas-detail-box {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.vagas-detail-box h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--vagas-text);
+}
+
+.vagas-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.vagas-detail-row {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.vagas-detail-row strong {
+  display: block;
+  color: var(--vagas-text);
+}
+
+.vagas-detail-row span {
+  font-size: 12px;
+  color: var(--vagas-muted);
+}
+
+.vagas-detail-meta {
+  display: grid;
+  text-align: right;
+  gap: 2px;
 }
 
 .vagas-list {
