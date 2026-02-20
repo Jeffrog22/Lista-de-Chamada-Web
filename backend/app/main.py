@@ -135,6 +135,28 @@ class ReportsFilterOut(BaseModel):
     meses: List[str]
     anos: List[str]
 
+
+# --- Statistics models (per-student retention & per-level permanence) ---
+class LevelHistoryOut(BaseModel):
+    nivel: str
+    firstDate: Optional[str]
+    lastDate: Optional[str]
+    days: int
+    presencas: int
+    faltas: int
+    justificativas: int
+    frequencia: float
+
+class StudentStatisticsOut(BaseModel):
+    id: Optional[str] = None
+    nome: str
+    firstPresence: Optional[str] = None
+    lastPresence: Optional[str] = None
+    exclusionDate: Optional[str] = None
+    retentionDays: int = 0
+    currentNivel: Optional[str] = None
+    levels: List[LevelHistoryOut] = []
+
 class ExportClassSelection(BaseModel):
     turma: str
     horario: str
@@ -1375,6 +1397,190 @@ def generate_chamada_pdf_file(payload: ExcelExportPayload, session: Session = De
         media_type="application/pdf",
         filename=output_name,
     )
+
+
+# --- Statistics aggregation endpoint ---
+@app.get("/reports/statistics", response_model=List[StudentStatisticsOut])
+def get_reports_statistics(session: Session = Depends(get_session)):
+    """Aggregate per-student retention and per-level permanence from attendance logs.
+
+    - firstPresence: primeira data com registro de presença ('Presente' ou 'Justificado').
+    - retention: dias entre firstPresence e data de exclusão (se houver) ou hoje.
+    - levels: para cada nível onde o aluno teve registros, retorna período e frequência.
+
+    Nota: identificação de aluno é por nome normalizado (mesmo critério usado em relatórios atuais).
+    """
+    # load classes to map turmaCodigo/turmaLabel -> nivel
+    classes = session.exec(select(models.ImportClass)).all()
+    class_by_code = {str(c.codigo or ""): c for c in classes}
+    class_by_label = {str(c.turma_label or ""): c for c in classes}
+
+    # load all attendance log entries
+    items = _load_json_list(os.path.join(DATA_DIR, "baseChamada.json"))
+
+    students: Dict[str, Dict[str, Any]] = {}
+
+    def _ensure_student(name: str):
+        key = _normalize_text(name)
+        if key not in students:
+            students[key] = {
+                "nome": name,
+                "ids": set(),
+                "attendance_by_date": {},  # date -> { status, nivel, turmaCodigo }
+                "per_level": {},
+                "first_presence": None,
+                "last_presence": None,
+                "exclusion_date": None,
+            }
+        return students[key]
+
+    # iterate logs (order not guaranteed) — process dates in each registro
+    for item in items:
+        turma_codigo = str(item.get("turmaCodigo") or "").strip()
+        turma_label = str(item.get("turmaLabel") or "").strip()
+        # resolve nivel from import classes
+        nivel = ""
+        cls = None
+        if turma_codigo and turma_codigo in class_by_code:
+            cls = class_by_code.get(turma_codigo)
+        elif turma_label and turma_label in class_by_label:
+            cls = class_by_label.get(turma_label)
+        if cls:
+            nivel = str(cls.nivel or "")
+
+        registros = item.get("registros") or []
+        for record in registros:
+            nome = str(record.get("aluno_nome") or "").strip()
+            if not nome:
+                continue
+            st = _ensure_student(nome)
+            attendance_map = record.get("attendance") or {}
+            # iterate dates in chronological order
+            for date_key in sorted(attendance_map.keys()):
+                raw = str(attendance_map.get(date_key) or "").strip()
+                mapped = _map_attendance_value(raw)
+                # keep records for frequency calculation even if empty (we'll skip empty)
+                if not date_key:
+                    continue
+                # ignore empty markers
+                if mapped == "":
+                    continue
+                # record attendance
+                st["attendance_by_date"][date_key] = {
+                    "status": mapped,
+                    "nivel": nivel,
+                    "turmaCodigo": turma_codigo or turma_label,
+                }
+                # update first/last presence (consider 'c' or 'j' as attendance)
+                if mapped in {"c", "j"}:
+                    try:
+                        parsed = datetime.strptime(date_key, "%Y-%m-%d").date()
+                    except Exception:
+                        parsed = None
+                    if parsed:
+                        if st["first_presence"] is None or parsed < st["first_presence"]:
+                            st["first_presence"] = parsed
+                        if st["last_presence"] is None or parsed > st["last_presence"]:
+                            st["last_presence"] = parsed
+                # update per-level counters
+                level_key = nivel or "(sem-nivel)"
+                lvl = st["per_level"].setdefault(level_key, {
+                    "first": None,
+                    "last": None,
+                    "presencas": 0,
+                    "faltas": 0,
+                    "justificativas": 0,
+                })
+                # update min/max dates
+                try:
+                    parsed_d = datetime.strptime(date_key, "%Y-%m-%d").date()
+                except Exception:
+                    parsed_d = None
+                if parsed_d:
+                    if lvl["first"] is None or parsed_d < lvl["first"]:
+                        lvl["first"] = parsed_d
+                    if lvl["last"] is None or parsed_d > lvl["last"]:
+                        lvl["last"] = parsed_d
+                if mapped == "c":
+                    lvl["presencas"] += 1
+                elif mapped == "f":
+                    lvl["faltas"] += 1
+                elif mapped == "j":
+                    lvl["justificativas"] += 1
+
+    # load exclusions
+    excluded = _load_json_list(os.path.join(DATA_DIR, "excludedStudents.json"))
+    for ex in excluded:
+        nome = str(ex.get("nome") or "").strip()
+        if not nome:
+            continue
+        key = _normalize_text(nome)
+        if key not in students:
+            students[key] = {"nome": nome, "ids": set(), "attendance_by_date": {}, "per_level": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
+        date_str = str(ex.get("dataExclusao") or "").strip()
+        if date_str:
+            try:
+                parsed = datetime.strptime(date_str, "%d/%m/%Y").date()
+                students[key]["exclusion_date"] = parsed
+            except Exception:
+                # keep as None on parse failure
+                pass
+
+    # build output list
+    out: List[Dict[str, Any]] = []
+    today = datetime.utcnow().date()
+    for key, st in sorted(students.items(), key=lambda t: t[1]["nome"].lower()):
+        first = st.get("first_presence")
+        last = st.get("last_presence")
+        exclusion = st.get("exclusion_date")
+        end_date = exclusion or today
+        retention_days = 0
+        if first and end_date:
+            retention_days = max(0, (end_date - first).days)
+        # determine current nivel: use per_level with latest 'last' date
+        current_nivel = None
+        if st.get("per_level"):
+            candidates = [(k, v["last"]) for k, v in st["per_level"].items() if v.get("last")]
+            if candidates:
+                candidates.sort(key=lambda x: x[1], reverse=True)
+                current_nivel = candidates[0][0]
+                if current_nivel == "(sem-nivel)":
+                    current_nivel = None
+        # build levels array
+        levels_out: List[LevelHistoryOut] = []
+        for lvl_name, vals in st.get("per_level", {}).items():
+            first_d = vals.get("first")
+            last_d = vals.get("last")
+            pres = int(vals.get("presencas") or 0)
+            falt = int(vals.get("faltas") or 0)
+            just = int(vals.get("justificativas") or 0)
+            total = pres + falt + just
+            freq = round(((pres + just) / total) * 100, 1) if total else 0.0
+            days = 0
+            if first_d and last_d:
+                days = max(0, (last_d - first_d).days + 1)
+            name_out = None if lvl_name == "(sem-nivel)" else lvl_name
+            levels_out.append(LevelHistoryOut(
+                nivel=name_out or "",
+                firstDate=first_d.isoformat() if first_d else None,
+                lastDate=last_d.isoformat() if last_d else None,
+                days=days,
+                presencas=pres,
+                faltas=falt,
+                justificativas=just,
+                frequencia=freq,
+            ))
+        out.append(StudentStatisticsOut(
+            id=None,
+            nome=st.get("nome") or key,
+            firstPresence=first.isoformat() if first else None,
+            lastPresence=last.isoformat() if last else None,
+            exclusionDate=exclusion.isoformat() if exclusion else None,
+            retentionDays=retention_days,
+            currentNivel=current_nivel,
+            levels=levels_out,
+        ))
+    return out
 
 @app.post("/reports/parq-pdf-file")
 def generate_parq_pdf_file_compat(payload: ExcelExportPayload, session: Session = Depends(get_session)):

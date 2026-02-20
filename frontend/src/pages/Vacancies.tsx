@@ -280,7 +280,7 @@ export const Vacancies: React.FC = () => {
       <div className="vagas-header">
         <div>
           <h2>Gestao de Vagas</h2>
-          <p>Leitura da base oficial via backend para analise de ocupacao.</p>
+          <p>Leitura da base oficial de dados.</p>
         </div>
       </div>
 

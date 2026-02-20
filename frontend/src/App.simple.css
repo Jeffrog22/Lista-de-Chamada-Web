@@ -249,6 +249,8 @@ body, html {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
+/* badge removed */
+
 .content-area {
   flex: 1;
   overflow-y: auto;

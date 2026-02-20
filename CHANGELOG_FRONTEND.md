@@ -1,15 +1,20 @@
-# CHANGELOG - Frontend Adaptação
+# CHANGELOG - Frontend Adaptaï¿½ï¿½o
 
-## ?? Adaptação Completa do Frontend do Repositório Template
+## 2026-02-19
 
-Este changelog documenta todas as mudanças realizadas para adaptar o frontend React/Vite baseado no repositório template `https://github.com/Jeffrog22/Lista-de-Chamada`.
+- RelatÃ³rios: removida a aba interna `Clima` da tela de `RelatÃ³rios`.
+- As informaÃ§Ãµes de clima no calendÃ¡rio do resumo permanecem disponÃ­veis.
+
+## ?? Adaptaï¿½ï¿½o Completa do Frontend do Repositï¿½rio Template
+
+Este changelog documenta todas as mudanï¿½as realizadas para adaptar o frontend React/Vite baseado no repositï¿½rio template `https://github.com/Jeffrog22/Lista-de-Chamada`.
 
 ---
 
 ## ?? Arquivos Modificados
 
 ### 1. **src/api.ts**
-**Mudanças:**
+**Mudanï¿½as:**
 - Adicionado suporte completo para todos os endpoints do backend FastAPI
 - Novos endpoints para:
   - Filtros: `getFilters()`
@@ -17,102 +22,102 @@ Este changelog documenta todas as mudanças realizadas para adaptar o frontend Re
   - Turmas: `getAllClasses()`, `addClass()`, `updateClass()`, `deleteClass()`, `updateClassLevel()`
   - Chamada: `saveAttendance()`
   - Justificativas: `saveJustification()`
-  - Relatórios: `getFrequencyReport()`, `generateExcelReport()`, `generateConsolidatedReport()`
-  - Exclusões: `getExcludedStudents()`, `restoreStudent()`
+  - Relatï¿½rios: `getFrequencyReport()`, `generateExcelReport()`, `generateConsolidatedReport()`
+  - Exclusï¿½es: `getExcludedStudents()`, `restoreStudent()`
 
 ### 2. **src/App.tsx**
-**Mudanças:**
-- Refatoração completa com navegação por abas
-- Adicionado sistema de sidebar com abas (Chamada, Alunos, Turmas, Relatórios, Exclusões)
-- Importação das novas páginas: `Classes`, `Reports`, `Exclusions`
-- Estado de navegação centralizado
+**Mudanï¿½as:**
+- Refatoraï¿½ï¿½o completa com navegaï¿½ï¿½o por abas
+- Adicionado sistema de sidebar com abas (Chamada, Alunos, Turmas, Relatï¿½rios, Exclusï¿½es)
+- Importaï¿½ï¿½o das novas pï¿½ginas: `Classes`, `Reports`, `Exclusions`
+- Estado de navegaï¿½ï¿½o centralizado
 - Layout responsivo com flexbox
 
 ### 3. **src/App.css**
-**Mudanças:**
-- Novo design com layout de duas colunas (sidebar + conteúdo)
-- Sidebar navegação com cores temáticas
+**Mudanï¿½as:**
+- Novo design com layout de duas colunas (sidebar + conteï¿½do)
+- Sidebar navegaï¿½ï¿½o com cores temï¿½ticas
 - Header aprimorado com logout
 - Responsividade mobile com breakpoints
 - Tema de cores melhorado
 
 ### 4. **src/index.css**
-**Mudanças:**
+**Mudanï¿½as:**
 - Reset de estilos globais melhorado
-- Fonte padrão aprimorada (system-ui)
-- Light mode por padrão
-- Estilos globais para botões, inputs, tabelas
+- Fonte padrï¿½o aprimorada (system-ui)
+- Light mode por padrï¿½o
+- Estilos globais para botï¿½es, inputs, tabelas
 
 ### 5. **src/pages/Attendance.tsx**
-**Mudanças:**
+**Mudanï¿½as:**
 - Reescrita completa com nova funcionalidade
-- Sistema de filtros (turma, horário, professor, mês, ano)
+- Sistema de filtros (turma, horï¿½rio, professor, mï¿½s, ano)
 - Tabela interativa com clique para alternar status
 - Cores de status (presente/ausente/justificado)
-- Botões: Carregar, Salvar, Limpar
+- Botï¿½es: Carregar, Salvar, Limpar
 - Tratamento de erros e loading
 
 ### 6. **src/pages/Attendance.css**
 **Novo arquivo:**
-- Estilos para seção de filtros
+- Estilos para seï¿½ï¿½o de filtros
 - Estilos para tabela de chamada
-- Efeito hover nas células
+- Efeito hover nas cï¿½lulas
 - Responsividade para tabelas longas
 - Cores de status
 
 ### 7. **src/pages/Students.tsx**
-**Mudanças:**
-- Refatoração completa com gerenciamento completo
+**Mudanï¿½as:**
+- Refatoraï¿½ï¿½o completa com gerenciamento completo
 - Lista com busca/filtro
 - Modal para adicionar/editar alunos
-- Formário com campos completos
-- Botões de ação (editar, deletar)
+- Formï¿½rio com campos completos
+- Botï¿½es de aï¿½ï¿½o (editar, deletar)
 - Tratamento de erros
 
 ### 8. **src/pages/Students.css**
-**Mudanças:**
+**Mudanï¿½as:**
 - Estilos melhorados para tabela
 - Modal estilo overlay
-- Formulário responsivo
-- Botões de ação estilizados
+- Formulï¿½rio responsivo
+- Botï¿½es de aï¿½ï¿½o estilizados
 
 ### 9. **src/pages/Classes.tsx** ? NOVO
 **Criado:**
-- Nova página para gerenciamento de turmas
+- Nova pï¿½gina para gerenciamento de turmas
 - Lista com busca
 - Modal para adicionar/editar turmas
-- Campos: Turma, Horário, Professor, Nível, Atalho, Data de Início
-- Operações CRUD completas
+- Campos: Turma, Horï¿½rio, Professor, Nï¿½vel, Atalho, Data de Inï¿½cio
+- Operaï¿½ï¿½es CRUD completas
 
 ### 10. **src/pages/Classes.css** ? NOVO
 **Criado:**
-- Estilos para página de turmas
+- Estilos para pï¿½gina de turmas
 - Similar ao layout de Students mas customizado
 
 ### 11. **src/pages/Reports.tsx** ? NOVO
 **Criado:**
-- Nova página para geração de relatórios
-- Seleção de filtros (turma, horário, professor, mês, ano)
-- Lista de relatórios selecionados
-- Botões para gerar individual e consolidado
-- Download automático de arquivos Excel
+- Nova pï¿½gina para geraï¿½ï¿½o de relatï¿½rios
+- Seleï¿½ï¿½o de filtros (turma, horï¿½rio, professor, mï¿½s, ano)
+- Lista de relatï¿½rios selecionados
+- Botï¿½es para gerar individual e consolidado
+- Download automï¿½tico de arquivos Excel
 
 ### 12. **src/pages/Reports.css** ? NOVO
 **Criado:**
 - Layout em duas colunas (filtros + selecionados)
-- Card de relatório selecionado
+- Card de relatï¿½rio selecionado
 - Responsividade
 
 ### 13. **src/pages/Exclusions.tsx** ? NOVO
 **Criado:**
-- Nova página para gerenciar alunos excluídos
+- Nova pï¿½gina para gerenciar alunos excluï¿½dos
 - Lista com busca
-- Botão para restaurar alunos
-- Campos: Nome, Turma, Professor, Data de Exclusão
+- Botï¿½o para restaurar alunos
+- Campos: Nome, Turma, Professor, Data de Exclusï¿½o
 
 ### 14. **src/pages/Exclusions.css** ? NOVO
 **Criado:**
-- Estilos para página de exclusões
+- Estilos para pï¿½gina de exclusï¿½es
 - Tabela com destaque
 
 ---
@@ -129,10 +134,10 @@ Este changelog documenta todas as mudanças realizadas para adaptar o frontend Re
 - **Info**: #17a2b8 (Ciano)
 
 ### Layout
-- Desktop: Sidebar left (200px) + Conteúdo (flex)
-- Mobile: Stack vertical com navegação horizontal
-- Padding: 20px padrão
-- Gap: 20px entre seções
+- Desktop: Sidebar left (200px) + Conteï¿½do (flex)
+- Mobile: Stack vertical com navegaï¿½ï¿½o horizontal
+- Padding: 20px padrï¿½o
+- Gap: 20px entre seï¿½ï¿½es
 
 ---
 
@@ -141,7 +146,7 @@ Este changelog documenta todas as mudanças realizadas para adaptar o frontend Re
 ```
 Login ? Token armazenado em localStorage
    ?
-App com abas de navegação
+App com abas de navegaï¿½ï¿½o
    ?? Chamada (Attendance)
    ?  ?? Busca dados por filtro
    ?     ?? Salva com POST /api/chamada
@@ -155,10 +160,10 @@ App com abas de navegação
    ?  ?? POST /api/turma (adicionar)
    ?  ?? PUT /api/turma (editar)
    ?  ?? DELETE /api/turma (deletar)
-   ?? Relatórios (Reports)
+   ?? Relatï¿½rios (Reports)
    ?  ?? GET /api/relatorio/excel (individual)
    ?  ?? POST /api/relatorio/excel_consolidado
-   ?? Exclusões (Exclusions)
+   ?? Exclusï¿½es (Exclusions)
       ?? GET /api/exclusoes
       ?? POST /api/restaurar
 ```
@@ -168,7 +173,7 @@ App com abas de navegação
 ## ?? Principais Features
 
 ### Chamada (Attendance)
-- ? Filtros dinâmicos
+- ? Filtros dinï¿½micos
 - ? Tabela interativa com status
 - ? Salvar dados
 - ? Limpar chamada
@@ -177,34 +182,34 @@ App com abas de navegação
 ### Alunos (Students)
 - ? CRUD completo
 - ? Busca em tempo real
-- ? Modal de formulário
-- ? Validação básica
+- ? Modal de formulï¿½rio
+- ? Validaï¿½ï¿½o bï¿½sica
 
 ### Turmas (Classes)
 - ? CRUD completo
 - ? Busca por turma/professor
-- ? Modal de formulário
-- ? Campos avançados (Nível, Atalho, Data)
+- ? Modal de formulï¿½rio
+- ? Campos avanï¿½ados (Nï¿½vel, Atalho, Data)
 
-### Relatórios (Reports)
+### Relatï¿½rios (Reports)
 - ? Download individual
 - ? Download consolidado
-- ? Múltiplas seleções
-- ? Preview da seleção
+- ? Mï¿½ltiplas seleï¿½ï¿½es
+- ? Preview da seleï¿½ï¿½o
 
-### Exclusões (Exclusions)
-- ? Visualizar alunos excluídos
+### Exclusï¿½es (Exclusions)
+- ? Visualizar alunos excluï¿½dos
 - ? Restaurar alunos
-- ? Busca de excluídos
+- ? Busca de excluï¿½dos
 
 ---
 
 ## ?? Performance
 
 - Lazy loading de componentes via routing
-- Memoização de callbacks
+- Memoizaï¿½ï¿½o de callbacks
 - Tratamento eficiente de estado
-- Requisições otimizadas com axios
+- Requisiï¿½ï¿½es otimizadas com axios
 
 ---
 
@@ -217,36 +222,36 @@ App com abas de navegação
 
 ---
 
-## ?? Segurança
+## ?? Seguranï¿½a
 
 - ? Token JWT em localStorage
-- ? Interceptor de requisições com token
-- ? Proteção de rotas (verificação de token)
+- ? Interceptor de requisiï¿½ï¿½es com token
+- ? Proteï¿½ï¿½o de rotas (verificaï¿½ï¿½o de token)
 - ? Logout limpa token
 
 ---
 
-## ?? Próximas Melhorias Sugeridas
+## ?? Prï¿½ximas Melhorias Sugeridas
 
-1. [ ] Adicionar paginação nas listas
-2. [ ] Adicionar filtros avançados
-3. [ ] Adicionar gráficos de frequência
-4. [ ] Adicionar exportação CSV
+1. [ ] Adicionar paginaï¿½ï¿½o nas listas
+2. [ ] Adicionar filtros avanï¿½ados
+3. [ ] Adicionar grï¿½ficos de frequï¿½ncia
+4. [ ] Adicionar exportaï¿½ï¿½o CSV
 5. [ ] Adicionar dark mode
-6. [ ] Adicionar notificações toast
-7. [ ] Adicionar confirmação antes de delete
-8. [ ] Adicionar histórico de ações
-9. [ ] Adicionar validação de formulário avançada
+6. [ ] Adicionar notificaï¿½ï¿½es toast
+7. [ ] Adicionar confirmaï¿½ï¿½o antes de delete
+8. [ ] Adicionar histï¿½rico de aï¿½ï¿½es
+9. [ ] Adicionar validaï¿½ï¿½o de formulï¿½rio avanï¿½ada
 10. [ ] Adicionar autosave
 
 ---
 
-## ?? Documentação
+## ?? Documentaï¿½ï¿½o
 
-Ver `frontend/ADAPTACAO.md` para documentação completa.
+Ver `frontend/ADAPTACAO.md` para documentaï¿½ï¿½o completa.
 
 ---
 
 **Data**: 14 de Janeiro de 2026
-**Versão**: 1.0
+**Versï¿½o**: 1.0
 **Status**: ? Completo

@@ -6,6 +6,7 @@ import {
   getAcademicCalendar,
   getBootstrap,
   getReports,
+  getStatistics,
   getWeather,
   saveAcademicCalendarEvent,
   saveAcademicCalendarSettings,
@@ -77,6 +78,29 @@ interface ActiveStudentLite {
   dataAtestado?: string;
   parQ?: string;
   atestado?: boolean;
+}
+
+// Statistics types (frontend)
+interface LevelHistory {
+  nivel: string;
+  firstDate?: string | null;
+  lastDate?: string | null;
+  days: number;
+  presencas: number;
+  faltas: number;
+  justificativas: number;
+  frequencia: number;
+}
+
+interface StudentStatistics {
+  id?: string | null;
+  nome: string;
+  firstPresence?: string | null;
+  lastPresence?: string | null;
+  exclusionDate?: string | null;
+  retentionDays: number;
+  currentNivel?: string | null;
+  levels: LevelHistory[];
 }
 
 interface BootstrapClassLite {
@@ -304,7 +328,7 @@ const monthOptions = [
 ];
 
 export const Reports: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "clima" | "vagas">("resumo");
+  const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "estatisticas">("resumo");
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentLocalDateKey().slice(0, 7));
   const [selectedTurmaLabel, setSelectedTurmaLabel] = useState<string>("");
   const [selectedHorario, setSelectedHorario] = useState<string>("");
@@ -318,6 +342,41 @@ export const Reports: React.FC = () => {
   const [loadingWeatherMonth, setLoadingWeatherMonth] = useState(false);
   const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherSnapshot>>({});
   const [periodsCollapsed, setPeriodsCollapsed] = useState(false);
+
+  // Statistics state
+  const [statistics, setStatistics] = useState<StudentStatistics[]>([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsFilter, setStatsFilter] = useState("");
+  const [expandedStats, setExpandedStats] = useState<Record<string, boolean>>({});
+
+  const formatDate = (iso?: string | null) => {
+    if (!iso) return "-";
+    try {
+      const d = new Date(iso);
+      return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+    } catch {
+      return iso;
+    }
+  };
+
+  useEffect(() => {
+    const loadStats = async () => {
+      setStatsLoading(true);
+      try {
+        const res = await getStatistics();
+        const data = Array.isArray(res.data) ? res.data as StudentStatistics[] : [];
+        setStatistics(data);
+      } catch (err) {
+        setStatistics([]);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    if (activeTab === "estatisticas") {
+      loadStats();
+    }
+  }, [activeTab]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [eventForm, setEventForm] = useState<CalendarEventForm>({
@@ -1027,35 +1086,10 @@ export const Reports: React.FC = () => {
     return fromStudents?.turmaCodigo || "-";
   })();
   const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
-  
-  const classesByTurma = classesData.reduce<Record<string, ClassStats>>((acc, item) => {
-    acc[item.turma] = item;
-    return acc;
-  }, {});
 
-  const turmas = Array.from(new Set([
-    ...classesData.map((c) => c.turma),
-    ...studentsSnapshot.map((s) => s.turma).filter(Boolean) as string[],
-  ])).sort();
+  // 'classesByTurma' e 'turmas' removidos — não são mais necessários dentro da aba Relatórios (Gestão de Vagas foi retirada).
 
-  const vagasResumo = turmas.map((turma) => {
-    const meta = classesByTurma[turma];
-    const bootstrapMeta = bootstrapClasses.find((item) => item.turmaLabel === turma || item.codigo === turma);
-    const total = studentsSnapshot.length > 0
-      ? studentsSnapshot.filter((s) => s.turma === turma).length
-      : (meta?.alunos.length || 0);
-    const capacity = Math.max(0, Number(bootstrapMeta?.capacidade || 0));
-    const pct = capacity > 0 ? Math.min(100, Math.round((total / capacity) * 100)) : 0;
-    return {
-      turma,
-      horario: bootstrapMeta?.horario || meta?.horario || "-",
-      professor: bootstrapMeta?.professor || meta?.professor || "-",
-      nivel: bootstrapMeta?.nivel || meta?.nivel || "-",
-      total,
-      capacity,
-      pct,
-    };
-  });
+  // 'Gestão de Vagas' removida da seção de Relatórios — manter dados no módulo principal de Vagas.
 
   const handleGenerateExcel = async () => {
     const selectedClasses = exportClassGrid
@@ -1152,11 +1186,8 @@ export const Reports: React.FC = () => {
         <button className={`reports-tab ${activeTab === "graficos" ? "active" : ""}`} onClick={() => setActiveTab("graficos")}>
           📈 Gráficos
         </button>
-        <button className={`reports-tab ${activeTab === "clima" ? "active" : ""}`} onClick={() => setActiveTab("clima")}>
-          ☁️ Clima
-        </button>
-        <button className={`reports-tab ${activeTab === "vagas" ? "active" : ""}`} onClick={() => setActiveTab("vagas")}>
-          🏊 Gestão de Vagas
+        <button className={`reports-tab ${activeTab === "estatisticas" ? "active" : ""}`} onClick={() => setActiveTab("estatisticas")}>
+          📈 Estatísticas
         </button>
       </div>
 
@@ -1794,47 +1825,110 @@ export const Reports: React.FC = () => {
         </div>
       )}
 
-      {activeTab === "clima" && (
-        <div className="reports-section placeholder">
-          Módulo em desenvolvimento
-        </div>
-      )}
-
-      {activeTab === "vagas" && (
+      {activeTab === "estatisticas" && (
         <div className="reports-section">
-          <div className="vagas-toolbar">
-            <div>
-              <strong>Base ativa:</strong> {studentsSnapshot.length > 0 ? "backend (bootstrap)" : "sem dados"}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <h3 style={{ margin: 0 }}>Estatísticas — Retenção e Permanência por Nível</h3>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                type="search"
+                placeholder="Filtrar por aluno..."
+                value={statsFilter}
+                onChange={(e) => setStatsFilter(e.target.value)}
+                style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd" }}
+              />
             </div>
-            <button className="btn-secondary" onClick={() => refreshVacanciesSnapshot()}>
-              Atualizar
-            </button>
           </div>
 
-          <div className="vagas-grid">
-            {vagasResumo.map((item) => (
-              <div key={item.turma} className="report-card vagas-card">
-                <div className="vagas-card-header">
-                  <h3>Turma {item.turma}</h3>
-                  <span className="vagas-chip">{item.nivel}</span>
-                </div>
-                <div className="vagas-meta">
-                  <span>⏰ {formatHorario(item.horario)}</span>
-                  <span>👨‍🏫 {item.professor}</span>
-                </div>
-                <div className="vagas-metric">
-                  <span>{item.total} alunos</span>
-                  <span>{item.capacity} vagas</span>
-                </div>
-                <div className="vagas-bar">
-                  <div className="vagas-bar-fill" style={{ width: `${item.pct}%` }} />
-                </div>
-                <div className="vagas-footer">{item.pct}% ocupada</div>
+          <div className="report-card">
+            {statsLoading && <div className="reports-section placeholder">Carregando estatísticas...</div>}
+
+            {!statsLoading && statistics.length === 0 && (
+              <div className="reports-section placeholder">Sem dados de presença para calcular estatísticas.</div>
+            )}
+
+            {!statsLoading && statistics.length > 0 && (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+                      <th style={{ padding: "8px" }}>Aluno</th>
+                      <th style={{ padding: "8px", width: 120 }}>Primeira presença</th>
+                      <th style={{ padding: "8px", width: 120 }}>Exclusão / Última</th>
+                      <th style={{ padding: "8px", width: 120 }}>Retenção (dias)</th>
+                      <th style={{ padding: "8px", width: 160 }}>Nível atual</th>
+                      <th style={{ padding: "8px", width: 80 }}>Detalhes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statistics
+                      .filter((s) => normalizeText(s.nome).includes(normalizeText(statsFilter || "")))
+                      .map((s) => (
+                        <React.Fragment key={s.nome}>
+                          <tr>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.nome}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{formatDate(s.firstPresence)}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.exclusionDate ? formatDate(s.exclusionDate) : (s.lastPresence ? formatDate(s.lastPresence) : "-")}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.retentionDays}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.currentNivel || "-"}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>
+                              <button
+                                className="btn-small-success"
+                                onClick={() => setExpandedStats((prev) => ({ ...prev, [s.nome]: !prev[s.nome] }))}
+                              >
+                                {expandedStats[s.nome] ? "Ocultar" : "Ver"}
+                              </button>
+                            </td>
+                          </tr>
+                          {expandedStats[s.nome] && (
+                            <tr>
+                              <td colSpan={6} style={{ padding: 12, background: "#fbfdff" }}>
+                                <strong>Histórico por nível</strong>
+                                <div style={{ marginTop: 8 }}>
+                                  {s.levels.length === 0 && <div className="reports-section placeholder">Sem dados por nível.</div>}
+                                  {s.levels.length > 0 && (
+                                    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
+                                      <thead>
+                                        <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+                                          <th style={{ padding: "6px" }}>Nível</th>
+                                          <th style={{ padding: "6px" }}>Período</th>
+                                          <th style={{ padding: "6px" }}>Dias</th>
+                                          <th style={{ padding: "6px" }}>Presenças</th>
+                                          <th style={{ padding: "6px" }}>Faltas</th>
+                                          <th style={{ padding: "6px" }}>Justif.</th>
+                                          <th style={{ padding: "6px" }}>Frequência %</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {s.levels.map((lvl) => (
+                                          <tr key={`${s.nome}-${lvl.nivel}-${lvl.firstDate || "-"}`}>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.nivel || "-"}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.firstDate ? `${formatDate(lvl.firstDate)} → ${formatDate(lvl.lastDate)}` : "-"}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.days}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.presencas}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.faltas}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.justificativas}</td>
+                                            <td style={{ padding: "6px 8px" }}>{lvl.frequencia}%</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
+
+      {/* Aba 'Gestão de Vagas' removida de Relatórios — use o menu principal 'Gestão de Vagas' para esse relatório. */}
     </div>
   );
 };

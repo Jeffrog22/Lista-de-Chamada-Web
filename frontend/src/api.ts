@@ -53,6 +53,9 @@ export const downloadChamadaPdfReport = (data: any) =>
   API.post("/reports/chamada-pdf-file", data, { responseType: "blob" });
 export const generateConsolidatedReport = (data: any) => API.post("/reports/consolidated", data).catch(() => ({ data: { ok: true } }));
 
+// Statistics
+export const getStatistics = () => API.get("/reports/statistics").catch(() => ({ data: [] }));
+
 // File Import
 export const importFile = (fileName: string) => 
   API.post(`/import?file=${encodeURIComponent(fileName)}&out_clean=true`)
