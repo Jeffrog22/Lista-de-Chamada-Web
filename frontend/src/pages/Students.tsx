@@ -145,6 +145,140 @@ export const Students: React.FC = () => {
     return turmaKey ? `${nameKey}|${turmaKey}` : nameKey;
   };
 
+  // --- attendance migration helpers ------------------------------------------------
+  interface AttendanceRecordMinimal {
+    id: number;
+    aluno: string;
+    attendance: { [date: string]: string };
+  }
+
+  const computeShiftDays = (oldTurma: string, newTurma: string) => {
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (!raw) return 0;
+      const classes = JSON.parse(raw) as Array<{
+        Turma?: string;
+        TurmaCodigo?: string;
+        DiasSemana?: string;
+      }>;
+      const findClass = (t: string) =>
+        classes.find((c) => {
+          const norm = normalizeText(c.Turma || c.TurmaCodigo || "");
+          return normalizeText(t) === norm;
+        });
+      const oldCls = findClass(oldTurma);
+      const newCls = findClass(newTurma);
+      if (!oldCls || !newCls) return 0;
+      const parseDias = (dias?: string) =>
+        dias
+          ? dias.split(/[;,]|\s+e\s+/i).map((d) => d.trim()).filter(Boolean)
+          : [] as string[];
+      const od = parseDias(oldCls.DiasSemana);
+      const nd = parseDias(newCls.DiasSemana);
+      const mapWeek: Record<string, number> = {
+        domingo: 0,
+        segunda: 1,
+        terca: 2,
+        terça: 2,
+        quarta: 3,
+        quinta: 4,
+        sexta: 5,
+        sabado: 6,
+        sábado: 6,
+      };
+      if (od.length > 0 && nd.length > 0) {
+        const oldDay = mapWeek[normalizeText(od[0])] ?? 0;
+        const newDay = mapWeek[normalizeText(nd[0])] ?? 0;
+        return newDay - oldDay;
+      }
+    } catch {
+      // ignore and fall through
+    }
+    return 0;
+  };
+
+  const migrateAttendanceForStudent = (
+    studentName: string,
+    oldTurma: string,
+    newTurma: string,
+    newHorario: string,
+    newProfessor: string
+  ) => {
+    if (!oldTurma || !newTurma || oldTurma === newTurma) return;
+    const shift = computeShiftDays(oldTurma, newTurma);
+
+    // collect all attendance entries for this student in oldTurma
+    const byMonth: Record<string, AttendanceRecordMinimal[]> = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("attendance:")) continue;
+      const parts = key.slice("attendance:".length).split("|");
+      const turmaKey = parts[0] || "";
+      if (normalizeText(turmaKey) !== normalizeText(oldTurma)) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        const records: AttendanceRecordMinimal[] = Array.isArray(parsed.records)
+          ? parsed.records
+          : Array.isArray(parsed)
+          ? parsed
+          : [];
+        const rec = records.find((r) => normalizeText(r.aluno) === normalizeText(studentName));
+        if (!rec) continue;
+        // shift dates
+        Object.entries(rec.attendance).forEach(([date, status]) => {
+          const d = new Date(date);
+          if (!isNaN(d.getTime())) {
+            d.setDate(d.getDate() + shift);
+            const iso = d.toISOString().split("T")[0];
+            const newMonth = iso.slice(0, 7);
+            if (!byMonth[newMonth]) byMonth[newMonth] = [];
+            const list = byMonth[newMonth];
+            let existing = list.find((r) => r.id === rec.id);
+            if (!existing) {
+              existing = { ...rec, attendance: {} };
+              list.push(existing);
+            }
+            existing.attendance[iso] = status;
+          }
+        });
+      } catch {
+        // ignore parsing errors
+      }
+    }
+
+    // write migrated records into corresponding new storage keys
+    Object.entries(byMonth).forEach(([month, records]) => {
+      const newKey = `attendance:${newTurma}|${newHorario}|${newProfessor}|${month}`;
+      try {
+        const existingRaw = localStorage.getItem(newKey);
+        let base: AttendanceRecordMinimal[] = [];
+        if (existingRaw) {
+          const parsed = JSON.parse(existingRaw);
+          base = Array.isArray(parsed.records)
+            ? parsed.records
+            : Array.isArray(parsed)
+            ? parsed
+            : [];
+        }
+        // merge or append
+        records.forEach((rec) => {
+          const idx = base.findIndex((r) => r.id === rec.id);
+          if (idx >= 0) {
+            base[idx] = rec;
+          } else {
+            base.push(rec);
+          }
+        });
+        const payload = JSON.stringify({ records: base, updatedAt: new Date().toISOString() });
+        localStorage.setItem(newKey, payload);
+      } catch {
+        // ignore
+      }
+    });
+  };
+
   const buildStudentNameSignature = (student: Partial<Student>) => {
     return normalizeText(student.nome || "");
   };
@@ -747,6 +881,17 @@ export const Students: React.FC = () => {
       return;
     }
 
+    // if editing an existing student and turma changed, migrate their attendance data
+    let originalTurma = "";
+    let originalName = "";
+    if (editingId) {
+      const orig = students.find((s) => s.id === editingId);
+      if (orig) {
+        originalTurma = orig.turma;
+        originalName = orig.nome;
+      }
+    }
+
     const birthDate = parseBirthDate(formData.dataNascimento);
     if (!birthDate) {
       alert("Data de nascimento inválida.");
@@ -794,6 +939,22 @@ export const Students: React.FC = () => {
       dataAtestado: formData.atestado ? formData.dataAtestado : undefined,
       idade: age,
     };
+
+    // migrate attendance if the student changed turmas
+    if (
+      editingId &&
+      originalTurma &&
+      originalTurma !== formData.turma &&
+      originalName
+    ) {
+      migrateAttendanceForStudent(
+        originalName,
+        originalTurma,
+        formData.turma,
+        formData.horario,
+        formData.professor
+      );
+    }
 
     const overrides = loadOverrides();
     const addedIndex = overrides.added.findIndex((s) => s.id === studentId);
@@ -1126,7 +1287,7 @@ export const Students: React.FC = () => {
               </th>
               <th
                 onClick={() => handleSort("idade")}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer", width: "80px", whiteSpace: "nowrap" }}
               >
                 Idade{getSortIndicator("idade")}
               </th>
@@ -1146,7 +1307,7 @@ export const Students: React.FC = () => {
                 onClick={() => {
                   handleSort("horario");
                 }}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer", position: "relative" }}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer", position: "relative", width: "90px", whiteSpace: "nowrap" }}
               >
                 Horário{getSortIndicator("horario")}
               </th>
@@ -1210,15 +1371,7 @@ export const Students: React.FC = () => {
                   ))}
                 </select>
               </th>
-              <th style={{ padding: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Professor"
-                  value={filters.professor}
-                  onChange={(e) => setFilters((f) => ({ ...f, professor: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                />
-              </th>
+              <th style={{ padding: "8px" }}></th>
               <th></th>
             </tr>
           </thead>
