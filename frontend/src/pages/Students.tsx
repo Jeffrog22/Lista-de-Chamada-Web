@@ -129,6 +129,39 @@ export const Students: React.FC = () => {
     return digits;
   };
 
+  // date helpers for attendance migration
+  const parseAttendanceDate = (d: string): Date | null => {
+    if (!d) return null;
+    const isoMatch = /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/;
+    const brMatch = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
+    let m = isoMatch.exec(d);
+    if (m) {
+      const [_, y, mo, da] = m;
+      const dt = new Date(+y, +mo - 1, +da);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    m = brMatch.exec(d);
+    if (m) {
+      const [_, da, mo, y] = m;
+      const dt = new Date(+y, +mo - 1, +da);
+      return isNaN(dt.getTime()) ? null : dt;
+    }
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? null : dt;
+  };
+
+  const formatAttendanceDateSame = (original: string, date: Date): string => {
+    const iso = date.toISOString().split("T")[0];
+    if (/^\d{4}[-\/]\d{2}[-\/]\d{2}$/.test(original)) {
+      return iso;
+    }
+    if (/^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(original)) {
+      const parts = iso.split("-");
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return iso;
+  };
+
   const buildStudentKey = (student: Partial<Student>) => {
     const nameKey = normalizeText(student.nome || "");
     const turmaKey = normalizeText(student.turma || "");
@@ -197,24 +230,39 @@ export const Students: React.FC = () => {
     return 0;
   };
 
+  // ensure at least one-day shift when changing turma
+  const safeShift = (oldTurma: string, newTurma: string) => {
+    const base = computeShiftDays(oldTurma, newTurma);
+    if (base === 0 && normalizeText(oldTurma) !== normalizeText(newTurma)) {
+      return 1;
+    }
+    return base;
+  };
+
   const migrateAttendanceForStudent = (
     studentName: string,
     oldTurma: string,
+    oldTurmaCode: string,
     newTurma: string,
     newHorario: string,
     newProfessor: string
   ) => {
-    if (!oldTurma || !newTurma || oldTurma === newTurma) return;
-    const shift = computeShiftDays(oldTurma, newTurma);
+    if (!oldTurma || !newTurma) return;
+    const shift = safeShift(oldTurma, newTurma);
+    console.log("[migrateAttendance] student", studentName, "from", oldTurma, "to", newTurma, "shift", shift);
 
-    // collect all attendance entries for this student in oldTurma
+    // collect all attendance entries for this student in oldTurma or oldTurmaCode
     const byMonth: Record<string, AttendanceRecordMinimal[]> = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key || !key.startsWith("attendance:")) continue;
       const parts = key.slice("attendance:".length).split("|");
       const turmaKey = parts[0] || "";
-      if (normalizeText(turmaKey) !== normalizeText(oldTurma)) continue;
+      const normTurmaKey = normalizeText(turmaKey);
+      const matchesOld =
+        normTurmaKey === normalizeText(oldTurma) ||
+        (oldTurmaCode && normTurmaKey === normalizeText(oldTurmaCode));
+      if (!matchesOld) continue;
       try {
         const raw = localStorage.getItem(key);
         if (!raw) continue;
@@ -228,29 +276,52 @@ export const Students: React.FC = () => {
         if (!rec) continue;
         // shift dates
         Object.entries(rec.attendance).forEach(([date, status]) => {
-          const d = new Date(date);
-          if (!isNaN(d.getTime())) {
-            d.setDate(d.getDate() + shift);
-            const iso = d.toISOString().split("T")[0];
-            const newMonth = iso.slice(0, 7);
-            if (!byMonth[newMonth]) byMonth[newMonth] = [];
-            const list = byMonth[newMonth];
-            let existing = list.find((r) => r.id === rec.id);
-            if (!existing) {
-              existing = { ...rec, attendance: {} };
-              list.push(existing);
-            }
-            existing.attendance[iso] = status;
+          const origDate = date;
+          const parsed = parseAttendanceDate(origDate);
+          if (!parsed) return;
+          parsed.setDate(parsed.getDate() + shift);
+          const formatted = formatAttendanceDateSame(origDate, parsed);
+          const newMonth = parsed.toISOString().slice(0, 7); // always YYYY-MM for storage
+          if (!byMonth[newMonth]) byMonth[newMonth] = [];
+          const list = byMonth[newMonth];
+          let existing = list.find((r) => r.id === rec.id);
+          if (!existing) {
+            existing = { ...rec, attendance: {} };
+            list.push(existing);
           }
+          existing.attendance[formatted] = status;
         });
       } catch {
         // ignore parsing errors
       }
     }
 
+    // determine proper turmaKey for new turma using activeClasses
+    const resolveNewTurmaKey = (turmaLabel: string) => {
+      try {
+        const raw = localStorage.getItem("activeClasses");
+        if (!raw) return turmaLabel;
+        const classes = JSON.parse(raw) as Array<{ Turma?: string; TurmaCodigo?: string }>;
+        const normLabel = normalizeText(turmaLabel);
+        const found = classes.find((c) => {
+          const code = normalizeText(c.TurmaCodigo || "");
+          const label = normalizeText(c.Turma || "");
+          return normLabel === code || normLabel === label;
+        });
+        if (found) {
+          return found.TurmaCodigo ? found.TurmaCodigo : found.Turma || turmaLabel;
+        }
+      } catch {
+        // ignore
+      }
+      return turmaLabel;
+    };
+
+    const newTurmaKey = resolveNewTurmaKey(newTurma);
     // write migrated records into corresponding new storage keys
     Object.entries(byMonth).forEach(([month, records]) => {
-      const newKey = `attendance:${newTurma}|${newHorario}|${newProfessor}|${month}`;
+      console.log("[migrateAttendance] writing to key", newTurmaKey, "month", month, "records", records.length);
+      const newKey = `attendance:${newTurmaKey}|${newHorario}|${newProfessor}|${month}`;
       try {
         const existingRaw = localStorage.getItem(newKey);
         let base: AttendanceRecordMinimal[] = [];
@@ -883,11 +954,13 @@ export const Students: React.FC = () => {
 
     // if editing an existing student and turma changed, migrate their attendance data
     let originalTurma = "";
+    let originalTurmaCode = "";
     let originalName = "";
     if (editingId) {
       const orig = students.find((s) => s.id === editingId);
       if (orig) {
         originalTurma = orig.turma;
+        originalTurmaCode = orig.turmaCodigo || "";
         originalName = orig.nome;
       }
     }
@@ -944,12 +1017,13 @@ export const Students: React.FC = () => {
     if (
       editingId &&
       originalTurma &&
-      originalTurma !== formData.turma &&
+      (originalTurma !== formData.turma || originalTurmaCode !== getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor)) &&
       originalName
     ) {
       migrateAttendanceForStudent(
         originalName,
         originalTurma,
+        originalTurmaCode || originalTurma,
         formData.turma,
         formData.horario,
         formData.professor
