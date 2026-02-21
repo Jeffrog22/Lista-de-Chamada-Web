@@ -193,6 +193,55 @@ export const Students: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
+  // helper moved up so horarioOptions can reference it without hoisting issues
+  const formatHorario = (value: string) => {
+    if (!value) return "";
+    if (value.includes(":")) return value;
+    const digits = value.replace(/\D/g, "");
+    if (digits.length === 3) {
+      return `0${digits[0]}:${digits.slice(1)}`;
+    }
+    if (digits.length >= 4) {
+      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    }
+    return value;
+  };
+
+  const compareHorario = (a: string, b: string) => {
+    const normalize = (value: string) => {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
+      if (digits.length === 3) return parseInt(`0${digits}`, 10);
+      if (digits.length === 2) return parseInt(`${digits}00`, 10);
+      return Number.MAX_SAFE_INTEGER;
+    };
+    return normalize(a) - normalize(b);
+  };
+
+  const turmaOptions = React.useMemo(() => {
+    return Array.from(new Set(students.map((s) => s.turma))).sort();
+  }, [students]);
+  const categoriaOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((s) => s.categoria && set.add(s.categoria));
+    return Array.from(set).sort();
+  }, [students]);
+  // filters accumulate in header
+  const [filters, setFilters] = useState<{
+    nivel: string;
+    categoria: string;
+    turma: string;
+    horario: string;
+    professor: string;
+  }>({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
+  const horarioOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    students.forEach((s) => {
+      const h = formatHorario(s.horario || "");
+      if (h) set.add(h);
+    });
+    return Array.from(set).sort(compareHorario);
+  }, [students]);
 
   useEffect(() => {
     localStorage.setItem("activeStudents", JSON.stringify(students));
@@ -339,10 +388,7 @@ export const Students: React.FC = () => {
     }
   }, [professorOptions.length]);
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [nivelFilter, setNivelFilter] = useState("");
-  const [sortKey, setSortKey] = useState<
-    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
+  const [sortKey, setSortKey] = useState<    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
   >(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showModal, setShowModal] = useState(false);
@@ -441,19 +487,6 @@ export const Students: React.FC = () => {
       if (age >= rule.min) result = rule.label;
     }
     return result;
-  };
-
-  const formatHorario = (value: string) => {
-    if (!value) return "";
-    if (value.includes(":")) return value;
-    const digits = value.replace(/\D/g, "");
-    if (digits.length === 3) {
-      return `0${digits[0]}:${digits.slice(1)}`;
-    }
-    if (digits.length >= 4) {
-      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
-    }
-    return value;
   };
 
   const maskDateInput = (raw: string) => {
@@ -591,16 +624,6 @@ export const Students: React.FC = () => {
     return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER - 1;
   };
 
-  const compareHorario = (a: string, b: string) => {
-    const normalize = (value: string) => {
-      const digits = value.replace(/\D/g, "");
-      if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
-      if (digits.length === 3) return parseInt(`0${digits}`, 10);
-      if (digits.length === 2) return parseInt(`${digits}00`, 10);
-      return Number.MAX_SAFE_INTEGER;
-    };
-    return normalize(a) - normalize(b);
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -926,14 +949,21 @@ export const Students: React.FC = () => {
   const nivelOptions = [...nivelOrder, ...nivelExtras];
 
   const filteredStudents = students.filter((s) => {
-    const term = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      !term ||
-      s.nome.toLowerCase().includes(term) ||
-      s.categoria.toLowerCase().includes(term) ||
-      s.professor.toLowerCase().includes(term);
-    const matchesNivel = !nivelFilter || normalizeText(s.nivel) === normalizeText(nivelFilter);
-    return matchesSearch && matchesNivel;
+    const matchesNivel = !filters.nivel || normalizeText(s.nivel) === normalizeText(filters.nivel);
+    const matchesTurma = !filters.turma || s.turma === filters.turma;
+    const matchesHorario =
+      !filters.horario || formatHorario(s.horario || "") === filters.horario;
+    const matchesProfessor =
+      !filters.professor || s.professor === filters.professor;
+    const matchesCategoria =
+      !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
+    return (
+      matchesNivel &&
+      matchesTurma &&
+      matchesHorario &&
+      matchesProfessor &&
+      matchesCategoria
+    );
   });
 
   const sortedStudents = [...filteredStudents].sort((a, b) => {
@@ -988,63 +1018,33 @@ export const Students: React.FC = () => {
   return (
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1 }}>
-          <input
-            type="text"
-            placeholder="🔍 Buscar aluno por nome, categoria ou professor..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 36px 12px 12px",
-              border: "1px solid #ddd",
-              borderRadius: "8px",
-              fontSize: "14px",
-            }}
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm("")}
-              title="Limpar busca"
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                fontSize: "14px",
-                color: "#666",
-                padding: 0,
-              }}
-            >
-              x
-            </button>
-          )}
+        <div style={{ flex: 1 }}>
+          {/* espaço para possíveis controles futuros */}
         </div>
         {loading && (
           <span style={{ fontSize: "12px", color: "#666" }}>Carregando...</span>
         )}
-        <select
-          value={nivelFilter}
-          onChange={(e) => setNivelFilter(e.target.value)}
+        <button
+          onClick={() => {
+            setFilters({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
+            setSortKey(null);
+            setSortDir("asc");
+          }}
           style={{
-            padding: "12px",
-            border: "1px solid #ddd",
+            background: "#f59e0b",
+            color: "white",
+            border: "none",
+            padding: "12px 24px",
             borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
             fontSize: "14px",
-            background: "white",
+            whiteSpace: "nowrap",
+            marginRight: "10px",
           }}
         >
-          <option value="">Limpar filtro</option>
-          {nivelOptions.map((nivel) => (
-            <option key={nivel} value={nivel}>
-              {nivel}
-            </option>
-          ))}
-        </select>
+          Limpar filtros
+        </button>
         <button
           onClick={handleAddClick}
           style={{
@@ -1098,8 +1098,10 @@ export const Students: React.FC = () => {
                 Turma{getSortIndicator("turma")}
               </th>
               <th
-                onClick={() => handleSort("horario")}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+                onClick={() => {
+                  handleSort("horario");
+                }}
+                style={{ padding: "12px", textAlign: "center", cursor: "pointer", position: "relative" }}
               >
                 Horário{getSortIndicator("horario")}
               </th>
@@ -1110,6 +1112,69 @@ export const Students: React.FC = () => {
                 Professor{getSortIndicator("professor")}
               </th>
               <th style={{ padding: "12px", textAlign: "center" }}>Ações</th>
+            </tr>
+            {/* filtro acumulativo */}
+            <tr className="filter-row">
+              <th style={{ padding: "8px" }}></th>
+              <th style={{ padding: "8px" }}>
+                <select
+                  value={filters.nivel}
+                  onChange={(e) => setFilters((f) => ({ ...f, nivel: e.target.value }))}
+                  style={{ width: "100%", padding: "4px" }}
+                >
+                  <option value="">Todos</option>
+                  {nivelOptions.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </th>
+              <th style={{ padding: "8px" }}></th>
+              <th style={{ padding: "8px" }}>
+                <select
+                  value={filters.categoria}
+                  onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value }))}
+                  style={{ width: "100%", padding: "4px" }}
+                >
+                  <option value="">Todos</option>
+                  {categoriaOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </th>
+              <th style={{ padding: "8px" }}>
+                <select
+                  value={filters.turma}
+                  onChange={(e) => setFilters((f) => ({ ...f, turma: e.target.value }))}
+                  style={{ width: "100%", padding: "4px" }}
+                >
+                  <option value="">Todos</option>
+                  {turmaOptions.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </th>
+              <th style={{ padding: "8px" }}>
+                <select
+                  value={filters.horario}
+                  onChange={(e) => setFilters((f) => ({ ...f, horario: e.target.value }))}
+                  style={{ width: "100%", padding: "4px" }}
+                >
+                  <option value="">Todos</option>
+                  {horarioOptions.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </th>
+              <th style={{ padding: "8px" }}>
+                <input
+                  type="text"
+                  placeholder="Professor"
+                  value={filters.professor}
+                  onChange={(e) => setFilters((f) => ({ ...f, professor: e.target.value }))}
+                  style={{ width: "100%", padding: "4px" }}
+                />
+              </th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -1377,14 +1442,18 @@ export const Students: React.FC = () => {
               {/* Campos Sticky */}
               <div>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Turma</label>
-                <input
+                <select
                   name="turma"
                   value={formData.turma}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  placeholder="Ex: 1A"
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#fffbeb" }}
-                />
+                >
+                  <option value="" disabled hidden>Selecione uma turma</option>
+                  {turmaOptions.map((turma) => (
+                    <option key={turma} value={turma}>{turma}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
