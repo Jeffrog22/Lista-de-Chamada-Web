@@ -193,6 +193,7 @@ export const Students: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   // helper moved up so horarioOptions can reference it without hoisting issues
   const formatHorario = (value: string) => {
     if (!value) return "";
@@ -949,6 +950,15 @@ export const Students: React.FC = () => {
   const nivelOptions = [...nivelOrder, ...nivelExtras];
 
   const filteredStudents = students.filter((s) => {
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      !term ||
+      normalizeText(s.nome).includes(term) ||
+      normalizeText(s.nivel).includes(term) ||
+      normalizeText(s.categoria).includes(term) ||
+      s.idade.toString().includes(term) ||
+      normalizeText(s.professor).includes(term);
+
     const matchesNivel = !filters.nivel || normalizeText(s.nivel) === normalizeText(filters.nivel);
     const matchesTurma = !filters.turma || s.turma === filters.turma;
     const matchesHorario =
@@ -958,6 +968,7 @@ export const Students: React.FC = () => {
     const matchesCategoria =
       !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
     return (
+      matchesSearch &&
       matchesNivel &&
       matchesTurma &&
       matchesHorario &&
@@ -1018,8 +1029,41 @@ export const Students: React.FC = () => {
   return (
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
-        <div style={{ flex: 1 }}>
-          {/* espaço para possíveis controles futuros */}
+        <div style={{ flex: 1, position: "relative" }}>
+          <input
+            type="text"
+            placeholder="🔍 Buscar aluno por nome, nível, categoria, idade ou professor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px 36px 12px 12px",
+              border: "1px solid #ddd",
+              borderRadius: "8px",
+              fontSize: "14px",
+            }}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              title="Limpar busca"
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: "14px",
+                color: "#666",
+                padding: 0,
+              }}
+            >
+              x
+            </button>
+          )}
         </div>
         {loading && (
           <span style={{ fontSize: "12px", color: "#666" }}>Carregando...</span>
@@ -1027,6 +1071,7 @@ export const Students: React.FC = () => {
         <button
           onClick={() => {
             setFilters({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
+            setSearchTerm("");
             setSortKey(null);
             setSortDir("asc");
           }}

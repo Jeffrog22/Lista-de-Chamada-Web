@@ -4,6 +4,7 @@
 
 - Relatórios: removida a aba interna `Clima` da tela de `Relatórios`.
 - As informações de clima no calendário do resumo permanecem disponíveis.
+- Alunos: restaurado sistema de busca (nome, nível, categoria, idade ou professor).
 
 ## ?? Adapta��o Completa do Frontend do Reposit�rio Template
 
