@@ -3328,5 +3328,745 @@
     "horario": "1600",
     "professor": "Daniela",
     "saved_at": "2026-02-21T03:51:11.194891+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Matias dos Santos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.423908+00:00"
+  },
+  {
+    "aluno_nome": "Alice Soares Batista",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.423992+00:00"
+  },
+  {
+    "aluno_nome": "Alice Sophia Dias Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424052+00:00"
+  },
+  {
+    "aluno_nome": "Lorena Costalonga",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424098+00:00"
+  },
+  {
+    "aluno_nome": "Manuella Ferreira Lima",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424141+00:00"
+  },
+  {
+    "aluno_nome": "Maria Heloísa Vieira Dutra",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424182+00:00"
+  },
+  {
+    "aluno_nome": "Maria Raphaelly Candida Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424222+00:00"
+  },
+  {
+    "aluno_nome": "Otávio Azi de Matos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424262+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Silva de Oliveira Neto",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424301+00:00"
+  },
+  {
+    "aluno_nome": "Raphaella Agatha Candida Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T13:37:46.424342+00:00"
+  },
+  {
+    "aluno_nome": "Nilton de Oliveira Fernandes",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq08",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1600",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:14.712049+00:00"
+  },
+  {
+    "aluno_nome": "Reinaldo Pires do Prado",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq08",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1600",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:14.712151+00:00"
+  },
+  {
+    "aluno_nome": "Renan Francisco Souza Oliveira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq08",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1600",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:14.712198+00:00"
+  },
+  {
+    "aluno_nome": "Allana Micaela dos Santos Oliveira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.596807+00:00"
+  },
+  {
+    "aluno_nome": "Arthur Tonetti de Andrade",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.596891+00:00"
+  },
+  {
+    "aluno_nome": "Bianca Rodrigues Franco",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.596938+00:00"
+  },
+  {
+    "aluno_nome": "Davi Lorenzo de Araújo",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.596980+00:00"
+  },
+  {
+    "aluno_nome": "João Cadorin Cintra",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597022+00:00"
+  },
+  {
+    "aluno_nome": "Juan Pablo Costa Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597062+00:00"
+  },
+  {
+    "aluno_nome": "Julia Barros Camargo",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597102+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Facundo de Carvalho",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597142+00:00"
+  },
+  {
+    "aluno_nome": "Miguel Vitor Alves dos Santos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597181+00:00"
+  },
+  {
+    "aluno_nome": "Miguel dos Santos Barreto",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597221+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Duarte Martins",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597261+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Emanoel Alves de Souza",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597300+00:00"
+  },
+  {
+    "aluno_nome": "Suzana Oliveira de Lima",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq06",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1345",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:27.597340+00:00"
+  },
+  {
+    "aluno_nome": "Evellyn Carolline Alves da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.477916+00:00"
+  },
+  {
+    "aluno_nome": "Fernando Ribeiro de Lima",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.477995+00:00"
+  },
+  {
+    "aluno_nome": "Guilherme Henrique Meira de Oliveira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478042+00:00"
+  },
+  {
+    "aluno_nome": "Heloísa Anderson Navero",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478085+00:00"
+  },
+  {
+    "aluno_nome": "Joaquim Miguel",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478126+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Alves Martins",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478167+00:00"
+  },
+  {
+    "aluno_nome": "Sophia Characomo Albino",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478207+00:00"
+  },
+  {
+    "aluno_nome": "Yasmin de Oliveira Silva Pereira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq05",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1300",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:38.478247+00:00"
+  },
+  {
+    "aluno_nome": "Ricardo Ferragut Gallo",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq04",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1100",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:51.223741+00:00"
+  },
+  {
+    "aluno_nome": "Elson Herly da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq04",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1100",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:51.223823+00:00"
+  },
+  {
+    "aluno_nome": "Geise Ribeiro Souza",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq04",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1100",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:51.223866+00:00"
+  },
+  {
+    "aluno_nome": "José Carlos da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq04",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1100",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:51.223907+00:00"
+  },
+  {
+    "aluno_nome": "Davi Luis Araujo Pereira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917304+00:00"
+  },
+  {
+    "aluno_nome": "Emilly Araújo Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917385+00:00"
+  },
+  {
+    "aluno_nome": "Nicole Oliveira da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917436+00:00"
+  },
+  {
+    "aluno_nome": "Roberta Costa Soares",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917481+00:00"
+  },
+  {
+    "aluno_nome": "Vinícius Oliveira da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917522+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Henrique de Souza Marciano",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:47:56.917562+00:00"
+  },
+  {
+    "aluno_nome": "Arthur Abreu Pinho",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.552738+00:00"
+  },
+  {
+    "aluno_nome": "Erick Gabriel Pereira da Souza",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.552821+00:00"
+  },
+  {
+    "aluno_nome": "Larissa Araujo Pereira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.552870+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Bernardo Carvalho Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.552916+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Henrique Araújo Oliveira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.552960+00:00"
+  },
+  {
+    "aluno_nome": "Paulo Manoel Oliveira Braga",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.553004+00:00"
+  },
+  {
+    "aluno_nome": "Rafael Nascimento dos Anjos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.553048+00:00"
+  },
+  {
+    "aluno_nome": "Yasmin Gabrielly Teófilo de Souza",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq02",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "845",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-21T13:48:04.553092+00:00"
+  },
+  {
+    "aluno_nome": "Eduarda Ferreira Gomes Gregório",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194297+00:00"
+  },
+  {
+    "aluno_nome": "Gabriel Souza de Oliveira",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194407+00:00"
+  },
+  {
+    "aluno_nome": "Kamilly Vitória da Silva Melo",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194456+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Quintilho de Sousa",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194499+00:00"
+  },
+  {
+    "aluno_nome": "Maria Laura Paiva da Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194542+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Henrique Bonfim dos Santos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194617+00:00"
+  },
+  {
+    "aluno_nome": "Rebecca de Amorim Meggiato",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194687+00:00"
+  },
+  {
+    "aluno_nome": "Victória Souza de Oliveira",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194758+00:00"
+  },
+  {
+    "aluno_nome": "Isabela Ferreira Cardoso",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs04",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:21.194817+00:00"
+  },
+  {
+    "aluno_nome": "Augusto Lira Cruvinel Machado",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651364+00:00"
+  },
+  {
+    "aluno_nome": "Daniel Ribeiro Ventura",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651541+00:00"
+  },
+  {
+    "aluno_nome": "Emmanuel Bernardo da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651649+00:00"
+  },
+  {
+    "aluno_nome": "Isabelle Felix dos Santos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651749+00:00"
+  },
+  {
+    "aluno_nome": "Marcos José Oliveira Alexandre",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651847+00:00"
+  },
+  {
+    "aluno_nome": "Marcos do Nascimento Leal",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.651944+00:00"
+  },
+  {
+    "aluno_nome": "Patrick Iezo Antunes Ramos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652039+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Henrique Godoy Filho",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652134+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Oliveira Malveiro",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652228+00:00"
+  },
+  {
+    "aluno_nome": "Rafaela Gomes Carvalho",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652323+00:00"
+  },
+  {
+    "aluno_nome": "Vitoria Santos Cavalcante",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652418+00:00"
+  },
+  {
+    "aluno_nome": "Yane Mendonça Oliveira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652514+00:00"
+  },
+  {
+    "aluno_nome": "Arthur de Souza Leal",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "dtq07",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1515",
+    "professor": "Daniela",
+    "saved_at": "2026-02-21T14:59:56.652607+00:00"
   }
 ]

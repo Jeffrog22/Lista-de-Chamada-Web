@@ -79,17 +79,16 @@ export const Vacancies: React.FC = () => {
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
   const [classesSnapshot, setClassesSnapshot] = useState<BootstrapClassLite[]>([]);
   const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
+  const [loadingBootstrap, setLoadingBootstrap] = useState(false);
 
   const [nivelFiltro, setNivelFiltro] = useState<string>("Todos");
   const [turmaLabelFiltro, setTurmaLabelFiltro] = useState<string>("Todos");
   const [periodoFiltro, setPeriodoFiltro] = useState<Periodo>("Todos");
 
-  useEffect(() => {
-    let isMounted = true;
-
-    getBootstrap()
+  const loadBootstrap = () => {
+    setLoadingBootstrap(true);
+    return getBootstrap()
       .then((response) => {
-        if (!isMounted) return;
         const data = response.data as {
           classes: Array<{
             id: number;
@@ -140,14 +139,17 @@ export const Vacancies: React.FC = () => {
         setClassesSnapshot(mappedClasses);
       })
       .catch(() => {
-        if (!isMounted) return;
         setStudentsSnapshot([]);
         setClassesSnapshot([]);
+      })
+      .finally(() => {
+        setLoadingBootstrap(false);
       });
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  // load on mount
+  useEffect(() => {
+    loadBootstrap();
   }, []);
 
   const turmaMeta = useMemo(() => {
@@ -281,6 +283,22 @@ export const Vacancies: React.FC = () => {
         <div>
           <h2>Gestao de Vagas</h2>
           <p>Leitura da base oficial de dados.</p>
+        </div>
+        <div style={{ marginLeft: "auto" }}>
+          <button
+            onClick={loadBootstrap}
+            disabled={loadingBootstrap}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              background: loadingBootstrap ? "#ccc" : "#4caf50",
+              color: "white",
+              cursor: loadingBootstrap ? "default" : "pointer",
+            }}
+          >
+            {loadingBootstrap ? "Atualizando..." : "Atualizar dados"}
+          </button>
         </div>
       </div>
 

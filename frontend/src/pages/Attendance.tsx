@@ -422,13 +422,14 @@ export const Attendance: React.FC = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // whenever classOptions change or selection values modify,
+  // ensure the selectedTurma is canonical when a matching class exists
   useEffect(() => {
     if (classOptions.length === 0) return;
-
     const currentExact = classOptions.find(
       (opt) =>
         isSameTurma(opt, selectedTurma) &&
-        opt.horario === selectedHorario &&
+        horarioMatches(opt.horario, selectedHorario) &&
         opt.professor === selectedProfessor
     );
     if (currentExact) {
@@ -436,54 +437,47 @@ export const Attendance: React.FC = () => {
       if (canonicalTurma && selectedTurma !== canonicalTurma) {
         setSelectedTurma(canonicalTurma);
       }
-      return;
     }
+  }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
 
-    const hasCurrentSelection = classOptions.some(
+  // when classOptions load/refresh, pick a valid selection or restore saved
+  useEffect(() => {
+    if (classOptions.length === 0) return;
+
+    const valid = classOptions.some(
       (opt) =>
         isSameTurma(opt, selectedTurma) &&
-        opt.horario === selectedHorario &&
+        horarioMatches(opt.horario, selectedHorario) &&
         opt.professor === selectedProfessor
     );
-    if (hasCurrentSelection) return;
+    if (valid) return;
 
     const saved = loadAttendanceSelection();
     if (saved?.turma) {
-      const restoredExact = classOptions.find(
+      const restored = classOptions.find(
         (opt) =>
           isSameTurma(opt, saved.turma) &&
-          (!saved.horario || opt.horario === saved.horario) &&
+          (!saved.horario || horarioMatches(opt.horario, saved.horario)) &&
           (!saved.professor || opt.professor === saved.professor)
       );
-      if (restoredExact) {
-        setSelectedTurma(getTurmaKey(restoredExact) || "");
-        setSelectedHorario(restoredExact.horario);
-        setSelectedProfessor(restoredExact.professor);
-        return;
-      }
-
-      const restoredTurma = classOptions.find((opt) => isSameTurma(opt, saved.turma));
-      if (restoredTurma) {
-        setSelectedTurma(getTurmaKey(restoredTurma) || "");
-        if (saved.horario) {
+      if (restored) {
+        setSelectedTurma(getTurmaKey(restored) || "");
+        if (saved.horario && horarioMatches(restored.horario, saved.horario)) {
           setSelectedHorario(saved.horario);
         } else {
-          setSelectedHorario(restoredTurma.horario);
+          const part = (restored.horario || "").split(/[;,]/)[0].trim();
+          if (part) setSelectedHorario(part);
         }
-        if (saved.professor) {
-          setSelectedProfessor(saved.professor);
-        } else {
-          setSelectedProfessor(restoredTurma.professor);
-        }
+        setSelectedProfessor(saved.professor || restored.professor);
         return;
       }
     }
 
     const first = classOptions[0];
     setSelectedTurma(getTurmaKey(first) || "");
-    setSelectedHorario(first.horario);
+    setSelectedHorario((first.horario || "").split(/[;,]/)[0].trim() || "");
     setSelectedProfessor(first.professor);
-  }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
+  }, [classOptions]);
 
   useEffect(() => {
     const target = localStorage.getItem("attendanceTargetTurma");
@@ -521,8 +515,15 @@ export const Attendance: React.FC = () => {
   const horarioOptions = useMemo(() => {
     const set = new Set<string>();
     classOptions
-      .filter((opt) => isSameTurma(opt, selectedTurma))
-      .forEach((opt) => opt.horario && set.add(opt.horario));
+      .filter((opt) => isSameTurma(opt, selectedTurma) &&
+        (!selectedProfessor || opt.professor === selectedProfessor))
+      .forEach((opt) => {
+        (opt.horario || "")
+          .split(/[;,]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((t) => set.add(t));
+      });
     const normalize = (value: string) => {
       const digits = value.replace(/\D/g, "");
       if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
@@ -530,15 +531,22 @@ export const Attendance: React.FC = () => {
       return Number.MAX_SAFE_INTEGER;
     };
     return Array.from(set).sort((a, b) => normalize(a) - normalize(b));
-  }, [classOptions, selectedTurma]);
+  }, [classOptions, selectedTurma, selectedProfessor]);
+
+  const horarioMatches = (optHorario: string, hora: string) => {
+    return (optHorario || "").
+      split(/[;,]/)
+      .map((s) => s.trim())
+      .some((t) => t === hora);
+  };
 
   const professorOptions = useMemo(() => {
     const set = new Set<string>();
     classOptions
-      .filter((opt) => isSameTurma(opt, selectedTurma) && opt.horario === selectedHorario)
+      .filter((opt) => isSameTurma(opt, selectedTurma))
       .forEach((opt) => opt.professor && set.add(opt.professor));
     return Array.from(set);
-  }, [classOptions, selectedTurma, selectedHorario]);
+  }, [classOptions, selectedTurma]);
 
   useEffect(() => {
     if (horarioOptions.length === 0) {
@@ -558,19 +566,21 @@ export const Attendance: React.FC = () => {
     if (!professorOptions.includes(selectedProfessor)) {
       setSelectedProfessor(professorOptions[0]);
     }
-  }, [professorOptions, selectedProfessor]);
+  }, [professorOptions]);
 
   const selectedClass = useMemo(() => {
     if (classOptions.length === 0) return emptyClass;
     const exact = classOptions.find(
       (opt) =>
         isSameTurma(opt, selectedTurma) &&
-        opt.horario === selectedHorario &&
+        horarioMatches(opt.horario, selectedHorario) &&
         opt.professor === selectedProfessor
     );
     if (exact) return exact;
     const byHorario = classOptions.find(
-      (opt) => isSameTurma(opt, selectedTurma) && opt.horario === selectedHorario
+      (opt) =>
+        isSameTurma(opt, selectedTurma) &&
+        horarioMatches(opt.horario, selectedHorario)
     );
     if (byHorario) return byHorario;
     const byTurma = classOptions.find((opt) => isSameTurma(opt, selectedTurma));
@@ -829,7 +839,15 @@ export const Attendance: React.FC = () => {
   }));
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
+
+  const sortedAttendance = useMemo(() => {
+    return [...attendance].sort((a, b) => {
+      const res = a.aluno.localeCompare(b.aluno);
+      return sortDir === "asc" ? res : -res;
+    });
+  }, [attendance, sortDir]);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
 
   // Estados para o Modal de Justificativa
@@ -1885,8 +1903,11 @@ export const Attendance: React.FC = () => {
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
             <thead>
               <tr style={{ background: "#667eea", color: "white" }}>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "bold", minWidth: "150px" }}>
-                  Aluno
+                <th
+                  style={{ padding: "12px", textAlign: "left", fontWeight: "bold", minWidth: "150px", cursor: "pointer" }}
+                  onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                >
+                  Aluno {sortDir === "asc" ? "▲" : "▼"}
                 </th>
                 {dateDates.map((date) => {
                   const dayNum = date.split("-")[2];
@@ -1936,7 +1957,7 @@ export const Attendance: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {attendance.map((item, idx) => {
+              {sortedAttendance.map((item, idx) => {
                 const absences = Object.values(item.attendance).filter((s) => s === "Falta").length;
                 const showNote =
                   Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado") ||
