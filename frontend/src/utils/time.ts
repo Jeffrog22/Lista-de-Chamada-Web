@@ -1,12 +1,12 @@
 export const maskHorarioInput = (raw: string): string => {
+  // Keep only numeric characters (max 4 digits representing HHMM)
   let digits = raw.replace(/\D/g, "").slice(0, 4);
-  if (digits.length === 3) {
-    digits = `0${digits}`;
+  // if two or fewer digits, just return them (user still typing hour)
+  if (digits.length <= 2) {
+    return digits;
   }
-  if (digits.length >= 3) {
-    return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-  }
-  return digits;
+  // insert colon between hour and minute portions
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
 };
 
 export const isValidHorarioPartial = (masked: string): boolean => {
