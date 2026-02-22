@@ -4068,5 +4068,95 @@
     "horario": "1515",
     "professor": "Daniela",
     "saved_at": "2026-02-21T14:59:56.652607+00:00"
+  },
+  {
+    "aluno_nome": "Helloisa de Jesus Inez",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.312484+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel Lima França",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.312788+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel de Souza Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.312886+00:00"
+  },
+  {
+    "aluno_nome": "Laura Ferreira Barbosa",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.312971+00:00"
+  },
+  {
+    "aluno_nome": "Lua Machado Pereira",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.313044+00:00"
+  },
+  {
+    "aluno_nome": "Matheus Henrique de Souza Marciano",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.313097+00:00"
+  },
+  {
+    "aluno_nome": "Miguel Soares Bastos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.313147+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.313195+00:00"
+  },
+  {
+    "aluno_nome": "Rafaela Aguiar Prata",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-22T19:26:10.313242+00:00"
   }
 ]

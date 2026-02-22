@@ -1,0 +1,12 @@
+﻿Opening DB...
+import units: 0
+import classes: 0
+import students: 0
+classes (persistent): 3
+students (persistent): 176
+No rows in import_* tables
+No candidate demo/default classes found
+No candidate demo/default students found
+Final classes (persistent): 3
+Final students (persistent): 176
+Done

@@ -15,3 +15,12 @@ Para sair do fallback e usar clima real:
 
 Sem essas variáveis, o endpoint `/weather` retorna fallback (`26` e `Parcialmente Nublado`).
 
+## Validar importação CSV
+
+Sempre que quiser verificar se o template oficial `data/templates/import-data.template.csv` continua compatível, execute o script de teste:
+
+1. No diretório raiz rodar `cd backend && .venv/Scripts/python.exe scripts/run_import_test.py` (ou adapte para o Python ativo). Isso faz upload do CSV e imprime os contadores de unidades, classes e alunos atualizados.
+2. O resultado deve ser `status 200` e valores como `classes_updated: 201`, o que confirma que o pipeline de importação funciona com o template atual.
+
+Esse comando também é útil para garantir que a base persistente reflita o conteúdo do CSV sempre que ele for alterado.
+

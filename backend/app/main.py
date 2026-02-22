@@ -1591,6 +1591,17 @@ def parse_bool(value: str) -> bool:
         return False
     return str(value).strip().lower() in {"true", "1", "sim", "yes", "y"}
 
+
+def _normalize_horario_value(raw: str) -> str:
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if len(digits) == 3:
+        digits = f"0{digits}"
+    if len(digits) > 4:
+        digits = digits[:4]
+    return digits.zfill(4)
+
 def get_or_create_import_unit(session: Session, name: str) -> models.ImportUnit:
     stmt = select(models.ImportUnit).where(models.ImportUnit.name == name)
     unit = session.exec(stmt).first()
@@ -1685,7 +1696,8 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
         for row in reader:
             unidade = (row.get("unidade") or "").strip()
             codigo = (row.get("turma_codigo") or "").strip()
-            horario = (row.get("horario") or "").strip()
+            raw_horario = (row.get("horario") or "").strip()
+            horario = _normalize_horario_value(raw_horario)
             aluno_nome = (row.get("aluno_nome") or "").strip()
 
             if not unidade or not codigo or not horario or not aluno_nome:
@@ -1706,6 +1718,7 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
                 session.flush()
                 counters["classes_created"] += 1
 
+            class_obj.horario = horario
             class_obj.professor = (row.get("professor") or "").strip()
             class_obj.nivel = (row.get("nivel") or "").strip()
             class_obj.faixa_etaria = (row.get("faixa_etaria") or "").strip()

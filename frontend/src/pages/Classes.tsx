@@ -29,7 +29,7 @@ const formatHorario = (value: string) => {
 };
 
 export const Classes: React.FC = () => {
-  // MOCK DATA - Baseado em chamadaBelaVista.xlsx
+  // Dados mock iniciais até o bootstrap carregar as turmas reais
   const [classes, setClasses] = useState<Class[]>([
     { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", FaixaEtaria: "Juvenil", Atalho: "1A", CapacidadeMaxima: 20 },
     { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", FaixaEtaria: "Juvenil", Atalho: "1B", CapacidadeMaxima: 20 },

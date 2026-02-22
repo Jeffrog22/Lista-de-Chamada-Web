@@ -91,6 +91,13 @@ export const Attendance: React.FC = () => {
 
   const defaultStudentsPerClass: { [key: string]: string[] } = {};
 
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
   const parseDiasSemana = (value: string | undefined): string[] => {
     if (!value) return [];
     return value
@@ -99,25 +106,81 @@ export const Attendance: React.FC = () => {
       .filter(Boolean);
   };
 
-  const formatHorario = (value: string) => {
-    if (!value) return "";
-    if (value.includes(":")) return value;
-    const digits = value.replace(/\D/g, "");
-    if (digits.length === 3) {
-      return `0${digits[0]}:${digits.slice(1)}`;
+  const getStringField = (item: any, ...keys: string[]) => {
+    if (!item) return "";
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) {
+        const value = item[key];
+        if (value !== undefined && value !== null) {
+          const text = String(value).trim();
+          if (text) return text;
+        }
+      }
     }
-    if (digits.length >= 4) {
-      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
-    }
-    return value;
+    return "";
   };
 
-  const normalizeText = (value: string) =>
-    value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
+  const normalizeHorarioDigits = (value?: string) => {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.length === 3) return `0${digits}`;
+    if (digits.length >= 4) return digits.slice(0, 4);
+    return digits;
+  };
+
+  const formatHorario = (value: string) => {
+    const normalized = normalizeHorarioDigits(value);
+    if (normalized.length >= 4) {
+      return `${normalized.slice(0, 2)}:${normalized.slice(2, 4)}`;
+    }
+    if (value) {
+      return value;
+    }
+    return "";
+  };
+
+  const extractHorarioTokens = (value?: string) => {
+    if (!value) return [];
+    return value
+      .split(/[;,]/)
+      .map((token) => normalizeHorarioDigits(token.trim()))
+      .filter(Boolean);
+  };
+
+  const getCanonicalHorario = (value?: string) => extractHorarioTokens(value)[0] || "";
+
+  const normalizeClassOptions = (items: any[]): ClassOption[] => {
+    const seen = new Map<string, ClassOption>();
+    items.forEach((raw) => {
+      if (!raw) return;
+      const turmaLabel =
+        getStringField(raw, "Turma", "turma_label", "turmaLabel", "turma") ||
+        getStringField(raw, "label", "nome");
+      const turmaCodigo =
+        getStringField(raw, "TurmaCodigo", "codigo", "turmaCodigo", "Atalho") || turmaLabel;
+      const professor = getStringField(raw, "Professor", "professor");
+      const nivel = getStringField(raw, "Nivel", "nivel");
+      const diasSemanaRaw = getStringField(raw, "DiasSemana", "dias_semana", "diasSemana");
+      const horarioRaw = String(raw.Horario ?? raw.horario ?? "").trim();
+      const canonicalHorario = getCanonicalHorario(horarioRaw);
+      const horarioKey = canonicalHorario || horarioRaw;
+      if (!turmaLabel && !turmaCodigo) return;
+      if (!horarioKey) return;
+      const key = `${turmaCodigo.toLowerCase()}|${turmaLabel.toLowerCase()}|${horarioKey}|${normalizeText(
+        professor
+      )}`;
+      if (seen.has(key)) return;
+      seen.set(key, {
+        turmaCodigo: turmaCodigo || turmaLabel,
+        turmaLabel: turmaLabel || turmaCodigo,
+        horario: canonicalHorario || horarioRaw,
+        professor,
+        nivel,
+        diasSemana: parseDiasSemana(diasSemanaRaw),
+      });
+    });
+    return Array.from(seen.values());
+  };
 
   const mapAttendanceValue = (value: string): "Presente" | "Falta" | "Justificado" | "" => {
     const normalized = normalizeText(value || "");
@@ -232,14 +295,7 @@ export const Attendance: React.FC = () => {
       const students = studentsStr ? JSON.parse(studentsStr) : [];
       if (!Array.isArray(classes) || !Array.isArray(students)) return null;
 
-      const classOptions: ClassOption[] = classes.map((cls: any) => ({
-        turmaCodigo: cls.TurmaCodigo || cls.Turma,
-        turmaLabel: cls.Turma,
-        horario: cls.Horario,
-        professor: cls.Professor,
-        nivel: cls.Nivel || "",
-        diasSemana: parseDiasSemana(cls.DiasSemana),
-      }));
+      const classOptions: ClassOption[] = normalizeClassOptions(classes);
 
       const studentsPerClass: { [key: string]: string[] } = {};
       students.forEach((student: any) => {
@@ -306,7 +362,7 @@ export const Attendance: React.FC = () => {
     storedSelection?.turma || getTurmaKey(classOptions[0] || emptyClass) || ""
   );
   const [selectedHorario, setSelectedHorario] = useState<string>(
-    storedSelection?.horario || classOptions[0]?.horario || ""
+    getCanonicalHorario(storedSelection?.horario || classOptions[0]?.horario || "")
   );
   const [selectedProfessor, setSelectedProfessor] = useState<string>(
     storedSelection?.professor || classOptions[0]?.professor || ""
@@ -387,10 +443,10 @@ export const Attendance: React.FC = () => {
       if (restored) {
         setSelectedTurma(getTurmaKey(restored) || "");
         if (saved.horario && horarioMatches(restored.horario, saved.horario)) {
-          setSelectedHorario(saved.horario);
+          setSelectedHorario(getCanonicalHorario(saved.horario));
         } else {
           const part = (restored.horario || "").split(/[;,]/)[0].trim();
-          if (part) setSelectedHorario(part);
+          if (part) setSelectedHorario(getCanonicalHorario(part));
         }
         setSelectedProfessor(saved.professor || restored.professor);
         return;
@@ -399,7 +455,7 @@ export const Attendance: React.FC = () => {
 
     const first = classOptions[0];
     setSelectedTurma(getTurmaKey(first) || "");
-    setSelectedHorario((first.horario || "").split(/[;,]/)[0].trim() || "");
+    setSelectedHorario(getCanonicalHorario(first.horario));
     setSelectedProfessor(first.professor);
   }, [classOptions]);
 
@@ -411,7 +467,7 @@ export const Attendance: React.FC = () => {
     );
     if (match) {
       setSelectedTurma(getTurmaKey(match) || "");
-      setSelectedHorario(match.horario);
+      setSelectedHorario(getCanonicalHorario(match.horario));
       setSelectedProfessor(match.professor);
     }
     localStorage.removeItem("attendanceTargetTurma");
@@ -437,31 +493,30 @@ export const Attendance: React.FC = () => {
   }, [classOptions]);
 
   const horarioOptions = useMemo(() => {
-    const set = new Set<string>();
+    const tokens = new Set<string>();
     classOptions
-      .filter((opt) => isSameTurma(opt, selectedTurma) &&
-        (!selectedProfessor || opt.professor === selectedProfessor))
+      .filter(
+        (opt) =>
+          isSameTurma(opt, selectedTurma) &&
+          (!selectedProfessor || opt.professor === selectedProfessor)
+      )
       .forEach((opt) => {
-        (opt.horario || "")
-          .split(/[;,]/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .forEach((t) => set.add(t));
+        extractHorarioTokens(opt.horario).forEach((token) => tokens.add(token));
       });
-    const normalize = (value: string) => {
-      const digits = value.replace(/\D/g, "");
-      if (digits.length >= 4) return parseInt(digits.slice(0, 4), 10);
-      if (digits.length === 3) return parseInt(`0${digits}`, 10);
-      return Number.MAX_SAFE_INTEGER;
-    };
-    return Array.from(set).sort((a, b) => normalize(a) - normalize(b));
+    return Array.from(tokens).sort((a, b) => {
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (Number.isNaN(na) && Number.isNaN(nb)) return 0;
+      if (Number.isNaN(na)) return 1;
+      if (Number.isNaN(nb)) return -1;
+      return na - nb;
+    });
   }, [classOptions, selectedTurma, selectedProfessor]);
 
   const horarioMatches = (optHorario: string, hora: string) => {
-    return (optHorario || "").
-      split(/[;,]/)
-      .map((s) => s.trim())
-      .some((t) => t === hora);
+    const normalizedHora = normalizeHorarioDigits(hora);
+    if (!normalizedHora) return false;
+    return extractHorarioTokens(optHorario).some((token) => token === normalizedHora);
   };
 
   const professorOptions = useMemo(() => {
@@ -551,15 +606,9 @@ export const Attendance: React.FC = () => {
 
   const activeStudentByNameInClass = useMemo(() => {
     const map = new Map<string, ActiveStudentMeta>();
-    const normalizeHorarioValue = (value: string) => {
-      const digits = (value || "").replace(/\D/g, "");
-      if (digits.length === 3) return `0${digits}`;
-      if (digits.length >= 4) return digits.slice(0, 4);
-      return digits;
-    };
     const turmaRef = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
     const turmaCodigoRef = normalizeText(selectedClass.turmaCodigo || "");
-    const horarioRef = normalizeHorarioValue(selectedClass.horario || selectedHorario || "");
+    const horarioRef = normalizeHorarioDigits(selectedClass.horario || selectedHorario || "");
     const professorRef = normalizeText(selectedClass.professor || selectedProfessor || "");
 
     activeStudentsMeta.forEach((student) => {
@@ -568,7 +617,7 @@ export const Attendance: React.FC = () => {
 
       const studentTurma = normalizeText(student.turma || "");
       const studentTurmaCodigo = normalizeText(student.turmaCodigo || "");
-      const studentHorario = normalizeHorarioValue(student.horario || "");
+      const studentHorario = normalizeHorarioDigits(student.horario || "");
       const studentProfessor = normalizeText(student.professor || "");
 
       const turmaMatches =

@@ -9,7 +9,6 @@
   - `logPiscina.xlsx`
 - `data/templates/` (modelos para importação/migração SQL)
   - `import-data.template.csv`
-  - `chamadaBelaVista.template.xlsx`
   - `baseChamada.template.json`
   - `baseJustificativas.template.json`
   - `excludedStudents.template.json`
@@ -25,7 +24,7 @@
 
 ## Importação SQL (CSV)
 
-O template principal é `templates/import-data.template.csv`.
+O template principal e oficial é `templates/import-data.template.csv`; o layout do Excel legado foi removido, de modo que toda integração e validação devem se basear nesse CSV.
 
 Colunas esperadas pelo endpoint `/api/import-data`:
 
