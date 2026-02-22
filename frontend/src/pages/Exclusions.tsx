@@ -287,67 +287,6 @@ export const Exclusions: React.FC = () => {
     activeStudents.push(restoredStudent);
     localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
 
-    try {
-      const overridesRaw = localStorage.getItem("studentOverrides");
-      const overrides = overridesRaw
-        ? JSON.parse(overridesRaw)
-        : { added: [], updated: {}, deleted: [], deletedKeys: [], deletedSignatures: [] };
-      const added = Array.isArray(overrides.added) ? overrides.added : [];
-      added.push(restoredStudent);
-      overrides.added = added;
-      overrides.deleted = Array.isArray(overrides.deleted) ? overrides.deleted : [];
-      overrides.deletedKeys = Array.isArray(overrides.deletedKeys) ? overrides.deletedKeys : [];
-      overrides.deletedSignatures = Array.isArray(overrides.deletedSignatures)
-        ? overrides.deletedSignatures
-        : [];
-
-      const normalizeText = (value: string) =>
-        value
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .trim();
-
-      const normalizeHorarioKey = (value: string) => {
-        const digits = (value || "").replace(/\D/g, "");
-        if (digits.length === 3) return `0${digits}`;
-        if (digits.length >= 4) return digits.slice(0, 4);
-        return digits;
-      };
-
-      const buildStudentKey = (student: any) => {
-        const nameKey = normalizeText(student.nome || "");
-        const turmaKey = normalizeText(student.turma || "");
-        const professorKey = normalizeText(student.professor || "");
-        const horarioKey = normalizeHorarioKey(student.horario || "");
-        const birthKey = (student.dataNascimento || "").trim();
-        const whatsappKey = (student.whatsapp || "").replace(/\D/g, "");
-        return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
-      };
-
-      const buildStudentSignature = (student: any) => {
-        const nameKey = normalizeText(student.nome || "");
-        const turmaKey = normalizeText(student.turma || student.turmaCodigo || "");
-        return turmaKey ? `${nameKey}|${turmaKey}` : nameKey;
-      };
-
-      const buildStudentNameSignature = (student: any) => normalizeText(student.nome || "");
-
-      const deleteKey = buildStudentKey(restoredStudent);
-      const deleteSignature = buildStudentSignature(restoredStudent);
-      const deleteName = buildStudentNameSignature(restoredStudent);
-
-      overrides.deleted = overrides.deleted.filter((id: string) => id !== restoredStudent.id);
-      overrides.deletedKeys = overrides.deletedKeys.filter((key: string) => key !== deleteKey);
-      overrides.deletedSignatures = overrides.deletedSignatures.filter(
-        (key: string) => key !== deleteSignature && key !== deleteName
-      );
-
-      localStorage.setItem("studentOverrides", JSON.stringify(overrides));
-    } catch {
-      // ignore
-    }
-
     const newExcludedList = students.filter((s) => s !== editingStudent);
     setStudents(newExcludedList);
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));

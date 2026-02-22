@@ -1,0 +1,202 @@
+﻿ï»¿aluno_nome;aluno_turma;atestado;capacidade;categoria;data_atest;data_nascimento;dias_semana;genero;horario;nivel;parq;professor;turma_codigo;unidade;whatsapp;faixa_etaria
+Ana Cristina Goldberger;TerÃ§a e Quinta;;8;Infantil I;;29/10/2013;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19989718760;7 a 15 anos
+Arthur Macienti;TerÃ§a e Quinta;;8;Infantil II;;05/04/2012;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19991341632;7 a 15 anos
+Felipe GonÃ§alves dos Santos;TerÃ§a e Quinta;;8;Juvenil I;;15/12/2011;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;11975642252;7 a 15 anos
+HeloÃ­sa Rainha Stradioto;TerÃ§a e Quinta;;8;Infantil I;;26/04/2013;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19996576904;7 a 15 anos
+Lavinia Evangelista dos Santos;TerÃ§a e Quinta;;8;Juvenil I;;18/10/2011;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19991541996;7 a 15 anos
+Lucas Samuel Quintilho;TerÃ§a e Quinta;;8;JÃºnior I;;17/12/2009;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19991166950;7 a 15 anos
+Matheus Henrique Liboni dos Santos;TerÃ§a e Quinta;;8;Infantil I;;23/02/2013;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19992227977;7 a 15 anos
+Nicholas de AraÃºjo Silva;TerÃ§a e Quinta;;8;Infantil II;;26/06/2012;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19991135105;7 a 15 anos
+Welpy Pereira Nunes Rodrigues;TerÃ§a e Quinta;;8;Juvenil II;;10/04/2010;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 A;Sim;Daniela;dtq01;Bela Vista;19988075332;7 a 15 anos
+Ana Julia Bonfim dos Santos;TerÃ§a e Quinta;;8;Infantil II;;30/01/2012;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19984441275;7 a 15 anos
+Fabiola Santos Marques da Silva;TerÃ§a e Quinta;;8;Juvenil I;;28/04/2011;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19993548421;7 a 15 anos
+Henry Brito de Oliveira;TerÃ§a e Quinta;;8;Juvenil I;;18/10/2011;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19999318663;7 a 15 anos
+Karen Pereira Martins;TerÃ§a e Quinta;;8;Infantil II;;01/08/2012;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19994721776;7 a 15 anos
+Kevin Miguel do Nascimento Pardinho;TerÃ§a e Quinta;;8;Juvenil I;;18/02/2011;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19982254162;7 a 15 anos
+Kleber Vinicius GonÃ§alves;TerÃ§a e Quinta;;8;Juvenil I;;29/04/2011;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19991567347;7 a 15 anos
+Luara Karolina de Torres;TerÃ§a e Quinta;;8;Petiz II;;30/11/2014;"""TerÃ§a;Quinta""";Feminino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;11962430291;7 a 15 anos
+Pietro dos Santos Cruz;TerÃ§a e Quinta;;8;Infantil II;;11/05/2012;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19982715285;7 a 15 anos
+Samuel Marino Ribeiro;TerÃ§a e Quinta;;8;Infantil II;;17/05/2012;"""TerÃ§a;Quinta""";Masculino;800;NÃ­vel 4 B;Sim;Jefferson;jtq01;Bela Vista;19997908056;7 a 15 anos
+Alice Marino Ribeiro;TerÃ§a e Quinta;;8;Mirim II;;26/10/2016;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19997908056;7 a 15 anos
+Arielly Luiza Machado Silva;TerÃ§a e Quinta;;8;Petiz I;;04/05/2015;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19974100481;7 a 15 anos
+Gabrielly Leal Marino;TerÃ§a e Quinta;;8;Mirim II;;12/04/2016;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19991933631;7 a 15 anos
+Isabelly Pires da Silva Leopoldo;TerÃ§a e Quinta;;8;Petiz II;;09/09/2014;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19992678973;7 a 15 anos
+Lorena Galdino Leal Ferres;TerÃ§a e Quinta;;8;Infantil I;;03/05/2013;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19991656714;7 a 15 anos
+Lucas Oliveira dos Santos;TerÃ§a e Quinta;;8;Infantil I;;17/02/2013;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19989782455;7 a 15 anos
+Maria Eduarda de Carvalho Falaschi;TerÃ§a e Quinta;;8;Mirim II;;05/03/2016;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 2;Sim;Daniela;dtq02;Bela Vista;19999674545;7 a 15 anos
+Arthur Abreu Pinho;TerÃ§a e Quinta;;8;Infantil I;;05/12/2013;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;11980348947;7 a 15 anos
+Erick Gabriel Pereira da Souza;TerÃ§a e Quinta;;8;Infantil II;;19/09/2012;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19991254586;7 a 15 anos
+Larissa Araujo Pereira;TerÃ§a e Quinta;;8;Petiz I;;07/10/2015;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19997502317;7 a 15 anos
+Lucas Bernardo Carvalho Silva;TerÃ§a e Quinta;;8;Petiz II;;11/03/2014;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19996340906;7 a 15 anos
+Matheus Henrique AraÃºjo Oliveira;TerÃ§a e Quinta;;8;Petiz II;;19/03/2014;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19993260767;7 a 15 anos
+Paulo Manoel Oliveira Braga;TerÃ§a e Quinta;;8;Juvenil I;;18/10/2011;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19987553511;7 a 15 anos
+Rafael Nascimento dos Anjos;TerÃ§a e Quinta;;8;Petiz I;;11/08/2015;"""TerÃ§a;Quinta""";Masculino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19996808116;7 a 15 anos
+Yasmin Gabrielly TeÃ³filo de Souza;TerÃ§a e Quinta;;8;Infantil I;;02/11/2013;"""TerÃ§a;Quinta""";Feminino;845;NÃ­vel 3;Sim;Jefferson;jtq02;Bela Vista;19984566884;7 a 15 anos
+HeloÃ­sa Silva Nascimento da Costa;TerÃ§a e Quinta;;7;Mirim II;;03/03/2016;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19999663861;7 a 15 anos
+Kaleo de Oliveira Almeida;TerÃ§a e Quinta;;7;Mirim I;;18/10/2017;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19993068207;7 a 15 anos
+Lucas Henrique de Assis;TerÃ§a e Quinta;;7;Mirim I;;18/02/2017;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19981152173;7 a 15 anos
+Luiz Felipe Lima Ladeia;TerÃ§a e Quinta;;7;Juvenil II;;04/12/2010;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19981171356;7 a 15 anos
+Pedro Henrique Silva Souza;TerÃ§a e Quinta;;7;PrÃ©-Mirim;;18/01/2018;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19981149450;7 a 15 anos
+Samuel Martins Cortiella de Moraes;TerÃ§a e Quinta;;7;Petiz I;;12/05/2015;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19988781485;7 a 15 anos
+Sofia Helena Silva Santos;TerÃ§a e Quinta;;7;Infantil I;;24/10/2013;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;19982774269;7 a 15 anos
+Yasmim VitÃ³ria de Oliveira ;TerÃ§a e Quinta;;7;Mirim II;;10/10/2016;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 B;Sim;Daniela;dtq03;Bela Vista;11956812138;7 a 15 anos
+Davi Luis Araujo Pereira;TerÃ§a e Quinta;;7;Petiz I;;07/10/2015;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19997502317;7 a 15 anos
+Emilly AraÃºjo Silva;TerÃ§a e Quinta;;7;Infantil I;;05/04/2013;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19982830862;7 a 15 anos
+Lucas Matias dos Santos;TerÃ§a e Quinta;;7;Petiz I;;04/03/2015;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19992899612;7 a 15 anos
+Nicole Oliveira da Silva;TerÃ§a e Quinta;;7;Petiz I;;04/05/2015;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19994910868;7 a 15 anos
+Roberta Costa Soares;TerÃ§a e Quinta;;7;Juvenil II;;30/11/2010;"""TerÃ§a;Quinta""";Feminino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19981499982;7 a 15 anos
+VinÃ­cius Oliveira da Silva;TerÃ§a e Quinta;;7;Petiz I;;04/05/2015;"""TerÃ§a;Quinta""";Masculino;1015;NÃ­vel 1 A;Sim;Jefferson;jtq03;Bela Vista;19994910868;7 a 15 anos
+Ana Paula Pinto Liboni;TerÃ§a e Quinta;;5;F45+;;11/05/1977;"""TerÃ§a;Quinta""";Feminino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19992227977;> 16 anos
+Fabio Antunes de Oliveira Ramos ;TerÃ§a e Quinta;;5;F45+;;26/04/1979;"""TerÃ§a;Quinta""";Masculino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;11980266619;> 16 anos
+Larissa Cristina Cruz;TerÃ§a e Quinta;;5;B25+;;08/02/1997;"""TerÃ§a;Quinta""";Feminino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19993788449;> 16 anos
+Ricardo Ferragut Gallo;TerÃ§a e Quinta;;5;E40+;;16/02/1984;"""TerÃ§a;Quinta""";Masculino;1100;Adulto A;Sim;Daniela;dtq04;Bela Vista;19999996367;> 16 anos
+Eldirlei Cruz;TerÃ§a e Quinta;;5;E40+;;10/06/1985;"""TerÃ§a;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19993360327;> 16 anos
+Elson Herly da Silva;TerÃ§a e Quinta;;5;C30+;;06/02/1994;"""TerÃ§a;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19983683310;> 16 anos
+Geise Ribeiro Souza;TerÃ§a e Quinta;;5;D35+;;29/01/1988;"""TerÃ§a;Quinta""";Feminino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19974050666;> 16 anos
+JosÃ© Carlos da Silva;TerÃ§a e Quinta;;5;I60+;;31/10/1966;"""TerÃ§a;Quinta""";Masculino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19996443147;> 16 anos
+LÃ©cia Francisca da Silva;TerÃ§a e Quinta;true;5;G50+;25/01/2026;06/08/1973;"""TerÃ§a;Quinta""";Feminino;1100;Adulto B;Sim;Jefferson;jtq04;Bela Vista;19996585489;> 16 anos
+Alice Soares Batista;TerÃ§a e Quinta;;7;Petiz I;;10/03/2015;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19989185413;7 a 15 anos
+Alice Sophia Dias Silva;TerÃ§a e Quinta;;7;Mirim II;;13/01/2016;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19988107162;7 a 15 anos
+Lorena Costalonga;TerÃ§a e Quinta;;7;Mirim II;;26/11/2016;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19987452543;7 a 15 anos
+Manuella Ferreira Lima;TerÃ§a e Quinta;;7;Mirim II;;21/12/2016;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19988575340;7 a 15 anos
+Maria HeloÃ­sa Vieira Dutra;TerÃ§a e Quinta;;7;Petiz II;;11/01/2014;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19994957896;7 a 15 anos
+Maria Raphaelly Candida Silva;TerÃ§a e Quinta;;7;Mirim I;;05/06/2017;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19987315511;7 a 15 anos
+OtÃ¡vio Azi de Matos;TerÃ§a e Quinta;;7;Mirim I;;15/03/2017;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19998364360;7 a 15 anos
+Pedro Silva de Oliveira Neto;TerÃ§a e Quinta;;7;Mirim I;;27/06/2017;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19982512856;7 a 15 anos
+Raphaella Agatha Candida Silva;TerÃ§a e Quinta;;7;Mirim I;;05/06/2017;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 A;Sim;Daniela;dtq05;Bela Vista;19987315511;7 a 15 anos
+Evellyn Carolline Alves da Silva;TerÃ§a e Quinta;;7;Petiz I;;11/02/2015;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;11940018509;7 a 15 anos
+Fernando Ribeiro de Lima;TerÃ§a e Quinta;;7;Infantil I;;01/11/2013;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;16996388331;7 a 15 anos
+Guilherme Henrique Meira de Oliveira ;TerÃ§a e Quinta;;7;Infantil II;;26/07/2012;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19994877941;7 a 15 anos
+HeloÃ­sa Anderson Navero;TerÃ§a e Quinta;;7;PrÃ©-Mirim;;23/01/2018;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19981680946;7 a 15 anos
+Joaquim Miguel;TerÃ§a e Quinta;;7;Mirim II;;15/03/2016;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19988730288;7 a 15 anos
+Matheus Alves Martins;TerÃ§a e Quinta;;7;Mirim II;;22/04/2016;"""TerÃ§a;Quinta""";Masculino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19991156666;7 a 15 anos
+Sophia Characomo Albino;TerÃ§a e Quinta;;7;Mirim II;;12/12/2016;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19974092190;7 a 15 anos
+Yasmin de Oliveira Silva Pereira;TerÃ§a e Quinta;;7;Petiz I;;22/03/2015;"""TerÃ§a;Quinta""";Feminino;1300;NÃ­vel 1 B;Sim;Jefferson;jtq05;Bela Vista;19994702217;7 a 15 anos
+Alice Gabrielly de Souza;TerÃ§a e Quinta;;8;Infantil I;;25/06/2013;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19996707327;7 a 15 anos
+Ana Clara Batista;TerÃ§a e Quinta;;8;Petiz II;;05/08/2014;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19998537207;7 a 15 anos
+CaÃ­que Amorim Torezin;TerÃ§a e Quinta;;8;Infantil I;;09/06/2013;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19992047876;7 a 15 anos
+Davi Francisco da Silva Sousa;TerÃ§a e Quinta;;8;Petiz II;;06/03/2014;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19988251193;7 a 15 anos
+Guilherme Santos Cavalcante;TerÃ§a e Quinta;;8;Petiz II;;26/11/2014;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19998827136;7 a 15 anos
+Isabella Aparecida Quintilho;TerÃ§a e Quinta;;8;Petiz II;;18/11/2014;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19997750882;7 a 15 anos
+Julia Quintilho Carrera;TerÃ§a e Quinta;;8;Petiz I;;27/07/2015;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19997198447;7 a 15 anos
+Luisa Barbosa Santos;TerÃ§a e Quinta;;8;Mirim I;;14/01/2017;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19995210605;7 a 15 anos
+Manuella Eduarda Padilha de Souza;TerÃ§a e Quinta;;8;Mirim II;;30/01/2016;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19993591786;7 a 15 anos
+Mateus Gomes Pacheco;TerÃ§a e Quinta;;8;Petiz I;;12/10/2015;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19988082611;7 a 15 anos
+Ricardo Henrique Goldberger ;TerÃ§a e Quinta;;8;Mirim II;;18/05/2016;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 B;Sim;Daniela;dtq06;Bela Vista;19993603830;7 a 15 anos
+Allana Micaela dos Santos Oliveira;TerÃ§a e Quinta;;8;Petiz I;;24/04/2015;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19971231709;7 a 15 anos
+Arthur Tonetti de Andrade;TerÃ§a e Quinta;;8;Petiz I;;15/02/2015;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19986082984;7 a 15 anos
+Bianca Rodrigues Franco;TerÃ§a e Quinta;;8;Petiz II;;21/04/2014;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19998698586;7 a 15 anos
+Davi Lorenzo de AraÃºjo;TerÃ§a e Quinta;;8;Petiz I;;02/06/2015;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19995925994;7 a 15 anos
+JoÃ£o Cadorin Cintra;TerÃ§a e Quinta;;8;Infantil I;;15/02/2013;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19993425030;7 a 15 anos
+Juan Pablo Costa Silva;TerÃ§a e Quinta;;8;Infantil I;;27/03/2013;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19981452475;7 a 15 anos
+Julia Barros Camargo;TerÃ§a e Quinta;;8;Infantil II;;09/08/2012;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19982757624;7 a 15 anos
+Matheus Facundo de Carvalho;TerÃ§a e Quinta;;8;Infantil II;;12/04/2012;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19997365963;7 a 15 anos
+Miguel dos Santos Barreto;TerÃ§a e Quinta;;8;Mirim II;;12/01/2016;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19993978058;7 a 15 anos
+Miguel Vitor Alves dos Santos;TerÃ§a e Quinta;;8;Juvenil I;;02/11/2011;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19984447378;7 a 15 anos
+Pedro Duarte Martins;TerÃ§a e Quinta;;8;Mirim I;;23/02/2017;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19996083837;7 a 15 anos
+Pedro Emanoel Alves de Souza;TerÃ§a e Quinta;;8;Petiz II;;25/01/2014;"""TerÃ§a;Quinta""";Masculino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19981436348;7 a 15 anos
+Suzana Oliveira de Lima;TerÃ§a e Quinta;;8;Petiz II;;03/04/2014;"""TerÃ§a;Quinta""";Feminino;1345;NÃ­vel 2 A;Sim;Jefferson;jtq06;Bela Vista;19982272104;7 a 15 anos
+Augusto Lira Cruvinel Machado;TerÃ§a e Quinta;;8;Petiz II;;17/11/2014;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;15981638442;7 a 15 anos
+Daniel Ribeiro Ventura;TerÃ§a e Quinta;;8;Petiz I;;19/09/2015;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19983599038;7 a 15 anos
+Emmanuel Bernardo da Silva;TerÃ§a e Quinta;;8;Infantil I;;03/09/2013;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19982468258;7 a 15 anos
+Isabelle Felix dos Santos;TerÃ§a e Quinta;;8;Petiz II;;12/05/2014;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19984074178;7 a 15 anos
+Marcos do Nascimento Leal;TerÃ§a e Quinta;;8;Petiz II;;17/09/2014;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19991656714;7 a 15 anos
+Marcos JosÃ© Oliveira Alexandre;TerÃ§a e Quinta;;8;Juvenil I;;03/11/2011;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19983113372;7 a 15 anos
+Patrick Iezo Antunes Ramos;TerÃ§a e Quinta;;8;Mirim I;;27/06/2017;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19996908084;7 a 15 anos
+Pedro Henrique Godoy Filho;TerÃ§a e Quinta;;8;Petiz II;;06/09/2014;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19994413169;7 a 15 anos
+Pedro Oliveira Malveiro;TerÃ§a e Quinta;;8;Petiz I;;01/03/2015;"""TerÃ§a;Quinta""";Masculino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19996246959;7 a 15 anos
+Rafaela Gomes Carvalho;TerÃ§a e Quinta;;8;Infantil I;;06/01/2013;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19993712123;7 a 15 anos
+Vitoria Santos Cavalcante;TerÃ§a e Quinta;;8;Petiz I;;08/09/2015;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19999742039;7 a 15 anos
+Yane MendonÃ§a Oliveira;TerÃ§a e Quinta;;8;Infantil I;;12/07/2013;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 3;Sim;Daniela;dtq07;Bela Vista;19987192714;7 a 15 anos
+Ana Julia da Silva Almeida;TerÃ§a e Quinta;;8;Petiz II;;08/10/2014;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19994409951;7 a 15 anos
+Ana Laura Ramos Flores;TerÃ§a e Quinta;;8;Mirim II;;13/05/2016;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19991847066;7 a 15 anos
+Helena Bezerra de Oliveira Bispo;TerÃ§a e Quinta;;8;Petiz I;;24/11/2015;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19998709730;7 a 15 anos
+Isabelly Santos Cavalcante;TerÃ§a e Quinta;;8;Infantil I;;21/11/2013;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19999742039;7 a 15 anos
+Lorenna Marineide de Jesus;TerÃ§a e Quinta;;8;Mirim II;;30/01/2016;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19991453921;7 a 15 anos
+Maria Eduarda Garcia;TerÃ§a e Quinta;;8;Petiz II;;01/10/2014;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19991299416;7 a 15 anos
+Maria Luiza Presti Resende;TerÃ§a e Quinta;;8;Mirim II;;25/02/2016;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19982025447;7 a 15 anos
+Rebeca da Silva Santos;TerÃ§a e Quinta;;8;Petiz I;;02/03/2015;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19992004319;7 a 15 anos
+Sarah Barbosa da Silva;TerÃ§a e Quinta;;8;Infantil II;;24/09/2012;"""TerÃ§a;Quinta""";Feminino;1515;NÃ­vel 4;Sim;Jefferson;jtq07;Bela Vista;19996033875;7 a 15 anos
+Beatriz Feitosa Bezerra;TerÃ§a e Quinta;;5;JÃºnior I;;18/02/2009;"""TerÃ§a;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19982853297;> 16 anos
+Ed Carlos de Oliveira;TerÃ§a e Quinta;;5;F45+;;25/12/1978;"""TerÃ§a;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19981523643;> 16 anos
+Edna Lucia de Almeida Cruz;TerÃ§a e Quinta;;5;E40+;;26/03/1985;"""TerÃ§a;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19993705725;> 16 anos
+Glaucia Yoko Baba;TerÃ§a e Quinta;;5;E40+;;25/01/1983;"""TerÃ§a;Quinta""";Feminino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19981526590;> 16 anos
+Luis Pereira de Oliveira;TerÃ§a e Quinta;;5;F45+;;15/05/1980;"""TerÃ§a;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19999117443;> 16 anos
+Matheus Araujo dos Santos Toquero;TerÃ§a e Quinta;;5;JÃºnior I;;15/04/2009;"""TerÃ§a;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19988427762;> 16 anos
+Willian Silva Oliveira;TerÃ§a e Quinta;;5;E40+;;22/01/1985;"""TerÃ§a;Quinta""";Masculino;1600;Adulto A;Sim;Daniela;dtq08;Bela Vista;19988428989;> 16 anos
+Gisele Cristina de Souza;TerÃ§a e Quinta;;5;F45+;;03/10/1980;"""TerÃ§a;Quinta""";Feminino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19989718760;> 16 anos
+Nilton de Oliveira Fernandes;TerÃ§a e Quinta;;5;D35+;;03/02/1987;"""TerÃ§a;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19988117728;> 16 anos
+Reinaldo Pires do Prado;TerÃ§a e Quinta;;5;F45+;;23/12/1979;"""TerÃ§a;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;19982743085;> 16 anos
+Renan Francisco Souza Oliveira;TerÃ§a e Quinta;;5;C30+;;02/06/1993;"""TerÃ§a;Quinta""";Masculino;1600;Adulto B;Sim;Jefferson;jtq08;Bela Vista;11984923877;> 16 anos
+Elza Pereira Amorim Torezin;Quarta e Sexta;;5;G50+;;30/01/1974;"""Quarta;Sexta""";Feminino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;19991514800;> 16 anos
+Priscila Moraes Lopes ;Quarta e Sexta;;5;C30+;;18/10/1993;"""Quarta;Sexta""";Feminino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;11990094977;> 16 anos
+Rodrigo GregÃ³rio da Silva;Quarta e Sexta;;5;C30+;;01/03/1995;"""Quarta;Sexta""";Masculino;800;Adulto B;Sim;Daniela;dqs01;Bela Vista;19996514208;> 16 anos
+Augusto de Almeida ;Quarta e Sexta;;5;B25+;;20/04/2001;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19999145542;> 16 anos
+Bianca Almeida de Moura Coelho ;Quarta e Sexta;;5;C30+;;23/05/1994;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19999134428;> 16 anos
+Bruno Nunes Marques;Quarta e Sexta;;5;E40+;;10/11/1986;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19981385193;> 16 anos
+JosÃ© Francisco da Silva;Quarta e Sexta;;5;E40+;;03/05/1983;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19996340906;> 16 anos
+Katia Cilene TibÃºrcio da Silva;Quarta e Sexta;;5;F45+;;15/08/1978;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19988379260;> 16 anos
+Liliam de Sales Cambraia;Quarta e Sexta;;5;E40+;;27/05/1984;"""Quarta;Sexta""";Feminino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19982739581;> 16 anos
+Lucas Cordeiro da Silva;Quarta e Sexta;;5;B25+;;04/03/1998;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19988916662;> 16 anos
+Samuel Ometto Franco;Quarta e Sexta;;5;D35+;;16/04/1987;"""Quarta;Sexta""";Masculino;800;Adulto A;Sim;Jefferson;jqs01;Bela Vista;19998059969;> 16 anos
+Helloisa de Jesus Inez;Quarta e Sexta;;8;Petiz I;;23/10/2015;"""Quarta;Sexta""";Feminino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;11943338262;10 a 15 anos
+JoÃ£o Miguel de Souza Silva;Quarta e Sexta;;8;Petiz I;;26/12/2015;"""Quarta;Sexta""";Masculino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19996237950;10 a 15 anos
+JoÃ£o Miguel Lima FranÃ§a;Quarta e Sexta;;8;Infantil I;;23/05/2013;"""Quarta;Sexta""";Masculino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19997886757;10 a 15 anos
+Laura Ferreira Barbosa;Quarta e Sexta;;8;Mirim II;;22/01/2016;"""Quarta;Sexta""";Feminino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19997213918;10 a 15 anos
+Lua Machado Pereira;Quarta e Sexta;;8;PrÃ©-Mirim;;15/07/2018;"""Quarta;Sexta""";Feminino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19999664445;10 a 15 anos
+Matheus Henrique de Souza Marciano;Quarta e Sexta;;8;Juvenil I;;04/10/2011;"""Quarta;Sexta""";Masculino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19988818856;10 a 15 anos
+Miguel Soares Bastos;Quarta e Sexta;;8;Mirim I;;18/04/2017;"""Quarta;Sexta""";Masculino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19988874186;10 a 15 anos
+Pedro Henrique Carvalho de AraÃºjo;Quarta e Sexta;;8;Petiz I;;09/01/2015;"""Quarta;Sexta""";Masculino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;19992318737;10 a 15 anos
+Rafaela Aguiar Prata;Quarta e Sexta;;8;Petiz I;;07/06/2015;"""Quarta;Sexta""";Feminino;930;IniciaÃ§Ã£o A;Sim;Jefferson;jqs02;Bela Vista;11952513843;10 a 15 anos
+Alice Soares Cunha;Quarta e Sexta;;8;PrÃ©-Mirim;;06/01/2019;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19987342571;7 a 9 anos
+Allana Beatriz da Cruz Francisco;Quarta e Sexta;;8;Petiz I;;29/04/2015;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19994847352;7 a 9 anos
+Ana Clara Pereira de Souza;Quarta e Sexta;;8;PrÃ©-Mirim;;16/10/2018;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19995281206;7 a 9 anos
+Aylla VictÃ³ria Silva Souza;Quarta e Sexta;;8;Mirim II;;16/05/2016;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19999745798;7 a 9 anos
+Isaque Galdino Autor;Quarta e Sexta;;8;Mirim II;;20/03/2016;"""Quarta;Sexta""";Masculino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19998312527;7 a 9 anos
+Lorena VitÃ³ria Silveira dos Santos;Quarta e Sexta;;8;PrÃ©-Mirim;;10/05/2018;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19999595186;7 a 9 anos
+Lorenna Silva Ribeiro;Quarta e Sexta;;8;PrÃ©-Mirim;;19/09/2018;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19987476037;7 a 9 anos
+Natalia Silva de Souza;Quarta e Sexta;;8;Mirim II;;25/02/2016;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19991572328;7 a 9 anos
+Nicole Yasmin Silveira dos Santos;Quarta e Sexta;;8;Mirim II;;20/02/2016;"""Quarta;Sexta""";Feminino;1015;IniciaÃ§Ã£o B;Sim;Daniela;dqs02;Bela Vista;19999595186;7 a 9 anos
+Alice Lohane Silva;Quarta e Sexta;;8;Mirim II;;24/08/2016;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19992825803;10 a 15 anos
+Arthur Guilherme Lima Santos;Quarta e Sexta;;8;Petiz I;;14/08/2015;"""Quarta;Sexta""";Masculino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19992302694;10 a 15 anos
+Felipe Marques de Melo;Quarta e Sexta;;8;Infantil I;;26/12/2013;"""Quarta;Sexta""";Masculino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19982520300;10 a 15 anos
+Ingrid Lohana Silva;Quarta e Sexta;;8;Mirim II;;24/08/2016;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19992825803;10 a 15 anos
+LÃ­via Meira de Oliveira ;Quarta e Sexta;;8;Mirim II;;08/12/2016;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19994877941;10 a 15 anos
+Nayla Mota de Matos;Quarta e Sexta;;8;Infantil I;;23/04/2013;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19971506163;10 a 15 anos
+Sophia Marques Forner;Quarta e Sexta;;8;Infantil I;;20/06/2013;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19998321598;10 a 15 anos
+Valentina Marques de Melo;Quarta e Sexta;;8;Mirim II;;31/03/2016;"""Quarta;Sexta""";Feminino;1300;IniciaÃ§Ã£o A;Sim;Daniela;dqs03;Bela Vista;19982520300;10 a 15 anos
+Benjamin Nardi;Quarta e Sexta;;8;Mirim I;;25/08/2017;"""Quarta;Sexta""";Masculino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;19991111708;7 a 9 anos
+Gabriella Modenez Oliveira;Quarta e Sexta;;8;PrÃ©-Mirim;;26/10/2018;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;44998192333;7 a 9 anos
+Giovana Silva dos Santos;Quarta e Sexta;;8;PrÃ©-Mirim;;07/08/2025;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;75981749147;7 a 9 anos
+Helena Santos Machado;Quarta e Sexta;;8;PrÃ©-Mirim;;15/07/2018;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;11953483625;7 a 9 anos
+Isadora Aparecida Barbosa;Quarta e Sexta;;8;PrÃ©-Mirim;;12/01/2018;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;19983580505;7 a 9 anos
+Livia Oliveira Alexandre;Quarta e Sexta;;8;Mirim I;;22/11/2017;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;19983113372;7 a 9 anos
+Raquel Siqueira Sabino;Quarta e Sexta;;8;Petiz I;;12/10/2015;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;19992320844;7 a 9 anos
+Rebeca Siqueira Sabino;Quarta e Sexta;;8;Petiz I;;12/10/2015;"""Quarta;Sexta""";Feminino;1345;IniciaÃ§Ã£o B;Sim;Jefferson;jqs03;Bela Vista;19992320844;7 a 9 anos
+Eduarda Ferreira Gomes GregÃ³rio;Quarta e Sexta;;8;Petiz II;;22/07/2014;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19982317908;7 a 15 anos
+Gabriel Souza de Oliveira;Quarta e Sexta;;8;Petiz II;;08/12/2014;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19981523643;7 a 15 anos
+Kamilly VitÃ³ria da Silva Melo;Quarta e Sexta;;8;Juvenil I;;25/08/2011;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19982431193;7 a 15 anos
+Lucas Quintilho de Sousa;Quarta e Sexta;;8;Infantil I;;27/03/2013;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19971426443;7 a 15 anos
+Maria Laura Paiva da Silva;Quarta e Sexta;;8;Infantil I;;30/01/2013;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19993687305;7 a 15 anos
+Matheus Henrique Bonfim dos Santos;Quarta e Sexta;;8;Petiz II;;27/12/2014;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19984441275;7 a 15 anos
+Rebecca de Amorim Meggiato;Quarta e Sexta;;8;Petiz II;;21/07/2014;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19993721808;7 a 15 anos
+VictÃ³ria Souza de Oliveira     ;Quarta e Sexta;;8;Petiz II;;08/12/2014;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19981523643;7 a 15 anos
+Vitor Alves Godoi;Quarta e Sexta;;8;Mirim II;;21/02/2016;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 B;Sim;Daniela;dqs04;Bela Vista;19988351714;7 a 15 anos
+Davi Gabriel Estevao;Quarta e Sexta;;8;Infantil I;;03/04/2013;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19991228987;7 a 15 anos
+Gabriella Ferrarezi Evangelista;Quarta e Sexta;;8;Juvenil I;;11/01/2011;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19996248581;7 a 15 anos
+Guilherme Mancini de Moraes;Quarta e Sexta;;8;JÃºnior II/SÃªnior;;08/11/2007;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19997734881;7 a 15 anos
+Heitor JosuÃ© de Queiroz;Quarta e Sexta;;8;Infantil II;;27/01/2012;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19991364016;7 a 15 anos
+Leonardo de Souza do Carmo;Quarta e Sexta;;8;Infantil II;;07/11/2012;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19984495961;7 a 15 anos
+Lorena dos Reis FranÃ§a Oliveira;Quarta e Sexta;;8;Infantil I;;11/11/2013;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19992973384;7 a 15 anos
+Thamyres Miranda Rodrigues;Quarta e Sexta;;8;Juvenil II;;28/10/2010;"""Quarta;Sexta""";Feminino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19999742482;7 a 15 anos
+Victor Hugo Oliveira dos Santos;Quarta e Sexta;;8;Infantil II;;11/01/2012;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19984371127;7 a 15 anos
+William Souza dos Santos Santana;Quarta e Sexta;;8;Juvenil I;;26/10/2011;"""Quarta;Sexta""";Masculino;1515;NÃ­vel 4 A;Sim;Jefferson;jqs04;Bela Vista;19984018654;7 a 15 anos
+Aline Manoela Ferreira;Quarta e Sexta;;5;B25+;;28/03/1999;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19991576810;> 16 anos
+Luiza Araujo de Oliveira de Melo;Quarta e Sexta;;5;E40+;;24/01/1982;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19982916475;> 16 anos
+Priscila Correa Dias;Quarta e Sexta;;5;E40+;;10/12/1983;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19996371760;> 16 anos
+Raimunda Maria da Silva Souza;Quarta e Sexta;;5;H55+;;31/08/1968;"""Quarta;Sexta""";Feminino;1600;Adulto B;Sim;Daniela;dqs05;Bela Vista;19983549175;> 16 anos
+Alana Oliveira de Melo;Quarta e Sexta;;5;JÃºnior I;;07/11/2009;"""Quarta;Sexta""";Feminino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19971440391;> 16 anos
+Anderson Cleiton Alves Garcia;Quarta e Sexta;;5;D35+;;09/04/1988;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19993381881;> 16 anos
+Daniel Carlos de Oliveira de Melo;Quarta e Sexta;;5;G50+;;07/04/1974;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19998585795;> 16 anos
+JoÃ£o Victor Oliveira Alexandre;Quarta e Sexta;;5;JÃºnior I;;27/10/2009;"""Quarta;Sexta""";Masculino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19983113372;> 16 anos
+Rayssa de Oliveira de Melo;Quarta e Sexta;;5;JÃºnior II/SÃªnior;;12/04/2007;"""Quarta;Sexta""";Feminino;1600;Adulto A;Sim;Jefferson;jqs05;Bela Vista;19971440391;> 16 anos

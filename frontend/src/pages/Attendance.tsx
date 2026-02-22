@@ -135,103 +135,27 @@ export const Attendance: React.FC = () => {
     return raw;
   };
 
-  const normalizeHorarioStoragePart = (value: string) => {
-    const digits = (value || "").replace(/\D/g, "");
-    if (digits.length === 3) return `0${digits[0]}:${digits.slice(1)}`;
-    if (digits.length >= 4) return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
-    return (value || "").trim();
-  };
 
-  const deriveAttendanceStorageAliases = (key: string) => {
-    if (!key.startsWith("attendance:")) {
-      return { tripleKeys: [key], fallbackKeys: [] as string[] };
-    }
-
-    const raw = key.slice("attendance:".length);
-    const parts = raw.split("|");
-    if (parts.length < 4) {
-      return { tripleKeys: [key], fallbackKeys: [] as string[] };
-    }
-
-    const [turmaRaw, horarioRaw, professorRaw, monthRaw] = parts;
-    const turma = (turmaRaw || "").trim();
-    const professor = (professorRaw || "").trim();
-    const month = (monthRaw || "").trim();
-    const horarioNormalized = normalizeHorarioStoragePart(horarioRaw || "");
-
-    const tripleKeys = Array.from(
-      new Set([
-        key,
-        `attendance:${turma}|${horarioRaw}|${professor}|${month}`,
-        `attendance:${turma.toLowerCase()}|${horarioNormalized}|${professor.toLowerCase()}|${month}`,
-        `attendance:${turma.toUpperCase()}|${horarioNormalized}|${professor.toUpperCase()}|${month}`,
-      ])
-    );
-
-    const fallbackKeys = Array.from(
-      new Set([
-        `attendance:${turma}|${month}`,
-        `attendance:${turma.toLowerCase()}|${month}`,
-        `attendance:${turma.toUpperCase()}|${month}`,
-      ])
-    );
-
-    return { tripleKeys, fallbackKeys };
-  };
 
   const loadAttendanceStorage = () => {
     if (!storageKey) return null as AttendanceRecord[] | null;
 
-    const parsePayload = (raw: string | null) => {
-      if (!raw) return null as AttendanceRecord[] | null;
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed as AttendanceRecord[];
-        if (parsed && Array.isArray(parsed.records)) return parsed.records as AttendanceRecord[];
-        return null;
-      } catch {
-        return null;
-      }
-    };
-
     try {
-      const { tripleKeys, fallbackKeys } = deriveAttendanceStorageAliases(storageKey);
-
-      for (const key of tripleKeys) {
-        const found = parsePayload(localStorage.getItem(key));
-        if (found) return found;
-      }
-
-      for (const key of fallbackKeys) {
-        const found = parsePayload(localStorage.getItem(key));
-        if (found) return found;
-      }
-
-      return null;
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as AttendanceRecord[];
+      if (parsed && Array.isArray(parsed.records)) return parsed.records as AttendanceRecord[];
     } catch {
-      return null;
+      // ignore
     }
+    return null;
   };
 
   const saveAttendanceStorage = (records: AttendanceRecord[]) => {
     if (!storageKey) return;
     const payload = { records, updatedAt: new Date().toISOString() };
-    const serialized = JSON.stringify(payload);
-    const { tripleKeys, fallbackKeys } = deriveAttendanceStorageAliases(storageKey);
-
-    localStorage.setItem(storageKey, serialized);
-    if (tripleKeys.length > 1) {
-      localStorage.setItem(tripleKeys[1], serialized);
-    }
-    if (tripleKeys.length > 2) {
-      localStorage.setItem(tripleKeys[2], serialized);
-    }
-    if (fallbackKeys.length > 0) {
-      localStorage.setItem(fallbackKeys[0], serialized);
-    }
-    if (fallbackKeys.length > 1) {
-      localStorage.setItem(fallbackKeys[1], serialized);
-    }
+    localStorage.setItem(storageKey, JSON.stringify(payload));
   };
 
   const hasAnyMonthJustification = (justifications?: Record<string, string>) => {

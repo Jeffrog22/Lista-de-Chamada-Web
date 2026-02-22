@@ -55,66 +55,8 @@ const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
 
 export const Students: React.FC = () => {
   const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
-  const overridesKey = "studentOverrides";
-  const loadOverrides = () => {
-    try {
-      const raw = localStorage.getItem(overridesKey);
-      if (!raw) return { added: [], updated: {}, deleted: [], deletedKeys: [], deletedSignatures: [] } as {
-        added: Student[];
-        updated: Record<string, Student>;
-        deleted: string[];
-        deletedKeys: string[];
-        deletedSignatures: string[];
-      };
-      const parsed = JSON.parse(raw);
-      return {
-        added: Array.isArray(parsed.added) ? parsed.added : [],
-        updated: parsed.updated && typeof parsed.updated === "object" ? parsed.updated : {},
-        deleted: Array.isArray(parsed.deleted) ? parsed.deleted : [],
-        deletedKeys: Array.isArray(parsed.deletedKeys) ? parsed.deletedKeys : [],
-        deletedSignatures: Array.isArray(parsed.deletedSignatures) ? parsed.deletedSignatures : [],
-      } as {
-        added: Student[];
-        updated: Record<string, Student>;
-        deleted: string[];
-        deletedKeys: string[];
-        deletedSignatures: string[];
-      };
-    } catch {
-      return { added: [], updated: {}, deleted: [], deletedKeys: [], deletedSignatures: [] } as {
-        added: Student[];
-        updated: Record<string, Student>;
-        deleted: string[];
-        deletedKeys: string[];
-        deletedSignatures: string[];
-      };
-    }
-  };
 
-  const saveOverrides = (next: { added: Student[]; updated: Record<string, Student>; deleted: string[]; deletedKeys: string[]; deletedSignatures: string[] }) => {
-    localStorage.setItem(overridesKey, JSON.stringify(next));
-  };
-
-  const applyOverrides = (base: Student[], overrides: { added: Student[]; updated: Record<string, Student>; deleted: string[]; deletedKeys: string[]; deletedSignatures: string[] }) => {
-    const deleted = new Set(overrides.deleted || []);
-    const deletedKeys = new Set(overrides.deletedKeys || []);
-    const deletedSignatures = new Set(overrides.deletedSignatures || []);
-    const updated = overrides.updated || {};
-    const result = base
-      .filter((s) => {
-        if (deleted.has(s.id) || deletedKeys.has(buildStudentKey(s))) return false;
-        const signature = buildStudentSignature(s);
-        const nameOnly = buildStudentNameSignature(s);
-        return !deletedSignatures.has(signature) && !deletedSignatures.has(nameOnly);
-      })
-      .map((s) => (updated[s.id] ? updated[s.id] : s));
-
-    (overrides.added || []).forEach((s) => {
-      if (!deleted.has(s.id)) result.push(s);
-    });
-    return result;
-  };
-
+  // utilitários simples para trabalhar com alunos
   const normalizeText = (value: string) =>
     value
       .toLowerCase()
@@ -129,39 +71,6 @@ export const Students: React.FC = () => {
     return digits;
   };
 
-  // date helpers for attendance migration
-  const parseAttendanceDate = (d: string): Date | null => {
-    if (!d) return null;
-    const isoMatch = /^(\d{4})[-\/](\d{2})[-\/](\d{2})$/;
-    const brMatch = /^(\d{2})[-\/](\d{2})[-\/](\d{4})$/;
-    let m = isoMatch.exec(d);
-    if (m) {
-      const [_, y, mo, da] = m;
-      const dt = new Date(+y, +mo - 1, +da);
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-    m = brMatch.exec(d);
-    if (m) {
-      const [_, da, mo, y] = m;
-      const dt = new Date(+y, +mo - 1, +da);
-      return isNaN(dt.getTime()) ? null : dt;
-    }
-    const dt = new Date(d);
-    return isNaN(dt.getTime()) ? null : dt;
-  };
-
-  const formatAttendanceDateSame = (original: string, date: Date): string => {
-    const iso = date.toISOString().split("T")[0];
-    if (/^\d{4}[-\/]\d{2}[-\/]\d{2}$/.test(original)) {
-      return iso;
-    }
-    if (/^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(original)) {
-      const parts = iso.split("-");
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return iso;
-  };
-
   const buildStudentKey = (student: Partial<Student>) => {
     const nameKey = normalizeText(student.nome || "");
     const turmaKey = normalizeText(student.turma || "");
@@ -172,187 +81,6 @@ export const Students: React.FC = () => {
     return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
   };
 
-  const buildStudentSignature = (student: Partial<Student>) => {
-    const nameKey = normalizeText(student.nome || "");
-    const turmaKey = normalizeText(student.turma || student.turmaCodigo || "");
-    return turmaKey ? `${nameKey}|${turmaKey}` : nameKey;
-  };
-
-  // --- attendance migration helpers ------------------------------------------------
-  interface AttendanceRecordMinimal {
-    id: number;
-    aluno: string;
-    attendance: { [date: string]: string };
-  }
-
-  const computeShiftDays = (oldTurma: string, newTurma: string) => {
-    try {
-      const raw = localStorage.getItem("activeClasses");
-      if (!raw) return 0;
-      const classes = JSON.parse(raw) as Array<{
-        Turma?: string;
-        TurmaCodigo?: string;
-        DiasSemana?: string;
-      }>;
-      const findClass = (t: string) =>
-        classes.find((c) => {
-          const norm = normalizeText(c.Turma || c.TurmaCodigo || "");
-          return normalizeText(t) === norm;
-        });
-      const oldCls = findClass(oldTurma);
-      const newCls = findClass(newTurma);
-      if (!oldCls || !newCls) return 0;
-      const parseDias = (dias?: string) =>
-        dias
-          ? dias.split(/[;,]|\s+e\s+/i).map((d) => d.trim()).filter(Boolean)
-          : [] as string[];
-      const od = parseDias(oldCls.DiasSemana);
-      const nd = parseDias(newCls.DiasSemana);
-      const mapWeek: Record<string, number> = {
-        domingo: 0,
-        segunda: 1,
-        terca: 2,
-        terça: 2,
-        quarta: 3,
-        quinta: 4,
-        sexta: 5,
-        sabado: 6,
-        sábado: 6,
-      };
-      if (od.length > 0 && nd.length > 0) {
-        const oldDay = mapWeek[normalizeText(od[0])] ?? 0;
-        const newDay = mapWeek[normalizeText(nd[0])] ?? 0;
-        return newDay - oldDay;
-      }
-    } catch {
-      // ignore and fall through
-    }
-    return 0;
-  };
-
-  // ensure at least one-day shift when changing turma
-  const safeShift = (oldTurma: string, newTurma: string) => {
-    const base = computeShiftDays(oldTurma, newTurma);
-    if (base === 0 && normalizeText(oldTurma) !== normalizeText(newTurma)) {
-      return 1;
-    }
-    return base;
-  };
-
-  const migrateAttendanceForStudent = (
-    studentName: string,
-    oldTurma: string,
-    oldTurmaCode: string,
-    newTurma: string,
-    newHorario: string,
-    newProfessor: string
-  ) => {
-    if (!oldTurma || !newTurma) return;
-    const shift = safeShift(oldTurma, newTurma);
-    console.log("[migrateAttendance] student", studentName, "from", oldTurma, "to", newTurma, "shift", shift);
-
-    // collect all attendance entries for this student in oldTurma or oldTurmaCode
-    const byMonth: Record<string, AttendanceRecordMinimal[]> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith("attendance:")) continue;
-      const parts = key.slice("attendance:".length).split("|");
-      const turmaKey = parts[0] || "";
-      const normTurmaKey = normalizeText(turmaKey);
-      const matchesOld =
-        normTurmaKey === normalizeText(oldTurma) ||
-        (oldTurmaCode && normTurmaKey === normalizeText(oldTurmaCode));
-      if (!matchesOld) continue;
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        const records: AttendanceRecordMinimal[] = Array.isArray(parsed.records)
-          ? parsed.records
-          : Array.isArray(parsed)
-          ? parsed
-          : [];
-        const rec = records.find((r) => normalizeText(r.aluno) === normalizeText(studentName));
-        if (!rec) continue;
-        // shift dates
-        Object.entries(rec.attendance).forEach(([date, status]) => {
-          const origDate = date;
-          const parsed = parseAttendanceDate(origDate);
-          if (!parsed) return;
-          parsed.setDate(parsed.getDate() + shift);
-          const formatted = formatAttendanceDateSame(origDate, parsed);
-          const newMonth = parsed.toISOString().slice(0, 7); // always YYYY-MM for storage
-          if (!byMonth[newMonth]) byMonth[newMonth] = [];
-          const list = byMonth[newMonth];
-          let existing = list.find((r) => r.id === rec.id);
-          if (!existing) {
-            existing = { ...rec, attendance: {} };
-            list.push(existing);
-          }
-          existing.attendance[formatted] = status;
-        });
-      } catch {
-        // ignore parsing errors
-      }
-    }
-
-    // determine proper turmaKey for new turma using activeClasses
-    const resolveNewTurmaKey = (turmaLabel: string) => {
-      try {
-        const raw = localStorage.getItem("activeClasses");
-        if (!raw) return turmaLabel;
-        const classes = JSON.parse(raw) as Array<{ Turma?: string; TurmaCodigo?: string }>;
-        const normLabel = normalizeText(turmaLabel);
-        const found = classes.find((c) => {
-          const code = normalizeText(c.TurmaCodigo || "");
-          const label = normalizeText(c.Turma || "");
-          return normLabel === code || normLabel === label;
-        });
-        if (found) {
-          return found.TurmaCodigo ? found.TurmaCodigo : found.Turma || turmaLabel;
-        }
-      } catch {
-        // ignore
-      }
-      return turmaLabel;
-    };
-
-    const newTurmaKey = resolveNewTurmaKey(newTurma);
-    // write migrated records into corresponding new storage keys
-    Object.entries(byMonth).forEach(([month, records]) => {
-      console.log("[migrateAttendance] writing to key", newTurmaKey, "month", month, "records", records.length);
-      const newKey = `attendance:${newTurmaKey}|${newHorario}|${newProfessor}|${month}`;
-      try {
-        const existingRaw = localStorage.getItem(newKey);
-        let base: AttendanceRecordMinimal[] = [];
-        if (existingRaw) {
-          const parsed = JSON.parse(existingRaw);
-          base = Array.isArray(parsed.records)
-            ? parsed.records
-            : Array.isArray(parsed)
-            ? parsed
-            : [];
-        }
-        // merge or append
-        records.forEach((rec) => {
-          const idx = base.findIndex((r) => r.id === rec.id);
-          if (idx >= 0) {
-            base[idx] = rec;
-          } else {
-            base.push(rec);
-          }
-        });
-        const payload = JSON.stringify({ records: base, updatedAt: new Date().toISOString() });
-        localStorage.setItem(newKey, payload);
-      } catch {
-        // ignore
-      }
-    });
-  };
-
-  const buildStudentNameSignature = (student: Partial<Student>) => {
-    return normalizeText(student.nome || "");
-  };
 
   const dedupeStudents = (list: Student[]) => {
     const seen = new Map<string, Student>();
@@ -454,33 +182,18 @@ export const Students: React.FC = () => {
   }, [students]);
 
   useEffect(() => {
-    const overrides = loadOverrides();
-    if (
-      (overrides.deletedKeys && overrides.deletedKeys.length > 0) ||
-      (overrides.deletedSignatures && overrides.deletedSignatures.length > 0)
-    ) {
-      return;
-    }
+    // filter out any students that were marked as excluded; simple in-memory
     try {
       const raw = localStorage.getItem("excludedStudents");
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
-      const deletedKeys = parsed
-        .map((student: Partial<Student>) => buildStudentKey(student))
-        .filter((key: string) => key && key !== "|||||");
-      const deletedSignatures = parsed
-        .map((student: Partial<Student>) => buildStudentSignature(student))
-        .filter((key: string) => key);
-      const deletedNames = parsed
-        .map((student: Partial<Student>) => buildStudentNameSignature(student))
-        .filter((key: string) => key);
-      const mergedSignatures = Array.from(new Set([...deletedSignatures, ...deletedNames]));
-      if (deletedKeys.length > 0 || mergedSignatures.length > 0) {
-        saveOverrides({ ...overrides, deletedKeys, deletedSignatures: mergedSignatures });
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const removed = new Set(parsed.map((s: Partial<Student>) => buildStudentKey(s)));
+          setStudents((prev) => prev.filter((s) => !removed.has(buildStudentKey(s))));
+        }
       }
     } catch {
-      // ignore
+      // ignore malformed storage
     }
   }, []);
 
@@ -541,9 +254,7 @@ export const Students: React.FC = () => {
         });
 
         if (mapped.length > 0) {
-          const overrides = loadOverrides();
-          const merged = applyOverrides(mapped, overrides);
-          const deduped = dedupeStudents(merged);
+          const deduped = dedupeStudents(mapped);
           setStudents(deduped);
           localStorage.setItem("activeStudents", JSON.stringify(deduped));
         }
@@ -1013,47 +724,15 @@ export const Students: React.FC = () => {
       idade: age,
     };
 
-    // migrate attendance if the student changed turmas
-    if (
-      editingId &&
-      originalTurma &&
-      (originalTurma !== formData.turma || originalTurmaCode !== getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor)) &&
-      originalName
-    ) {
-      migrateAttendanceForStudent(
-        originalName,
-        originalTurma,
-        originalTurmaCode || originalTurma,
-        formData.turma,
-        formData.horario,
-        formData.professor
-      );
-    }
-
-    const overrides = loadOverrides();
-    const addedIndex = overrides.added.findIndex((s) => s.id === studentId);
-    if (editingId) {
-      if (addedIndex >= 0) {
-        overrides.added[addedIndex] = studentData;
-      } else {
-        overrides.updated[studentId] = studentData;
-      }
-    } else {
-      overrides.added.push(studentData);
-    }
-    overrides.deleted = overrides.deleted.filter((id) => id !== studentId);
-    overrides.deletedKeys = overrides.deletedKeys.filter((key) => key !== buildStudentKey(studentData));
-    overrides.deletedSignatures = (overrides.deletedSignatures || []).filter((key) => {
-      return key !== buildStudentSignature(studentData) && key !== buildStudentNameSignature(studentData);
-    });
-    saveOverrides(overrides);
-
+    // update state directly; persistence handled by effect
     setStudents((prev) => {
-      const base = addedIndex >= 0 ? prev.filter((s) => s.id !== studentId) : prev;
-      const merged = applyOverrides(base, overrides);
-      const deduped = dedupeStudents(merged);
-      localStorage.setItem("activeStudents", JSON.stringify(deduped));
-      return deduped;
+      let updated = prev;
+      if (editingId) {
+        updated = prev.map((s) => (s.id === studentId ? studentData : s));
+      } else {
+        updated = [...prev, studentData];
+      }
+      return dedupeStudents(updated);
     });
 
     if (editingId) {
@@ -1128,40 +807,8 @@ export const Students: React.FC = () => {
     excludedStudents.push(exclusionPayload);
     localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
 
-    const overrides = loadOverrides();
-    overrides.added = overrides.added.filter((s) => s.id !== student.id);
-    delete overrides.updated[student.id];
-    if (!overrides.deleted.includes(student.id)) {
-      overrides.deleted.push(student.id);
-    }
-    const deleteKey = buildStudentKey(student);
-    if (!overrides.deletedKeys.includes(deleteKey)) {
-      overrides.deletedKeys.push(deleteKey);
-    }
-    const deleteSignature = buildStudentSignature(student);
-    const deleteName = buildStudentNameSignature(student);
-    if (!overrides.deletedSignatures.includes(deleteSignature)) {
-      overrides.deletedSignatures.push(deleteSignature);
-    }
-    if (!overrides.deletedSignatures.includes(deleteName)) {
-      overrides.deletedSignatures.push(deleteName);
-    }
-    saveOverrides(overrides);
-
-    setStudents((prev) => {
-      const removeKey = buildStudentKey(student);
-      const removeSignature = buildStudentSignature(student);
-      const removeName = buildStudentNameSignature(student);
-      const next = prev.filter((s) => {
-        if (s.id === student.id) return false;
-        if (buildStudentKey(s) === removeKey) return false;
-        if (buildStudentSignature(s) === removeSignature) return false;
-        if (buildStudentNameSignature(s) === removeName) return false;
-        return true;
-      });
-      localStorage.setItem("activeStudents", JSON.stringify(next));
-      return next;
-    });
+    // simply remove student from state; persistence effect will clear storage
+    setStudents((prev) => prev.filter((s) => s.id !== student.id));
 
     setShowExcludeReasonModal(false);
     setStudentPendingExclusion(null);
