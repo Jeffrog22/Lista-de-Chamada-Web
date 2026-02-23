@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, getAcademicCalendar, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -70,6 +70,13 @@ interface PoolLogEntry {
   tempPiscina: string;
   cloroPpm: number | null;
 }
+
+type ClimaCache = {
+  tempExterna: string;
+  selectedIcons: string[];
+  apiTemp?: string;
+  apiCondition?: string;
+};
 
 // Opções de Clima para a Matriz de Decisão
 const WEATHER_ICONS = {
@@ -299,18 +306,45 @@ export const Attendance: React.FC = () => {
 
       const excludedRaw = localStorage.getItem("excludedStudents");
       const excluded = excludedRaw ? (JSON.parse(excludedRaw) as any[]) : [];
-      const exclusionKeys = new Set<string>();
-      excluded.forEach((student) => {
-        const normalized = `${normalizeText(student.nome || "")}|${normalizeText(student.turma || "")}|${normalizeHorarioDigits(student.horario || "")}|${normalizeText(student.professor || "")}|${normalizeText(student.turmaCodigo || "")}`;
-        if (normalized.trim()) {
-          exclusionKeys.add(normalized);
+      const isExcludedStudent = (student: any, exclusion: any) => {
+        const studentId = String(student?.id || "").trim();
+        const exclusionId = String(exclusion?.id || "").trim();
+        if (studentId && exclusionId && studentId === exclusionId) {
+          return true;
         }
-      });
 
-      const filteredStudents = students.filter((student) => {
-        const key = `${normalizeText(student.nome || "")}|${normalizeText(student.turma || "")}|${normalizeHorarioDigits(student.horario || "")}|${normalizeText(student.professor || "")}|${normalizeText(student.turmaCodigo || "")}`;
-        return !exclusionKeys.has(key);
-      });
+        const studentName = normalizeText(student?.nome || "");
+        const exclusionName = normalizeText(exclusion?.nome || exclusion?.Nome || "");
+        if (!studentName || !exclusionName || studentName !== exclusionName) {
+          return false;
+        }
+
+        const studentTurma = normalizeText(student?.turma || "");
+        const studentTurmaCodigo = normalizeText(student?.turmaCodigo || "");
+        const studentHorario = normalizeHorarioDigits(student?.horario || "");
+        const studentProfessor = normalizeText(student?.professor || "");
+
+        const exclusionTurma = normalizeText(
+          exclusion?.turmaLabel || exclusion?.TurmaLabel || exclusion?.turma || exclusion?.Turma || ""
+        );
+        const exclusionTurmaCodigo = normalizeText(exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
+        const exclusionHorario = normalizeHorarioDigits(exclusion?.horario || exclusion?.Horario || "");
+        const exclusionProfessor = normalizeText(exclusion?.professor || exclusion?.Professor || "");
+
+        const turmaMatches =
+          !exclusionTurma && !exclusionTurmaCodigo
+            ? true
+            : [studentTurma, studentTurmaCodigo].includes(exclusionTurma) ||
+              [studentTurma, studentTurmaCodigo].includes(exclusionTurmaCodigo);
+        const horarioMatches = !exclusionHorario || !studentHorario || exclusionHorario === studentHorario;
+        const professorMatches = !exclusionProfessor || !studentProfessor || exclusionProfessor === studentProfessor;
+
+        return turmaMatches && horarioMatches && professorMatches;
+      };
+
+      const filteredStudents = students.filter(
+        (student) => !excluded.some((exclusion) => isExcludedStudent(student, exclusion))
+      );
 
       const classOptions: ClassOption[] = normalizeClassOptions(classes);
 
@@ -408,6 +442,22 @@ export const Attendance: React.FC = () => {
     window.addEventListener("attendanceDataUpdated", refreshStorageData);
     return () => window.removeEventListener("attendanceDataUpdated", refreshStorageData);
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    getExcludedStudents()
+      .then((response) => {
+        if (!isMounted) return;
+        const payload = Array.isArray(response?.data) ? response.data : [];
+        localStorage.setItem("excludedStudents", JSON.stringify(payload));
+        refreshStorageData();
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshStorageData]);
 
   useEffect(() => {
     localStorage.setItem(renewalAlertStorageKey, JSON.stringify(dismissedRenewalAlerts));
@@ -906,23 +956,18 @@ export const Attendance: React.FC = () => {
   const climaCacheKey = (date: string) => `climaCache:${date}`;
   const lastClimaCacheDateKey = "climaLastDate";
 
-  const getClimaCache = (date: string) => {
+  const getClimaCache = (date: string): ClimaCache | null => {
     if (!date) return null;
     try {
       const raw = localStorage.getItem(climaCacheKey(date));
       if (!raw) return null;
-      return JSON.parse(raw) as {
-        tempExterna: string;
-        selectedIcons: string[];
-        apiTemp?: string;
-        apiCondition?: string;
-      };
+      return JSON.parse(raw) as ClimaCache;
     } catch {
       return null;
     }
   };
 
-  const setClimaCache = (date: string, payload: { tempExterna: string; selectedIcons: string[]; apiTemp?: string; apiCondition?: string }) => {
+  const setClimaCache = (date: string, payload: ClimaCache) => {
     localStorage.setItem(climaCacheKey(date), JSON.stringify(payload));
     localStorage.setItem(lastClimaCacheDateKey, date);
   };
@@ -1189,12 +1234,13 @@ export const Attendance: React.FC = () => {
       }
     }
 
-    const cache = getClimaCache(date);
-    if (cache) {
+    // Intentional any cast so we can read cached fields without the compiler narrowing the result to never
+    const climaCache = getClimaCache(date) as any;
+    if (climaCache) {
       setPoolData(prev => ({
         ...prev,
-        tempExterna: normalizeNumberInput(cache.tempExterna),
-        selectedIcons: cache.selectedIcons || [],
+        tempExterna: normalizeNumberInput(climaCache.tempExterna),
+        selectedIcons: climaCache.selectedIcons || [],
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
@@ -1218,37 +1264,40 @@ export const Attendance: React.FC = () => {
     const apiData = await fetchClimatempoData(date);
     const apiTemp = String(apiData.temp || "");
     const apiCondition = String(apiData.condition || "");
-    const hasApiSignature = cache && cache.apiTemp && cache.apiCondition;
-    const cacheMatchesApi =
-      cache &&
-      (cache.apiTemp || "") === apiTemp &&
-      (cache.apiCondition || "") === apiCondition;
 
-    if (cache && (cacheMatchesApi || !hasApiSignature)) {
-      if (!hasApiSignature) {
-        setClimaCache(date, {
-          tempExterna: cache.tempExterna,
-          selectedIcons: cache.selectedIcons || [],
-          apiTemp,
-          apiCondition,
-        });
+    if (climaCache) {
+      const hasApiSignature = Boolean(climaCache.apiTemp && climaCache.apiCondition);
+      const cacheMatchesApi =
+        (climaCache.apiTemp || "") === apiTemp &&
+        (climaCache.apiCondition || "") === apiCondition;
+
+      if (cacheMatchesApi || !hasApiSignature) {
+        if (!hasApiSignature) {
+          setClimaCache(date, {
+            tempExterna: climaCache.tempExterna,
+            selectedIcons: climaCache.selectedIcons || [],
+            apiTemp,
+            apiCondition,
+          });
+        }
+        setShowDateModal(true);
+        return;
       }
-    } else {
-      const autoIcons = buildIconsFromApi(apiData);
-      setPoolData(prev => ({
-        ...prev,
-        tempExterna: normalizeNumberInput(apiData.temp),
-        selectedIcons: autoIcons,
-      }));
-      setClimaCache(date, {
-        tempExterna: normalizeNumberInput(apiData.temp),
-        selectedIcons: autoIcons,
-        apiTemp,
-        apiCondition,
-      });
-      setClimaPrefillApplied(true);
     }
 
+    const autoIcons = buildIconsFromApi(apiData);
+    setPoolData(prev => ({
+      ...prev,
+      tempExterna: normalizeNumberInput(apiData.temp),
+      selectedIcons: autoIcons,
+    }));
+    setClimaCache(date, {
+      tempExterna: normalizeNumberInput(apiData.temp),
+      selectedIcons: autoIcons,
+      apiTemp,
+      apiCondition,
+    });
+    setClimaPrefillApplied(true);
     setShowDateModal(true);
   };
 
@@ -1564,7 +1613,7 @@ export const Attendance: React.FC = () => {
               };
               const storedAttendance = stored?.attendance || {};
               Object.entries(storedAttendance).forEach(([date, value]) => {
-                if (value) {
+                if (value && !merged[date]) {
                   merged[date] = value;
                 }
               });
