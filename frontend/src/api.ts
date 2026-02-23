@@ -102,6 +102,12 @@ export const deleteAcademicCalendarEvent = (eventId: string) =>
 export const getBootstrap = (unitId?: number) =>
   API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);
 
+export const createImportStudent = (data: any) =>
+  API.post("/api/import-students", data);
+
+export const updateImportStudent = (id: string, data: any) =>
+  API.put(`/api/import-students/${id}`, data);
+
 export const importDataFile = (file: File) => {
   const formData = new FormData();
   formData.append("file", file);
