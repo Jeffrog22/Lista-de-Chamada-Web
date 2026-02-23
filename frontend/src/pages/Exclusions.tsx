@@ -35,8 +35,8 @@ interface ExcludedStudent {
 export const Exclusions: React.FC = () => {
   const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
   const [students, setStudents] = useState<ExcludedStudent[]>([]);
-  const turmaOptions = ["Quarta e Sexta", "Terça e Quinta"];
-  const [lastTurma, setLastTurma] = useState<string>(turmaOptions[0]);
+  const [turmaOptions, setTurmaOptions] = useState<string[]>([]);
+  const [lastTurma, setLastTurma] = useState<string>("");
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<ExcludedStudent | null>(null);
@@ -173,17 +173,68 @@ export const Exclusions: React.FC = () => {
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return;
+      const turmaLabels = new Set<string>();
       const professors = new Set<string>();
       parsed.forEach((cls: any) => {
+        const turma = String(cls.Turma || "").trim();
+        if (turma) turmaLabels.add(turma);
         if (cls.Professor) professors.add(String(cls.Professor));
       });
+      const turmaList = Array.from(turmaLabels).sort();
+      setTurmaOptions(turmaList);
+      if (!lastTurma && turmaList.length > 0) {
+        setLastTurma(turmaList[0]);
+      }
       setProfessorOptions(Array.from(professors));
     } catch {
       // ignore
     }
-  }, []);
+  }, [lastTurma]);
+
+  const normalizeText = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const normalizeHorarioDigits = (value?: string) => {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (digits.length === 3) return `0${digits}`;
+    if (digits.length >= 4) return digits.slice(0, 4);
+    return digits;
+  };
+
+  const resolveClassFromTriple = (turma: string, horario: string, professor: string) => {
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (!raw) return null;
+      const classes = JSON.parse(raw) as Array<{
+        Turma?: string;
+        TurmaCodigo?: string;
+        Horario?: string;
+        Professor?: string;
+      }>;
+      const turmaNorm = normalizeText(turma || "");
+      const horarioNorm = normalizeHorarioDigits(horario || "");
+      const professorNorm = normalizeText(professor || "");
+      return (
+        classes.find((cls) => {
+          const labelNorm = normalizeText(cls.Turma || "");
+          const codeNorm = normalizeText(cls.TurmaCodigo || "");
+          const clsHorario = normalizeHorarioDigits(cls.Horario || "");
+          const clsProfessor = normalizeText(cls.Professor || "");
+          const turmaMatches = turmaNorm && (turmaNorm === labelNorm || turmaNorm === codeNorm);
+          return turmaMatches && clsHorario === horarioNorm && clsProfessor === professorNorm;
+        }) || null
+      );
+    } catch {
+      return null;
+    }
+  };
 
   const resolveTurmaLabel = (value: string) => {
+    if (!value) return "";
     const normalized = value.toLowerCase();
     if (normalized.includes("quarta") || normalized.includes("sexta")) {
       return "Quarta e Sexta";
@@ -191,12 +242,12 @@ export const Exclusions: React.FC = () => {
     if (normalized.includes("terca") || normalized.includes("terça") || normalized.includes("quinta")) {
       return "Terça e Quinta";
     }
-    return "";
+    return value;
   };
 
   const handleRestoreClick = (student: ExcludedStudent) => {
     const rawTurma = student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "";
-    const turmaValue = resolveTurmaLabel(rawTurma) || lastTurma;
+    const turmaValue = resolveTurmaLabel(rawTurma) || lastTurma || rawTurma;
     const dataNascimento = normalizeDateValue(student.dataNascimento || "").trim();
     const idade = calculateAge(dataNascimento);
     const categoriaCalc = getCategoriaByAge(idade) || student.categoria || "";
@@ -257,10 +308,14 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
+    const classMatch = resolveClassFromTriple(formData.turma, formData.horario, formData.professor);
+    const turmaLabel = classMatch?.Turma || formData.turma;
+    const turmaCodigo = classMatch?.TurmaCodigo || editingStudent.turmaCodigo || editingStudent.TurmaCodigo || "";
+
     const restorePayload = {
       id: editingStudent.id,
       nome: formData.nome,
-      turma: formData.turma,
+      turma: turmaLabel,
       horario: formData.horario,
       professor: formData.professor,
     };
@@ -275,6 +330,9 @@ export const Exclusions: React.FC = () => {
     const restoredStudent = {
       ...editingStudent,
       ...formData,
+      turma: turmaLabel,
+      turmaLabel,
+      turmaCodigo,
       idade: calculateAge(formData.dataNascimento),
       dataExclusao: undefined,
       DataExclusao: undefined,
@@ -348,6 +406,18 @@ export const Exclusions: React.FC = () => {
       return next;
     });
   };
+
+  const effectiveTurmaOptions =
+    turmaOptions.length > 0
+      ? turmaOptions
+      : Array.from(
+          new Set(
+            students
+              .map((student) => student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "")
+              .map((value) => String(value || "").trim())
+              .filter(Boolean)
+          )
+        ).sort();
 
   return (
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
@@ -567,7 +637,7 @@ export const Exclusions: React.FC = () => {
                   }}
                   style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "2px solid #f39c12", background: "#fffbeb" }}
                 >
-                  {turmaOptions.map((option) => (
+                  {effectiveTurmaOptions.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
