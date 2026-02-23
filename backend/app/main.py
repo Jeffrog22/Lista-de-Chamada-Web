@@ -408,6 +408,19 @@ class BootstrapOut(BaseModel):
     classes: list[ImportClassOut]
     students: list[ImportStudentOut]
 
+class ImportStudentUpsertPayload(BaseModel):
+    nome: str
+    turma: str
+    horario: str
+    professor: str
+    whatsapp: Optional[str] = ""
+    data_nascimento: Optional[str] = ""
+    data_atestado: Optional[str] = ""
+    categoria: Optional[str] = ""
+    genero: Optional[str] = ""
+    parq: Optional[str] = ""
+    atestado: bool = False
+
 @app.get("/weather")
 def get_weather(date: str):
     token = os.getenv("CLIMATEMPO_TOKEN")
@@ -595,6 +608,41 @@ def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> b
     if payload.id and str(item.get("id")) == str(payload.id):
         return True
     return _exclusion_key(item) == _exclusion_key(payload.dict())
+
+def _normalize_horario_key(value: Optional[str]) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    if len(digits) == 3:
+        return f"0{digits}"
+    if len(digits) >= 4:
+        return digits[:4]
+    return digits
+
+def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> bool:
+    cls_codigo = _normalize_text(cls.codigo or "")
+    cls_label = _normalize_text(cls.turma_label or cls.codigo or "")
+    cls_horario = _normalize_horario_key(cls.horario or "")
+    cls_professor = _normalize_text(cls.professor or "")
+
+    ex_codigo = _normalize_text(entry.get("turmaCodigo") or entry.get("TurmaCodigo") or "")
+    ex_label = _normalize_text(
+        entry.get("turmaLabel")
+        or entry.get("TurmaLabel")
+        or entry.get("turma")
+        or entry.get("Turma")
+        or ""
+    )
+    ex_horario = _normalize_horario_key(entry.get("horario") or entry.get("Horario") or "")
+    ex_professor = _normalize_text(entry.get("professor") or entry.get("Professor") or "")
+
+    if ex_codigo and ex_codigo not in {cls_codigo, cls_label}:
+        return False
+    if ex_label and ex_label not in {cls_label, cls_codigo}:
+        return False
+    if ex_horario and cls_horario and ex_horario != cls_horario:
+        return False
+    if ex_professor and cls_professor and ex_professor != cls_professor:
+        return False
+    return True
 
 def _map_attendance_value(value: str) -> str:
     normalized = _normalize_text(value)
@@ -1071,6 +1119,28 @@ def _build_import_student_details_map(
         }
     return details
 
+def _attendance_log_lookup_keys(item: Dict[str, Any]) -> List[str]:
+    turma_codigo = str(item.get("turmaCodigo") or "").strip()
+    turma_label = str(item.get("turmaLabel") or "").strip()
+    horario = str(item.get("horario") or "").strip()
+    professor = str(item.get("professor") or "").strip()
+
+    keys: List[str] = []
+    key_fields = [horario, professor]
+
+    if turma_codigo:
+        keys.append("|".join(["codigo", turma_codigo, *key_fields]))
+    if turma_label:
+        keys.append("|".join(["label", turma_label, *key_fields]))
+
+    # retrocompatibilidade para registros antigos sem horario/professor
+    if turma_codigo:
+        keys.append(f"codigo|{turma_codigo}||")
+    if turma_label:
+        keys.append(f"label|{turma_label}||")
+
+    return keys
+
 def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     file_path = os.path.join(DATA_DIR, "baseChamada.json")
     items = _load_json_list(file_path)
@@ -1078,16 +1148,17 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
     for item in items:
         if month and str(item.get("mes") or "") != month:
             continue
-        key = str(item.get("turmaCodigo") or item.get("turmaLabel") or "").strip()
-        if not key:
+        keys = _attendance_log_lookup_keys(item)
+        if not keys:
             continue
         saved_at = str(item.get("saved_at") or "")
-        if key not in latest:
-            latest[key] = item
-            continue
-        existing_saved = str(latest[key].get("saved_at") or "")
-        if saved_at > existing_saved:
-            latest[key] = item
+        for key in keys:
+            if key not in latest:
+                latest[key] = item
+                continue
+            existing_saved = str(latest[key].get("saved_at") or "")
+            if saved_at > existing_saved:
+                latest[key] = item
     return latest
 
 @app.get("/exclusions")
@@ -1271,6 +1342,7 @@ def delete_academic_calendar_event(event_id: str):
 def get_reports(month: Optional[str] = None, session: Session = Depends(get_session)) -> List[ReportClass]:
     classes = session.exec(select(models.ImportClass)).all()
     students = session.exec(select(models.ImportStudent)).all()
+    excluded_items = _load_json_list(os.path.join(DATA_DIR, "excludedStudents.json"))
 
     students_by_class: Dict[int, List[models.ImportStudent]] = {}
     for student in students:
@@ -1282,7 +1354,26 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
     for cls in classes:
         turma_key = (cls.codigo or cls.turma_label or "").strip()
         turma_label = (cls.turma_label or cls.codigo or "").strip()
-        log_entry = latest_logs.get(turma_key) or latest_logs.get(turma_label)
+        horario = (cls.horario or "").strip()
+        professor = (cls.professor or "").strip()
+
+        composite_codigo = f"codigo|{turma_key}|{horario}|{professor}" if turma_key else ""
+        composite_label = f"label|{turma_label}|{horario}|{professor}" if turma_label else ""
+        fallback_codigo = f"codigo|{turma_key}||" if turma_key else ""
+        fallback_label = f"label|{turma_label}||" if turma_label else ""
+
+        log_entry = (
+            (latest_logs.get(composite_codigo) if composite_codigo else None)
+            or (latest_logs.get(composite_label) if composite_label else None)
+            or (latest_logs.get(fallback_codigo) if fallback_codigo else None)
+            or (latest_logs.get(fallback_label) if fallback_label else None)
+        )
+
+        excluded_names = {
+            _normalize_text(entry.get("nome") or entry.get("Nome") or "")
+            for entry in excluded_items
+            if _normalize_text(entry.get("nome") or entry.get("Nome") or "") and _exclusion_matches_class(entry, cls)
+        }
 
         name_to_id = {
             _normalize_text(s.nome): str(s.id)
@@ -1294,6 +1385,8 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
             registros = log_entry.get("registros") or []
             for record in registros:
                 nome = str(record.get("aluno_nome") or "").strip()
+                if _normalize_text(nome) in excluded_names:
+                    continue
                 attendance = record.get("attendance") or {}
                 presencas = 0
                 faltas = 0
@@ -1326,6 +1419,8 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                 )
         else:
             for student in students_by_class.get(cls.id, []):
+                if _normalize_text(student.nome) in excluded_names:
+                    continue
                 class_students.append(
                     ReportStudent(
                         id=str(student.id),
@@ -1655,6 +1750,43 @@ def get_or_create_import_student(session: Session, class_id: int, nome: str) -> 
     )
     return session.exec(stmt).first()
 
+def _find_import_class_by_triple(
+    session: Session,
+    turma: str,
+    horario: str,
+    professor: str,
+) -> Optional[models.ImportClass]:
+    turma_norm = _normalize_text(turma)
+    horario_key = _normalize_horario_value(horario)
+    professor_norm = _normalize_text(professor)
+    if not turma_norm or not horario_key or not professor_norm:
+        return None
+
+    classes = session.exec(select(models.ImportClass)).all()
+    for cls in classes:
+        cls_horario = _normalize_horario_value(cls.horario or "")
+        cls_professor = _normalize_text(cls.professor or "")
+        cls_codigo = _normalize_text(cls.codigo or "")
+        cls_label = _normalize_text(cls.turma_label or cls.codigo or "")
+        turma_matches = turma_norm in {cls_codigo, cls_label}
+        if turma_matches and cls_horario == horario_key and cls_professor == professor_norm:
+            return cls
+    return None
+
+def _import_student_out(student: models.ImportStudent) -> ImportStudentOut:
+    return ImportStudentOut(
+        id=student.id or 0,
+        class_id=student.class_id,
+        nome=student.nome,
+        whatsapp=student.whatsapp or "",
+        data_nascimento=student.data_nascimento or "",
+        data_atestado=student.data_atestado or "",
+        categoria=student.categoria or "",
+        genero=student.genero or "",
+        parq=student.parq or "",
+        atestado=bool(student.atestado),
+    )
+
 @app.post("/api/import-data", response_model=ImportResult)
 async def import_data(file: UploadFile = File(...), session: Session = Depends(get_session)) -> ImportResult:
     if not file.filename.lower().endswith(".csv"):
@@ -1825,6 +1957,80 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
             for s in students
         ],
     )
+
+@app.post("/api/import-students", response_model=ImportStudentOut)
+def create_import_student(payload: ImportStudentUpsertPayload, session: Session = Depends(get_session)) -> ImportStudentOut:
+    target_class = _find_import_class_by_triple(
+        session=session,
+        turma=payload.turma,
+        horario=payload.horario,
+        professor=payload.professor,
+    )
+    if not target_class:
+        raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
+
+    nome = str(payload.nome or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="nome is required")
+
+    student = get_or_create_import_student(session, target_class.id, nome)
+    if not student:
+        student = models.ImportStudent(class_id=target_class.id, nome=nome)
+        session.add(student)
+
+    student.class_id = target_class.id
+    student.nome = nome
+    student.whatsapp = _format_whatsapp(payload.whatsapp)
+    student.data_nascimento = str(payload.data_nascimento or "").strip()
+    student.data_atestado = str(payload.data_atestado or "").strip()
+    student.categoria = str(payload.categoria or "").strip()
+    student.genero = str(payload.genero or "").strip()
+    student.parq = str(payload.parq or "").strip()
+    student.atestado = bool(payload.atestado)
+
+    session.commit()
+    session.refresh(student)
+    return _import_student_out(student)
+
+@app.put("/api/import-students/{student_id}", response_model=ImportStudentOut)
+def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, session: Session = Depends(get_session)) -> ImportStudentOut:
+    student = session.get(models.ImportStudent, student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Import student not found")
+
+    target_class = _find_import_class_by_triple(
+        session=session,
+        turma=payload.turma,
+        horario=payload.horario,
+        professor=payload.professor,
+    )
+    if not target_class:
+        raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
+
+    nome = str(payload.nome or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="nome is required")
+
+    existing_target = get_or_create_import_student(session, target_class.id, nome)
+    target_student = student
+    if existing_target and existing_target.id != student.id:
+        target_student = existing_target
+        session.delete(student)
+
+    target_student.class_id = target_class.id
+    target_student.nome = nome
+    target_student.whatsapp = _format_whatsapp(payload.whatsapp)
+    target_student.data_nascimento = str(payload.data_nascimento or "").strip()
+    target_student.data_atestado = str(payload.data_atestado or "").strip()
+    target_student.categoria = str(payload.categoria or "").strip()
+    target_student.genero = str(payload.genero or "").strip()
+    target_student.parq = str(payload.parq or "").strip()
+    target_student.atestado = bool(payload.atestado)
+
+    session.add(target_student)
+    session.commit()
+    session.refresh(target_student)
+    return _import_student_out(target_student)
 
 # Users endpoints (bootstrap)
 @app.post("/users/register")
