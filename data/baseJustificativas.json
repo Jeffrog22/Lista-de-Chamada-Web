@@ -4158,5 +4158,185 @@
     "horario": "0930",
     "professor": "Jefferson",
     "saved_at": "2026-02-22T19:26:10.313242+00:00"
+  },
+  {
+    "aluno_nome": "Elza Pereira Amorim Torezin",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:01.466004+00:00"
+  },
+  {
+    "aluno_nome": "Priscila Moraes Lopes",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:01.466121+00:00"
+  },
+  {
+    "aluno_nome": "Rodrigo Gregório da Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:01.466185+00:00"
+  },
+  {
+    "aluno_nome": "Alice Soares Cunha",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002126+00:00"
+  },
+  {
+    "aluno_nome": "Allana Beatriz da Cruz Francisco",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002216+00:00"
+  },
+  {
+    "aluno_nome": "Ana Clara Pereira de Souza",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002267+00:00"
+  },
+  {
+    "aluno_nome": "Aylla Victória Silva Souza",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002314+00:00"
+  },
+  {
+    "aluno_nome": "Isaque Galdino Autor",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002357+00:00"
+  },
+  {
+    "aluno_nome": "Lorena Vitória Silveira dos Santos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002399+00:00"
+  },
+  {
+    "aluno_nome": "Lorenna Silva Ribeiro",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002441+00:00"
+  },
+  {
+    "aluno_nome": "Natalia Silva de Souza",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002482+00:00"
+  },
+  {
+    "aluno_nome": "Nicole Yasmin Silveira dos Santos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "dqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "1015",
+    "professor": "Daniela",
+    "saved_at": "2026-02-23T00:24:39.002524+00:00"
+  },
+  {
+    "aluno_nome": "Davi Luis Araujo Pereira",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409179+00:00"
+  },
+  {
+    "aluno_nome": "Emilly Araújo Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409371+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Matias dos Santos",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409473+00:00"
+  },
+  {
+    "aluno_nome": "Nicole Oliveira da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409568+00:00"
+  },
+  {
+    "aluno_nome": "Roberta Costa Soares",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409658+00:00"
+  },
+  {
+    "aluno_nome": "Vinícius Oliveira da Silva",
+    "data": "2026-02-17",
+    "motivo": "Feriado: Carnaval",
+    "turmaCodigo": "jtq03",
+    "turmaLabel": "Terça e Quinta",
+    "horario": "1015",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T02:11:12.409749+00:00"
   }
 ]

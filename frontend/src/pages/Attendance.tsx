@@ -295,10 +295,25 @@ export const Attendance: React.FC = () => {
       const students = studentsStr ? JSON.parse(studentsStr) : [];
       if (!Array.isArray(classes) || !Array.isArray(students)) return null;
 
+      const excludedRaw = localStorage.getItem("excludedStudents");
+      const excluded = excludedRaw ? (JSON.parse(excludedRaw) as any[]) : [];
+      const exclusionKeys = new Set<string>();
+      excluded.forEach((student) => {
+        const normalized = `${normalizeText(student.nome || "")}|${normalizeText(student.turma || "")}|${normalizeHorarioDigits(student.horario || "")}|${normalizeText(student.professor || "")}|${normalizeText(student.turmaCodigo || "")}`;
+        if (normalized.trim()) {
+          exclusionKeys.add(normalized);
+        }
+      });
+
+      const filteredStudents = students.filter((student) => {
+        const key = `${normalizeText(student.nome || "")}|${normalizeText(student.turma || "")}|${normalizeHorarioDigits(student.horario || "")}|${normalizeText(student.professor || "")}|${normalizeText(student.turmaCodigo || "")}`;
+        return !exclusionKeys.has(key);
+      });
+
       const classOptions: ClassOption[] = normalizeClassOptions(classes);
 
       const studentsPerClass: { [key: string]: string[] } = {};
-      students.forEach((student: any) => {
+      filteredStudents.forEach((student: any) => {
         const key = student.turmaCodigo || student.turma;
         if (!key || !student.nome) return;
         if (!studentsPerClass[key]) {
@@ -307,7 +322,7 @@ export const Attendance: React.FC = () => {
         studentsPerClass[key].push(student.nome);
       });
 
-      return { classOptions, studentsPerClass, studentsMeta: students as ActiveStudentMeta[] };
+      return { classOptions, studentsPerClass, studentsMeta: filteredStudents as ActiveStudentMeta[] };
     } catch {
       return null;
     }
@@ -493,12 +508,11 @@ export const Attendance: React.FC = () => {
   }, [classOptions]);
 
   const horarioOptions = useMemo(() => {
+    if (!selectedProfessor) return [];
     const tokens = new Set<string>();
     classOptions
       .filter(
-        (opt) =>
-          isSameTurma(opt, selectedTurma) &&
-          (!selectedProfessor || opt.professor === selectedProfessor)
+        (opt) => isSameTurma(opt, selectedTurma) && opt.professor === selectedProfessor
       )
       .forEach((opt) => {
         extractHorarioTokens(opt.horario).forEach((token) => tokens.add(token));
@@ -1762,42 +1776,12 @@ export const Attendance: React.FC = () => {
 
         <div>
           <label style={{ fontSize: "12px", opacity: 0.9, fontWeight: 600 }}>
-            Horário
-          </label>
-          <select
-            value={selectedHorario}
-            onChange={(e) => setSelectedHorario(e.target.value)}
-            disabled={!selectedTurma || horarioOptions.length === 0}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "none",
-              marginTop: "6px",
-              fontSize: "14px",
-              fontWeight: 600,
-            }}
-          >
-            {horarioOptions.length === 0 ? (
-              <option value="">Sem horários</option>
-            ) : (
-              horarioOptions.map((horario) => (
-                <option key={horario} value={horario}>
-                  {formatHorario(horario)}
-                </option>
-              ))
-            )}
-          </select>
-        </div>
-
-        <div>
-          <label style={{ fontSize: "12px", opacity: 0.9, fontWeight: 600 }}>
             Professor
           </label>
           <select
             value={selectedProfessor}
             onChange={(e) => setSelectedProfessor(e.target.value)}
-            disabled={!selectedHorario || professorOptions.length === 0}
+            disabled={!selectedTurma || professorOptions.length === 0}
             style={{
               width: "100%",
               padding: "8px 12px",
@@ -1814,6 +1798,36 @@ export const Attendance: React.FC = () => {
               professorOptions.map((professor) => (
                 <option key={professor} value={professor}>
                   {professor}
+                </option>
+              ))
+            )}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ fontSize: "12px", opacity: 0.9, fontWeight: 600 }}>
+            Horário
+          </label>
+          <select
+            value={selectedHorario}
+            onChange={(e) => setSelectedHorario(e.target.value)}
+            disabled={!selectedTurma || !selectedProfessor || horarioOptions.length === 0}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              borderRadius: "6px",
+              border: "none",
+              marginTop: "6px",
+              fontSize: "14px",
+              fontWeight: 600,
+            }}
+          >
+            {horarioOptions.length === 0 ? (
+              <option value="">Sem horários</option>
+            ) : (
+              horarioOptions.map((horario) => (
+                <option key={horario} value={horario}>
+                  {formatHorario(horario)}
                 </option>
               ))
             )}
