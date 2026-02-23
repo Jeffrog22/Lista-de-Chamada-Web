@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, getBootstrap } from "../api";
+import { addExclusion, createImportStudent, getBootstrap, updateImportStudent } from "../api";
 
 interface Student {
   id: string;
@@ -10,6 +10,7 @@ interface Student {
   categoria: string;
   turma: string;
   turmaCodigo?: string;
+  turmaLabel?: string;
   horario: string;
   professor: string;
   whatsapp: string;
@@ -92,25 +93,6 @@ export const Students: React.FC = () => {
     });
     return Array.from(seen.values());
   };
-  // Mock Data inicial expandido
-  const initialMockStudents: Student[] = [
-    {
-      id: "1", nome: "João Silva", nivel: "Iniciante", idade: 15, categoria: "Juvenil", 
-      turma: "1A", horario: "14:00", professor: "Joao Silva", whatsapp: "(11) 98765-4321",
-      genero: "Masculino", dataNascimento: "10/05/2010", parQ: "Não", atestado: true, dataAtestado: "15/01/2025"
-    },
-    { 
-      id: "2", nome: "Maria Santos", nivel: "Intermediario", idade: 16, categoria: "Juvenil", 
-      turma: "1B", horario: "15:30", professor: "Maria Santos", whatsapp: "(11) 98765-4322",
-      genero: "Feminino", dataNascimento: "20/08/2009", parQ: "Sim", atestado: false
-    },
-    { 
-      id: "3", nome: "Carlos Oliveira", nivel: "Avancado", idade: 17, categoria: "Adulto", 
-      turma: "2A", horario: "16:30", professor: "Carlos Oliveira", whatsapp: "(11) 98765-4323",
-      genero: "Masculino", dataNascimento: "05/02/2008", parQ: "Não", atestado: false
-    }
-  ];
-
   const [students, setStudents] = useState<Student[]>(() => {
     const saved = localStorage.getItem("activeStudents");
     if (saved) {
@@ -121,7 +103,7 @@ export const Students: React.FC = () => {
         // ignore
       }
     }
-    return initialMockStudents;
+    return [];
   });
 
   const [loading, setLoading] = useState(false);
@@ -158,8 +140,20 @@ export const Students: React.FC = () => {
     return normalize(a) - normalize(b);
   };
 
+  const getTurmaDisplayLabel = (student: Student) => student.turmaLabel || student.turma;
+
   const turmaOptions = React.useMemo(() => {
-    return Array.from(new Set(students.map((s) => s.turma))).sort();
+    try {
+      const raw = localStorage.getItem("activeClasses");
+      if (raw) {
+        const classes = JSON.parse(raw) as Array<{ Turma?: string }>;
+        const labels = Array.from(new Set(classes.map((cls) => (cls.Turma || "").trim()).filter(Boolean)));
+        if (labels.length > 0) return labels.sort();
+      }
+    } catch {
+      // ignore
+    }
+    return Array.from(new Set(students.map(getTurmaDisplayLabel))).sort();
   }, [students]);
   const categoriaOptions = React.useMemo(() => {
     const set = new Set<string>();
@@ -249,6 +243,7 @@ export const Students: React.FC = () => {
             categoria: student.categoria || "",
             turma: cls?.turma_label || cls?.codigo || "",
             turmaCodigo: cls?.codigo || "",
+            turmaLabel: cls?.turma_label || cls?.codigo || "",
             horario: cls?.horario || "",
             professor: cls?.professor || "",
             whatsapp: student.whatsapp || "",
@@ -284,12 +279,24 @@ export const Students: React.FC = () => {
             const stored = storedById.get(student.id);
             if (!stored) return student;
 
+            const turmaLabelFromBackend = student.turmaLabel || stored.turmaLabel;
+
             const hasManualChange =
               stored.turma !== student.turma ||
               (stored.horario || "") !== (student.horario || "") ||
               (stored.professor || "") !== (student.professor || "");
 
-            return hasManualChange ? stored : student;
+            if (!hasManualChange) {
+              return {
+                ...student,
+                turmaLabel: turmaLabelFromBackend,
+              };
+            }
+
+            return {
+              ...stored,
+              turmaLabel: turmaLabelFromBackend,
+            };
           });
 
           const storedOnly = storedList.filter((student) => !deduped.some((item) => item.id === student.id));
@@ -460,10 +467,10 @@ export const Students: React.FC = () => {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
-  const getNivelFromClasses = (turma: string, horario: string, professor: string) => {
+  const findClassFromTriple = (turma: string, horario: string, professor: string) => {
     try {
       const raw = localStorage.getItem("activeClasses");
-      if (!raw) return "";
+      if (!raw) return null;
       const classes = JSON.parse(raw) as Array<{
         Turma?: string;
         TurmaCodigo?: string;
@@ -491,46 +498,29 @@ export const Students: React.FC = () => {
         const clsProfessor = normalizeText(cls.Professor || "");
         return turmaMatch && clsHorario === horarioKey && clsProfessor === professorNorm;
       });
-      return match?.Nivel || "";
+      return match || null;
     } catch {
-      return "";
+      return null;
     }
+  };
+
+  const getNivelFromClasses = (turma: string, horario: string, professor: string) => {
+    const match = findClassFromTriple(turma, horario, professor);
+    return match?.Nivel || "";
   };
 
   const getTurmaCodigoFromClasses = (turma: string, horario: string, professor: string) => {
     try {
-      const raw = localStorage.getItem("activeClasses");
-      if (!raw) return turma;
-      const classes = JSON.parse(raw) as Array<{
-        Turma?: string;
-        TurmaCodigo?: string;
-        Horario?: string;
-        Professor?: string;
-      }>;
-      const turmaNorm = normalizeText(turma || "");
-      const professorNorm = normalizeText(professor || "");
-      const horarioNorm = (value: string) => {
-        const digits = (value || "").replace(/\D/g, "");
-        if (digits.length === 3) return `0${digits}`;
-        if (digits.length >= 4) return digits.slice(0, 4);
-        return digits;
-      };
-      const horarioKey = horarioNorm(horario || "");
-      const match = classes.find((cls) => {
-        const turmaKey = cls.TurmaCodigo || "";
-        const turmaLabel = cls.Turma || "";
-        if (!horarioKey || !professorNorm) return false;
-        const turmaKeyNorm = normalizeText(turmaKey);
-        const turmaLabelNorm = normalizeText(turmaLabel);
-        const turmaMatch = turmaNorm && (turmaNorm === turmaKeyNorm || turmaNorm === turmaLabelNorm);
-        const clsHorario = horarioNorm(cls.Horario || "");
-        const clsProfessor = normalizeText(cls.Professor || "");
-        return turmaMatch && clsHorario === horarioKey && clsProfessor === professorNorm;
-      });
+      const match = findClassFromTriple(turma, horario, professor);
       return match?.TurmaCodigo || turma;
     } catch {
       return turma;
     }
+  };
+
+  const getTurmaLabelFromClasses = (turma: string, horario: string, professor: string) => {
+    const match = findClassFromTriple(turma, horario, professor);
+    return match?.Turma || turma;
   };
 
   const nivelOrder = [
@@ -685,7 +675,7 @@ export const Students: React.FC = () => {
       dataNascimento: normalizedBirth,
       genero: student.genero,
       whatsapp: normalizedWhatsapp,
-      turma: student.turma,
+      turma: getTurmaDisplayLabel(student),
       horario: normalizedHorario,
       professor: student.professor,
       nivel: student.nivel,
@@ -697,23 +687,38 @@ export const Students: React.FC = () => {
     setShowModal(true);
   };
 
+  const persistStudent = async (student: Student, isNew: boolean) => {
+    try {
+      const payload = {
+        nome: student.nome,
+        turma: student.turmaLabel || student.turma || "",
+        horario: student.horario || "",
+        professor: student.professor || "",
+        whatsapp: student.whatsapp || "",
+        data_nascimento: student.dataNascimento || "",
+        data_atestado: student.dataAtestado || "",
+        categoria: student.categoria || "",
+        genero: student.genero || "",
+        parq: student.parQ || "",
+        atestado: student.atestado,
+      };
+      if (isNew) {
+        await createImportStudent(payload);
+      } else {
+        const numericId = Number(student.id);
+        if (Number.isFinite(numericId)) {
+          await updateImportStudent(student.id, payload);
+        }
+      }
+    } catch (error) {
+      console.error("Falha ao persistir aluno no backend", error);
+    }
+  };
+
   const handleSave = () => {
     if (!formData.nome || !formData.turma) {
       alert("Preencha os campos obrigatórios (Nome, Turma)");
       return;
-    }
-
-    // if editing an existing student and turma changed, migrate their attendance data
-    let originalTurma = "";
-    let originalTurmaCode = "";
-    let originalName = "";
-    if (editingId) {
-      const orig = students.find((s) => s.id === editingId);
-      if (orig) {
-        originalTurma = orig.turma;
-        originalTurmaCode = orig.turmaCodigo || "";
-        originalName = orig.nome;
-      }
     }
 
     const birthDate = parseBirthDate(formData.dataNascimento);
@@ -745,6 +750,7 @@ export const Students: React.FC = () => {
     }
 
     const turmaCodigo = getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor);
+    const turmaLabel = getTurmaLabelFromClasses(formData.turma, formData.horario, formData.professor);
     const studentId = editingId || `local-${Date.now()}`;
     const studentData: Student = {
       id: studentId,
@@ -752,8 +758,9 @@ export const Students: React.FC = () => {
       dataNascimento: formData.dataNascimento,
       genero: formData.genero,
       whatsapp: formData.whatsapp,
-      turma: formData.turma,
+      turma: turmaLabel,
       turmaCodigo,
+      turmaLabel,
       horario: formData.horario,
       professor: formData.professor,
       nivel: formData.nivel,
@@ -774,6 +781,12 @@ export const Students: React.FC = () => {
       }
       return dedupeStudents(updated);
     });
+
+    if (!editingId) {
+      persistStudent(studentData, true).catch(() => undefined);
+    } else if (!studentId.startsWith("local-")) {
+      persistStudent(studentData, false).catch(() => undefined);
+    }
 
     if (editingId) {
       alert("Aluno atualizado com sucesso!");
@@ -882,7 +895,8 @@ export const Students: React.FC = () => {
       normalizeText(s.professor).includes(term);
 
     const matchesNivel = !filters.nivel || normalizeText(s.nivel) === normalizeText(filters.nivel);
-    const matchesTurma = !filters.turma || s.turma === filters.turma;
+    const turmaValue = getTurmaDisplayLabel(s);
+    const matchesTurma = !filters.turma || turmaValue === filters.turma;
     const matchesHorario =
       !filters.horario || formatHorario(s.horario || "") === filters.horario;
     const matchesProfessor =
@@ -921,7 +935,7 @@ export const Students: React.FC = () => {
         result = aIsCustom ? -1 : 1;
       }
     } else if (sortKey === "turma") {
-      result = a.turma.localeCompare(b.turma);
+      result = getTurmaDisplayLabel(a).localeCompare(getTurmaDisplayLabel(b));
     } else if (sortKey === "horario") {
       result = compareHorario(a.horario, b.horario);
     } else if (sortKey === "professor") {
@@ -1151,14 +1165,14 @@ export const Students: React.FC = () => {
                 <td style={{ padding: "12px" }}>{student.categoria}</td>
                 <td style={{ padding: "12px", textAlign: "center" }}>
                   <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 8px", borderRadius: "4px", fontWeight: "bold", fontSize: "12px" }}>
-                    {student.turma}
+                    {getTurmaDisplayLabel(student)}
                   </span>
                 </td>
                 <td style={{ padding: "12px", textAlign: "center" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                   <button
-                    onClick={() => handleGoToAttendance(student.turma)}
+                    onClick={() => handleGoToAttendance(getTurmaDisplayLabel(student))}
                     title="Ir para chamada"
                     style={{
                       background: "#28a745",
