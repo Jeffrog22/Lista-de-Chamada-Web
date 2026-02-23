@@ -663,7 +663,7 @@ export const Exclusions: React.FC = () => {
                   Professor
                 </label>
                 <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", background: "#fffbeb", padding: "10px", borderRadius: "6px" }}>
-                  {(professorOptions.length > 0 ? professorOptions : ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa"]).map((prof) => (
+                  {professorOptions.map((prof) => (
                     <label key={prof} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer" }}>
                       <input
                         type="radio"

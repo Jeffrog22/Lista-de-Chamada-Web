@@ -29,13 +29,7 @@ const formatHorario = (value: string) => {
 };
 
 export const Classes: React.FC = () => {
-  // Dados mock iniciais até o bootstrap carregar as turmas reais
-  const [classes, setClasses] = useState<Class[]>([
-    { Turma: "1A", Horario: "14:00", Professor: "Joao Silva", Nivel: "Iniciante", FaixaEtaria: "Juvenil", Atalho: "1A", CapacidadeMaxima: 20 },
-    { Turma: "1B", Horario: "15:30", Professor: "Maria Santos", Nivel: "Intermediario", FaixaEtaria: "Juvenil", Atalho: "1B", CapacidadeMaxima: 20 },
-    { Turma: "2A", Horario: "16:30", Professor: "Carlos Oliveira", Nivel: "Avancado", FaixaEtaria: "Adulto", Atalho: "2A", CapacidadeMaxima: 15 },
-    { Turma: "2B", Horario: "18:00", Professor: "Ana Costa", Nivel: "Iniciante", FaixaEtaria: "Juvenil", Atalho: "2B", CapacidadeMaxima: 20 },
-  ]);
+  const [classes, setClasses] = useState<Class[]>([]);
   
   const [loading] = useState(false);
   const [showForm, setShowForm] = useState(false);

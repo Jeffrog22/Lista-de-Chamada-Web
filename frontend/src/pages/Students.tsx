@@ -93,18 +93,7 @@ export const Students: React.FC = () => {
     });
     return Array.from(seen.values());
   };
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem("activeStudents");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return dedupeStudents(parsed);
-      } catch {
-        // ignore
-      }
-    }
-    return [];
-  });
+  const [students, setStudents] = useState<Student[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
@@ -255,56 +244,9 @@ export const Students: React.FC = () => {
           } as Student;
         });
 
-        if (mapped.length > 0) {
-          const deduped = dedupeStudents(mapped);
-          const storedRaw = localStorage.getItem("activeStudents");
-          const storedList: Student[] = [];
-          if (storedRaw) {
-            try {
-              const parsed = JSON.parse(storedRaw);
-              if (Array.isArray(parsed)) {
-                storedList.push(...parsed);
-              }
-            } catch {
-              // ignore malformed storage
-            }
-          }
-
-          const storedById = new Map<string, Student>();
-          storedList.forEach((student) => {
-            if (student.id) storedById.set(student.id, student);
-          });
-
-          const mergedFromBackend = deduped.map((student) => {
-            const stored = storedById.get(student.id);
-            if (!stored) return student;
-
-            const turmaLabelFromBackend = student.turmaLabel || stored.turmaLabel;
-
-            const hasManualChange =
-              stored.turma !== student.turma ||
-              (stored.horario || "") !== (student.horario || "") ||
-              (stored.professor || "") !== (student.professor || "");
-
-            if (!hasManualChange) {
-              return {
-                ...student,
-                turmaLabel: turmaLabelFromBackend,
-              };
-            }
-
-            return {
-              ...stored,
-              turmaLabel: turmaLabelFromBackend,
-            };
-          });
-
-          const storedOnly = storedList.filter((student) => !deduped.some((item) => item.id === student.id));
-          const finalList = dedupeStudents([...mergedFromBackend, ...storedOnly]);
-
-          setStudents(finalList);
-          localStorage.setItem("activeStudents", JSON.stringify(finalList));
-        }
+        const finalList = dedupeStudents(mapped);
+        setStudents(finalList);
+        localStorage.setItem("activeStudents", JSON.stringify(finalList));
 
         const classStorage = data.classes.map((cls) => ({
           Turma: cls.turma_label || cls.codigo,
@@ -326,7 +268,16 @@ export const Students: React.FC = () => {
         }
       })
       .catch(() => {
-        // keep local data
+        try {
+          const saved = localStorage.getItem("activeStudents");
+          if (!saved) return;
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setStudents(dedupeStudents(parsed));
+          }
+        } catch {
+          // ignore malformed storage
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false);
@@ -1444,7 +1395,7 @@ export const Students: React.FC = () => {
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={{ display: "block", marginBottom: "5px", fontSize: "13px", fontWeight: 600 }}>Professor</label>
                 <div style={{ display: "flex", gap: "15px", background: "#fffbeb", padding: "10px", borderRadius: "6px" }}>
-                  {(professorOptions.length > 0 ? professorOptions : ["Joao Silva", "Maria Santos", "Carlos Oliveira", "Ana Costa"]).map(prof => (
+                  {professorOptions.map(prof => (
                     <label key={prof} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", cursor: "pointer" }}>
                       <input
                         type="radio"
