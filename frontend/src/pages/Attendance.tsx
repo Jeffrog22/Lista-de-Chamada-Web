@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addExclusion, getAcademicCalendar, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
@@ -83,6 +83,8 @@ const WEATHER_ICONS = {
 
 type AttendanceHistory = AttendanceRecord[];
 type ModalLogType = "aula" | "ocorrencia";
+
+const DEFAULT_POOL_TEMP = "28";
 
 export const Attendance: React.FC = () => {
   const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
@@ -345,6 +347,13 @@ export const Attendance: React.FC = () => {
   };
 
   const stored = loadFromStorage();
+  const refreshStorageData = useCallback(() => {
+    const latest = loadFromStorage();
+    if (!latest) return;
+    setClassOptions(latest.classOptions);
+    setStudentsPerClass(latest.studentsPerClass);
+    setActiveStudentsMeta(latest.studentsMeta || []);
+  }, []);
   const storedSelection = loadAttendanceSelection();
   const [classOptions, setClassOptions] = useState<ClassOption[]>(stored?.classOptions || defaultClassOptions);
   const [studentsPerClass, setStudentsPerClass] = useState<{ [key: string]: string[] }>(
@@ -393,6 +402,11 @@ export const Attendance: React.FC = () => {
       setActiveStudentsMeta(latest.studentsMeta || []);
       // selection handled by effects below
     }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("attendanceDataUpdated", refreshStorageData);
+    return () => window.removeEventListener("attendanceDataUpdated", refreshStorageData);
   }, []);
 
   useEffect(() => {
@@ -859,7 +873,7 @@ export const Attendance: React.FC = () => {
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
     tempExterna: "",
-    tempPiscina: "",
+    tempPiscina: DEFAULT_POOL_TEMP,
     cloro: 1.5,
     cloroEnabled: true,
     selectedIcons: [] as string[],
@@ -890,8 +904,10 @@ export const Attendance: React.FC = () => {
   };
 
   const climaCacheKey = (date: string) => `climaCache:${date}`;
+  const lastClimaCacheDateKey = "climaLastDate";
 
   const getClimaCache = (date: string) => {
+    if (!date) return null;
     try {
       const raw = localStorage.getItem(climaCacheKey(date));
       if (!raw) return null;
@@ -908,6 +924,7 @@ export const Attendance: React.FC = () => {
 
   const setClimaCache = (date: string, payload: { tempExterna: string; selectedIcons: string[]; apiTemp?: string; apiCondition?: string }) => {
     localStorage.setItem(climaCacheKey(date), JSON.stringify(payload));
+    localStorage.setItem(lastClimaCacheDateKey, date);
   };
 
   const toMinutes = (time?: string) => {
@@ -1058,7 +1075,7 @@ export const Attendance: React.FC = () => {
     // Resetar dados
     setPoolData(prev => ({
       ...prev,
-      tempPiscina: "",
+      tempPiscina: DEFAULT_POOL_TEMP,
       cloro: 1.5,
       cloroEnabled: true,
       selectedIcons: [],
@@ -1181,6 +1198,20 @@ export const Attendance: React.FC = () => {
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
+      return;
+    }
+
+    const fallbackDate = localStorage.getItem(lastClimaCacheDateKey);
+    const fallbackCache = fallbackDate && fallbackDate !== date ? getClimaCache(fallbackDate) : null;
+    if (fallbackCache) {
+      setPoolData(prev => ({
+        ...prev,
+        tempExterna: normalizeNumberInput(fallbackCache.tempExterna),
+        selectedIcons: fallbackCache.selectedIcons || [],
+      }));
+      setClimaPrefillApplied(true);
+      setShowDateModal(true);
+      return;
     }
 
     // Pré-carregar dados da API
@@ -1363,10 +1394,35 @@ export const Attendance: React.FC = () => {
     return "#dc3545"; // Vermelho/Laranja Intenso
   };
 
+  const clickTimerRef = useRef<number | null>(null);
+
   const handleOpenStudentModal = (id: number) => {
     setStudentModalId(id);
     setNewNote("");
     setStudentModalOpen(true);
+  };
+
+  const handleStudentClick = (id: number) => {
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    clickTimerRef.current = window.setTimeout(() => {
+      handleOpenStudentModal(id);
+      clickTimerRef.current = null;
+    }, 400);
+  };
+
+  const handleNavigateToStudent = (name: string, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (!name) return;
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    const lookupName = normalizeText(name);
+    localStorage.setItem("studentLookupName", lookupName || name);
+    window.location.hash = "students";
   };
 
   const handleAddNote = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1965,7 +2021,8 @@ export const Attendance: React.FC = () => {
                 >
                   <td 
                     style={{ padding: "12px", fontWeight: 500, cursor: "pointer" }}
-                    onClick={() => handleOpenStudentModal(item.id)}
+                    onClick={() => handleStudentClick(item.id)}
+                    onDoubleClick={(event) => handleNavigateToStudent(item.aluno, event)}
                     title="Clique para ver/adicionar anotações"
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

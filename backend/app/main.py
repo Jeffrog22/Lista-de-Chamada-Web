@@ -7,6 +7,7 @@ import os
 import json
 import re
 import uuid
+import math
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
@@ -308,6 +309,31 @@ def _format_whatsapp(value: Any) -> str:
         return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
     return ""
 
+
+def _coerce_numeric_value(value: Optional[str]) -> str | float:
+    raw = str(value or "").replace(",", ".").strip()
+    if raw == "":
+        return ""
+    try:
+        num = float(raw)
+        if math.isfinite(num):
+            return num
+    except ValueError:
+        pass
+    return raw
+
+
+def _format_temperature_output(value: Any, fallback: str = "28") -> str:
+    if value is None:
+        return fallback
+    try:
+        num = float(value)
+        if math.isfinite(num):
+            return str(num)
+    except Exception:
+        pass
+    return fallback
+
 def _load_pool_log(file_path: str) -> pd.DataFrame:
     if os.path.exists(file_path):
         df = pd.read_excel(file_path)
@@ -427,6 +453,8 @@ def append_pool_log(entry: PoolLogEntryModel):
             raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para salvar.")
 
         cloro_value = "-" if entry.nota in {"feriado", "ponte-feriado", "reuniao"} else ("-" if entry.cloroPpm is None else entry.cloroPpm)
+        temp_externa_value = _coerce_numeric_value(entry.tempExterna)
+        temp_piscina_value = _coerce_numeric_value(entry.tempPiscina)
         row = {
             "Data": entry.data,
             "TurmaCodigo": entry.turmaCodigo or "",
@@ -438,8 +466,8 @@ def append_pool_log(entry: PoolLogEntryModel):
             "Status_aula": entry.statusAula,
             "Nota": entry.nota,
             "Tipo_ocorrencia": entry.tipoOcorrencia,
-            "Temp. (C)": entry.tempExterna or "",
-            "Piscina (C)": entry.tempPiscina or "",
+            "Temp. (C)": temp_externa_value,
+            "Piscina (C)": temp_piscina_value,
             "Cloro (ppm)": cloro_value,
         }
 
@@ -520,8 +548,8 @@ def get_pool_log(
             "statusAula": str(row.get("Status_aula", "")),
             "nota": str(row.get("Nota", "")),
             "tipoOcorrencia": str(row.get("Tipo_ocorrencia", "")),
-            "tempExterna": str(row.get("Temp. (C)", "")),
-            "tempPiscina": str(row.get("Piscina (C)", "")),
+            "tempExterna": _format_temperature_output(row.get("Temp. (C)", None), ""),
+            "tempPiscina": _format_temperature_output(row.get("Piscina (C)", None), "28"),
             "cloroPpm": row.get("Cloro (ppm)", None),
         }
     except HTTPException:

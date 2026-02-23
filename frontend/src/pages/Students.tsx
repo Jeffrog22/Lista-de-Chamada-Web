@@ -127,6 +127,12 @@ export const Students: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  useEffect(() => {
+    const lookup = localStorage.getItem("studentLookupName");
+    if (!lookup) return;
+    setSearchTerm(lookup);
+    localStorage.removeItem("studentLookupName");
+  }, []);
   // helper moved up so horarioOptions can reference it without hoisting issues
   const formatHorario = (value: string) => {
     if (!value) return "";
@@ -179,6 +185,7 @@ export const Students: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem("activeStudents", JSON.stringify(students));
+    window.dispatchEvent(new Event("attendanceDataUpdated"));
   }, [students]);
 
   useEffect(() => {
@@ -255,8 +262,41 @@ export const Students: React.FC = () => {
 
         if (mapped.length > 0) {
           const deduped = dedupeStudents(mapped);
-          setStudents(deduped);
-          localStorage.setItem("activeStudents", JSON.stringify(deduped));
+          const storedRaw = localStorage.getItem("activeStudents");
+          const storedList: Student[] = [];
+          if (storedRaw) {
+            try {
+              const parsed = JSON.parse(storedRaw);
+              if (Array.isArray(parsed)) {
+                storedList.push(...parsed);
+              }
+            } catch {
+              // ignore malformed storage
+            }
+          }
+
+          const storedById = new Map<string, Student>();
+          storedList.forEach((student) => {
+            if (student.id) storedById.set(student.id, student);
+          });
+
+          const mergedFromBackend = deduped.map((student) => {
+            const stored = storedById.get(student.id);
+            if (!stored) return student;
+
+            const hasManualChange =
+              stored.turma !== student.turma ||
+              (stored.horario || "") !== (student.horario || "") ||
+              (stored.professor || "") !== (student.professor || "");
+
+            return hasManualChange ? stored : student;
+          });
+
+          const storedOnly = storedList.filter((student) => !deduped.some((item) => item.id === student.id));
+          const finalList = dedupeStudents([...mergedFromBackend, ...storedOnly]);
+
+          setStudents(finalList);
+          localStorage.setItem("activeStudents", JSON.stringify(finalList));
         }
 
         const classStorage = data.classes.map((cls) => ({
