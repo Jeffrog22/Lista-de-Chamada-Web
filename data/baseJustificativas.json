@@ -4398,5 +4398,85 @@
     "horario": "1015",
     "professor": "Jefferson",
     "saved_at": "2026-02-23T04:20:38.895955+00:00"
+  },
+  {
+    "aluno_nome": "Augusto de Almeida",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.926216+00:00"
+  },
+  {
+    "aluno_nome": "Bianca Almeida de Moura Coelho",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.927757+00:00"
+  },
+  {
+    "aluno_nome": "Bruno Nunes Marques",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.927897+00:00"
+  },
+  {
+    "aluno_nome": "José Francisco da Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.928007+00:00"
+  },
+  {
+    "aluno_nome": "Katia Cilene Tibúrcio da Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.928107+00:00"
+  },
+  {
+    "aluno_nome": "Liliam de Sales Cambraia",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.928216+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Cordeiro da Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.928305+00:00"
+  },
+  {
+    "aluno_nome": "Samuel Ometto Franco",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-23T17:23:36.928413+00:00"
   }
 ]
