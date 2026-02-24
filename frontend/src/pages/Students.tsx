@@ -820,8 +820,17 @@ export const Students: React.FC = () => {
     alert("Aluno movido para a lista de exclusão.");
   };
 
-  const handleGoToAttendance = (turma: string) => {
-    localStorage.setItem("attendanceTargetTurma", turma);
+  const handleGoToAttendance = (student: Student) => {
+    const turmaValue = student.turmaLabel || student.turmaCodigo || student.turma || "";
+    localStorage.setItem("attendanceTargetTurma", turmaValue);
+    localStorage.setItem(
+      "attendanceSelection",
+      JSON.stringify({
+        turma: turmaValue,
+        horario: student.horario || "",
+        professor: student.professor || "",
+      })
+    );
     window.location.hash = "attendance";
   };
 
@@ -1123,7 +1132,7 @@ export const Students: React.FC = () => {
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                   <button
-                    onClick={() => handleGoToAttendance(getTurmaDisplayLabel(student))}
+                    onClick={() => handleGoToAttendance(student)}
                     title="Ir para chamada"
                     style={{
                       background: "#28a745",

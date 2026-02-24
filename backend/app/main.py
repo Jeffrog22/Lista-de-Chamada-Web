@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, get_session
 from app import crud, models
 from typing import List, Optional, Dict, Any
@@ -2078,6 +2078,86 @@ def list_classes(session: Session = Depends(get_session)):
 @app.post("/classes", response_model=models.ClassModel)
 def add_class(class_model: models.ClassModel, session: Session = Depends(get_session)):
     return crud.create_class(session, class_model)
+
+# Import classes endpoints (for turma management via UI)
+@app.post("/import-classes")
+def create_import_class(
+    data: models.ImportClassCreate,
+    session: Session = Depends(get_session),
+):
+    """Create a new import class (turma) - default unit_id is 1"""
+    unit_id = 1  # Default unit
+    # Generate codigo from turma components
+    codigo = f"{data.professor[:2].lower()}{data.turma_label[:3].lower()}".replace(" ", "")
+    
+    new_class = models.ImportClass(
+        unit_id=unit_id,
+        codigo=codigo or f"t{session.exec(select(func.count(models.ImportClass.id))).first() or 0}",
+        turma_label=data.turma_label,
+        horario=data.horario,
+        professor=data.professor,
+        nivel=data.nivel or "",
+        faixa_etaria=data.faixa_etaria or "",
+        capacidade=data.capacidade or 0,
+        dias_semana=data.dias_semana or "",
+    )
+    session.add(new_class)
+    session.commit()
+    session.refresh(new_class)
+    return {
+        "id": new_class.id,
+        "unit_id": new_class.unit_id,
+        "codigo": new_class.codigo,
+        "turma_label": new_class.turma_label,
+        "horario": new_class.horario,
+        "professor": new_class.professor,
+        "nivel": new_class.nivel,
+        "faixa_etaria": new_class.faixa_etaria,
+        "capacidade": new_class.capacidade,
+        "dias_semana": new_class.dias_semana,
+    }
+
+@app.put("/import-classes/{class_id}")
+def update_import_class(
+    class_id: int,
+    data: models.ImportClassUpdate,
+    session: Session = Depends(get_session),
+):
+    """Update an existing import class (turma)"""
+    import_class = session.exec(select(models.ImportClass).where(models.ImportClass.id == class_id)).first()
+    if not import_class:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    if data.turma_label is not None:
+        import_class.turma_label = data.turma_label
+    if data.horario is not None:
+        import_class.horario = data.horario
+    if data.professor is not None:
+        import_class.professor = data.professor
+    if data.nivel is not None:
+        import_class.nivel = data.nivel
+    if data.faixa_etaria is not None:
+        import_class.faixa_etaria = data.faixa_etaria
+    if data.capacidade is not None:
+        import_class.capacidade = data.capacidade
+    if data.dias_semana is not None:
+        import_class.dias_semana = data.dias_semana
+    
+    session.add(import_class)
+    session.commit()
+    session.refresh(import_class)
+    return {
+        "id": import_class.id,
+        "unit_id": import_class.unit_id,
+        "codigo": import_class.codigo,
+        "turma_label": import_class.turma_label,
+        "horario": import_class.horario,
+        "professor": import_class.professor,
+        "nivel": import_class.nivel,
+        "faixa_etaria": import_class.faixa_etaria,
+        "capacidade": import_class.capacidade,
+        "dias_semana": import_class.dias_semana,
+    }
 
 @app.get("/attendance", response_model=List[models.Attendance])
 def list_attendance(session: Session = Depends(get_session)):

@@ -28,9 +28,9 @@ export const deleteAttendance = (id: string) => API.delete(`/attendance/${id}`).
 
 // Classes
 export const getAllClasses = () => API.get("/classes").catch(() => ({ data: [] }));
-export const addClass = (data: any) => API.post("/classes", data).catch(() => ({ data: { ok: true } }));
-export const updateClass = (turma: string, horario: string, professor: string, data: any) => 
-  API.put(`/classes/${turma}/${horario}/${professor}`, data).catch(() => ({ data: { ok: true } }));
+export const addClass = (data: any) => API.post("/import-classes", data).catch(() => ({ data: { ok: true } }));
+export const updateClass = (class_id: number, data: any) => 
+  API.put(`/import-classes/${class_id}`, data).catch(() => ({ data: { ok: true } }));
 export const deleteClass = (turma: string, horario: string, professor: string) => 
   API.delete(`/classes/${turma}/${horario}/${professor}`).catch(() => ({ data: { ok: true } }));
 

@@ -541,13 +541,40 @@ export const Attendance: React.FC = () => {
   useEffect(() => {
     const target = localStorage.getItem("attendanceTargetTurma");
     if (!target) return;
-    const match = classOptions.find(
-      (opt) => isSameTurma(opt, target) || opt.turmaLabel === target
+
+    const selection = loadAttendanceSelection();
+    const selectionHorario = selection?.horario || "";
+    const selectionProfessor = selection?.professor || "";
+
+    // Prefer precise match when horario/professor are available
+    const preciseMatch = classOptions.find(
+      (opt) =>
+        isSameTurma(opt, target) &&
+        (!selectionHorario || horarioMatches(opt.horario, selectionHorario)) &&
+        (!selectionProfessor || opt.professor === selectionProfessor)
     );
+
+    const match =
+      preciseMatch ||
+      classOptions.find((opt) => {
+        if (opt.turmaLabel === target) return true;
+        if (opt.turmaCodigo === target) return true;
+        if (isSameTurma(opt, target)) return true;
+        return false;
+      });
+
     if (match) {
       setSelectedTurma(getTurmaKey(match) || "");
       setSelectedHorario(getCanonicalHorario(match.horario));
       setSelectedProfessor(match.professor);
+    } else if (classOptions.length === 0) {
+      // Turma list not ready, will retry when classOptions loads
+      return;
+    } else {
+      console.warn(
+        `[Attendance] Turma não encontrada: ${target}. Disponíveis:`,
+        classOptions.map((o) => `${o.turmaLabel}/${o.turmaCodigo}`)
+      );
     }
     localStorage.removeItem("attendanceTargetTurma");
   }, [classOptions]);

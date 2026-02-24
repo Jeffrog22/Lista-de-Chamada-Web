@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { getBootstrap } from "../api";
+import { getBootstrap, addClass, updateClass } from "../api";
 import "./Classes.css";
 
 interface Class {
+  id?: number;
   Turma: string;
   TurmaCodigo?: string;
   Horario: string;
@@ -15,17 +16,155 @@ interface Class {
   DiasSemana?: string;
 }
 
+type WeekdayValue = "segunda" | "terca" | "quarta" | "quinta" | "sexta";
+
+const WEEKDAY_OPTIONS: Array<{ value: WeekdayValue; label: string }> = [
+  { value: "segunda", label: "Segunda" },
+  { value: "terca", label: "Terça" },
+  { value: "quarta", label: "Quarta" },
+  { value: "quinta", label: "Quinta" },
+  { value: "sexta", label: "Sexta" },
+];
+
+const WEEKDAY_LETTERS: Record<WeekdayValue, string> = {
+  segunda: "S",
+  terca: "T",
+  quarta: "Q",
+  quinta: "Q",
+  sexta: "S",
+};
+
+const WEEKDAY_ACCENTS: Record<WeekdayValue, string> = {
+  segunda: "#6f66ff",
+  terca: "#7f8bff",
+  quarta: "#6b7cf5",
+  quinta: "#5c63ff",
+  sexta: "#7bb3ff",
+};
+
+const getWeekdayAccentStyle = (day: WeekdayValue) =>
+  ({
+    ["--weekday-accent" as "--weekday-accent"]: WEEKDAY_ACCENTS[day],
+  } as React.CSSProperties);
+
+const WEEKDAY_ORDER: Record<WeekdayValue, number> = {
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+};
+
+const normalizeSimple = (value: string) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const sortDays = (days: WeekdayValue[]) =>
+  [...days].sort((a, b) => WEEKDAY_ORDER[a] - WEEKDAY_ORDER[b]);
+
+const parseDiasSemana = (raw?: string) => {
+  if (!raw) return [] as WeekdayValue[];
+  const chunks = raw
+    .split(/[;,]/)
+    .map((item) => normalizeSimple(item))
+    .filter(Boolean);
+
+  const found = new Set<WeekdayValue>();
+  chunks.forEach((item) => {
+    if (item.startsWith("seg")) found.add("segunda");
+    else if (item.startsWith("ter")) found.add("terca");
+    else if (item.startsWith("qua")) found.add("quarta");
+    else if (item.startsWith("qui")) found.add("quinta");
+    else if (item.startsWith("sex")) found.add("sexta");
+  });
+
+  return sortDays(Array.from(found));
+};
+
+const buildDiasLabel = (days: WeekdayValue[]) => {
+  const ordered = sortDays(days);
+  if (ordered.length === 0) return "";
+
+  const groups: WeekdayValue[][] = [];
+  ordered.forEach((day) => {
+    const lastGroup = groups[groups.length - 1];
+    if (!lastGroup) {
+      groups.push([day]);
+      return;
+    }
+    const previousDay = lastGroup[lastGroup.length - 1];
+    if (WEEKDAY_ORDER[day] - WEEKDAY_ORDER[previousDay] === 1) {
+      lastGroup.push(day);
+      return;
+    }
+    groups.push([day]);
+  });
+
+  const formatDay = (day: WeekdayValue) => WEEKDAY_OPTIONS.find((opt) => opt.value === day)?.label || day;
+
+  const chunks = groups.map((group) => {
+    if (group.length === 1) return formatDay(group[0]);
+    if (group.length === 2) return `${formatDay(group[0])} e ${formatDay(group[1])}`;
+    return `${formatDay(group[0])} à ${formatDay(group[group.length - 1])}`;
+  });
+
+  if (chunks.length === 1) return chunks[0];
+  if (chunks.length === 2) return `${chunks[0]} e ${chunks[1]}`;
+  return `${chunks.slice(0, -1).join(", ")} e ${chunks[chunks.length - 1]}`;
+};
+
+const buildDiasCode = (days: WeekdayValue[]) => {
+  const ordered = sortDays(days);
+  if (ordered.length === 0) return "";
+  const normalizedKey = ordered.join("|");
+  if (normalizedKey === "terca|quinta") return "tq";
+  if (normalizedKey === "quarta|sexta") return "qs";
+
+  const mapping: Record<WeekdayValue, string> = {
+    segunda: "s",
+    terca: "t",
+    quarta: "q",
+    quinta: "q",
+    sexta: "f",
+  };
+
+  return ordered.map((day) => mapping[day]).join("");
+};
+
+const buildProfessorCode = (professor: string) => {
+  const clean = normalizeSimple(professor).replace(/[^a-z]/g, "");
+  if (!clean) return "xx";
+  return clean.slice(0, 2).padEnd(2, "x");
+};
+
+const buildNextTurmaCode = (professor: string, days: WeekdayValue[], existingClasses: Class[]) => {
+  const profCode = buildProfessorCode(professor);
+  const diasCode = buildDiasCode(days);
+  if (!profCode || !diasCode) return "";
+
+  const base = `${profCode}${diasCode}`;
+  let nextIndex = 1;
+  existingClasses.forEach((cls) => {
+    const currentCode = ((cls.TurmaCodigo || cls.Atalho || "") as string).trim().toLowerCase();
+    const match = currentCode.match(new RegExp(`^${base}(\\d{2})$`, "i"));
+    if (!match) return;
+    const numeric = parseInt(match[1], 10);
+    if (numeric >= nextIndex) nextIndex = numeric + 1;
+  });
+  return `${base}${String(nextIndex).padStart(2, "0")}`;
+};
+
 const formatHorario = (value: string) => {
   if (!value) return "";
   if (value.includes(":")) return value;
   const digits = value.replace(/\D/g, "");
-  if (digits.length === 3) {
-    return `0${digits[0]}:${digits.slice(1)}`;
-  }
   if (digits.length >= 4) {
     return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
   }
-  return value;
+  return digits;
 };
 
 export const Classes: React.FC = () => {
@@ -39,6 +178,9 @@ export const Classes: React.FC = () => {
   const [studentCounts, setStudentCounts] = useState<{ [key: string]: number }>({});
   const [sortKey, setSortKey] = useState<"Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selectedDays, setSelectedDays] = useState<WeekdayValue[]>([]);
+  const [turmaTouched, setTurmaTouched] = useState(false);
+  const [codeTouched, setCodeTouched] = useState(false);
 
   useEffect(() => {
     const updateCounts = () => {
@@ -65,6 +207,7 @@ export const Classes: React.FC = () => {
       .then((response) => {
         const data = response.data as {
           classes: Array<{
+            id: number;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -78,6 +221,7 @@ export const Classes: React.FC = () => {
 
         if (data.classes.length === 0) return;
         const mapped = data.classes.map((cls) => ({
+          id: cls.id,
           Turma: cls.turma_label || cls.codigo,
           TurmaCodigo: cls.codigo,
           Horario: cls.horario,
@@ -90,11 +234,37 @@ export const Classes: React.FC = () => {
         }));
         setClasses(mapped);
         localStorage.setItem("activeClasses", JSON.stringify(mapped));
+        // Notify Attendance component to refresh
+        window.dispatchEvent(new Event("attendanceDataUpdated"));
       })
       .catch(() => {
         // keep local data
       });
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("activeClasses", JSON.stringify(classes));
+    // Notify Attendance component to refresh
+    window.dispatchEvent(new Event("attendanceDataUpdated"));
+  }, [classes]);
+
+  useEffect(() => {
+    if (!showForm || !!editingClass) return;
+    const nextLabel = buildDiasLabel(selectedDays);
+    const nextCode = buildNextTurmaCode(String(formData.Professor || ""), selectedDays, classes);
+    const nextDiasSemana = selectedDays
+      .map((day) => WEEKDAY_OPTIONS.find((opt) => opt.value === day)?.label || "")
+      .filter(Boolean)
+      .join(";");
+
+    setFormData((prev) => ({
+      ...prev,
+      Turma: turmaTouched ? prev.Turma : nextLabel,
+      Atalho: codeTouched ? prev.Atalho : nextCode,
+      TurmaCodigo: codeTouched ? prev.TurmaCodigo : nextCode,
+      DiasSemana: nextDiasSemana,
+    }));
+  }, [showForm, editingClass, selectedDays, formData.Professor, classes, turmaTouched, codeTouched]);
 
   const filteredClasses = classes.filter(
     (c) =>
@@ -165,31 +335,110 @@ export const Classes: React.FC = () => {
 
   const handleAddClick = () => {
     setEditingClass(null);
+    setSelectedDays([]);
+    setTurmaTouched(false);
+    setCodeTouched(false);
     setFormData({});
     setShowForm(true);
   };
 
   const handleEditClick = (classData: Class) => {
     setEditingClass(classData);
+    setSelectedDays(parseDiasSemana(classData.DiasSemana));
+    setTurmaTouched(true);
+    setCodeTouched(true);
     setFormData(classData);
     setShowForm(true);
   };
 
-  const handleSave = () => {
-    if (editingClass) {
-      setClasses((prev) =>
-        prev.map((c) =>
-          c.Turma === editingClass.Turma && c.Horario === editingClass.Horario
-            ? ({ ...c, ...formData } as Class)
-            : c
-        )
-      );
-      alert("Turma atualizada com sucesso!");
-    } else {
-      setClasses((prev) => [...prev, formData as Class]);
-      alert("Turma adicionada com sucesso!");
+  const handleSave = async () => {
+    const finalCode = String(formData.Atalho || formData.TurmaCodigo || "").trim();
+    const finalPayload: Class = {
+      ...(formData as Class),
+      TurmaCodigo: finalCode,
+      Atalho: finalCode,
+      DiasSemana:
+        formData.DiasSemana ||
+        selectedDays
+          .map((day) => WEEKDAY_OPTIONS.find((opt) => opt.value === day)?.label || "")
+          .filter(Boolean)
+          .join(";"),
+    };
+
+    try {
+      if (editingClass) {
+        // Update existing class
+        if (!editingClass.id) {
+          throw new Error("ID da turma não encontrado");
+        }
+        await updateClass(editingClass.id, {
+          turma_label: finalPayload.Turma,
+          horario: finalPayload.Horario,
+          professor: finalPayload.Professor,
+          nivel: finalPayload.Nivel,
+          faixa_etaria: finalPayload.FaixaEtaria,
+          capacidade: finalPayload.CapacidadeMaxima,
+          dias_semana: finalPayload.DiasSemana,
+        });
+        setClasses((prev) =>
+          prev.map((c) =>
+            c.id === editingClass.id
+              ? ({ ...c, ...finalPayload } as Class)
+              : c
+          )
+        );
+        // Notify Attendance component to refresh
+        window.dispatchEvent(new Event("attendanceDataUpdated"));
+        alert("Turma atualizada com sucesso!");
+      } else {
+        // Add new class
+        await addClass({
+          turma_label: finalPayload.Turma,
+          horario: finalPayload.Horario,
+          professor: finalPayload.Professor,
+          nivel: finalPayload.Nivel,
+          faixa_etaria: finalPayload.FaixaEtaria,
+          capacidade: finalPayload.CapacidadeMaxima,
+          dias_semana: finalPayload.DiasSemana,
+        });
+        // Refetch data from backend to get the ID
+        const response = await getBootstrap();
+        const data = response.data as {
+          classes: Array<{
+            id: number;
+            codigo: string;
+            turma_label: string;
+            horario: string;
+            professor: string;
+            nivel: string;
+            faixa_etaria: string;
+            capacidade: number;
+            dias_semana: string;
+          }>;
+        };
+        const mapped = data.classes.map((cls) => ({
+          id: cls.id,
+          Turma: cls.turma_label || cls.codigo,
+          TurmaCodigo: cls.codigo,
+          Horario: cls.horario,
+          Professor: cls.professor,
+          Nivel: cls.nivel,
+          FaixaEtaria: cls.faixa_etaria,
+          Atalho: cls.codigo,
+          CapacidadeMaxima: cls.capacidade,
+          DiasSemana: cls.dias_semana,
+        }));
+        setClasses(mapped);
+        localStorage.setItem("activeClasses", JSON.stringify(mapped));
+        // Notify Attendance component to refresh
+        window.dispatchEvent(new Event("attendanceDataUpdated"));
+        alert("Turma adicionada com sucesso!");
+      }
+      setShowForm(false);
+    } catch (error) {
+      console.error("Erro ao salvar turma:", error);
+      alert("Erro ao salvar turma. Verifique os dados e tente novamente.");
     }
-    setShowForm(false);
   };
 
   const handleDelete = (classData: Class) => {
@@ -199,12 +448,23 @@ export const Classes: React.FC = () => {
           (c) => c.Turma !== classData.Turma || c.Horario !== classData.Horario
         )
       );
+      // Notify Attendance component to refresh
+      window.dispatchEvent(new Event("attendanceDataUpdated"));
       alert("Turma excluída com sucesso!");
     }
   };
 
-  const handleGoToAttendance = (turma: string) => {
-    localStorage.setItem("attendanceTargetTurma", turma);
+  const handleGoToAttendance = (classData: Class) => {
+    const targetValue = classData.TurmaCodigo || classData.Turma;
+    localStorage.setItem("attendanceTargetTurma", targetValue);
+    localStorage.setItem(
+      "attendanceSelection",
+      JSON.stringify({
+        turma: classData.Turma || "",
+        horario: classData.Horario || "",
+        professor: classData.Professor || "",
+      })
+    );
     window.location.hash = "attendance";
   };
 
@@ -222,6 +482,9 @@ export const Classes: React.FC = () => {
     const { name, value } = e.target;
     let newValue: string | number = value;
 
+    if (name === "Turma") setTurmaTouched(true);
+    if (name === "Atalho") setCodeTouched(true);
+
     setFormData((prev) => {
       if (name === "Horario") {
         const masked = maskHorarioInput(value);
@@ -233,149 +496,164 @@ export const Classes: React.FC = () => {
         newValue = parseInt(value) || 0;
       }
 
+      if (name === "Atalho") {
+        const normalized = String(newValue).toLowerCase().replace(/[^a-z0-9]/g, "");
+        return { ...prev, Atalho: normalized, TurmaCodigo: normalized };
+      }
+
       return { ...prev, [name]: newValue };
     });
   };
 
+  const handleDayToggle = (day: WeekdayValue) => {
+    setSelectedDays((prev) => {
+      const exists = prev.includes(day);
+      const next = exists ? prev.filter((item) => item !== day) : [...prev, day];
+      return sortDays(next);
+    });
+  };
+
+  const diasResumo = selectedDays.length ? buildDiasLabel(selectedDays) : "Selecione os dias da semana";
+  const summaryCode = formData.Atalho || formData.TurmaCodigo;
+
   return (
-    <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
-        <input
-          type="text"
-          placeholder="Buscar turma..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            flex: 1,
-            padding: "10px",
-            border: "1px solid #ddd",
-            borderRadius: "8px",
-            fontSize: "14px",
-          }}
-        />
-        <button
-          onClick={handleAddClick}
-          style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: "14px",
-            transition: "all 0.2s ease",
-          }}
-        >
-          ➕ Nova Turma
-        </button>
+    <div className="classes-page">
+      <div className="classes-top">
+        <div className="classes-top__search">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Buscar turma..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button onClick={handleAddClick} className="btn-primary btn-gradient">
+            ➕ Nova Turma
+          </button>
+        </div>
       </div>
 
       {showForm && (
-        <div style={{ background: "#f9f9f9", padding: "20px", borderRadius: "8px", marginBottom: "20px" }}>
-          <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>turma</label>
+        <section className="nova-turma-card">
+          <header className="nova-turma-card__header">
+            <div>
+              <p className="nova-turma-card__eyebrow">painel rápido</p>
+              <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
+            </div>
+            <div className="nova-turma-card__summary">
+              <span className="nova-turma-card__summary-title">dias</span>
+              <strong className="nova-turma-card__summary-text">{diasResumo}</strong>
+              <span className="nova-turma-card__summary-meta">
+                {summaryCode ? `ID ${summaryCode.toUpperCase()}` : "Código automático"}
+              </span>
+            </div>
+          </header>
+          <div className="nova-turma-grid nova-turma-grid--top">
+            <div className="form-group form-group--chips">
+              <label>dias da semana</label>
+              <div className="weekday-chips">
+                {WEEKDAY_OPTIONS.map((day) => {
+                  const active = selectedDays.includes(day.value);
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => handleDayToggle(day.value)}
+                      disabled={!!editingClass}
+                      className={`weekday-chip ${active ? "weekday-chip--active" : ""} ${editingClass ? "weekday-chip--disabled" : ""}`}
+                      style={getWeekdayAccentStyle(day.value)}
+                      aria-label={day.label}
+                    >
+                      <span className="weekday-chip__letter">{WEEKDAY_LETTERS[day.value]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="form-group form-group--selected">
+              <label>dias selecionados</label>
+              <input
+                type="text"
+                name="DiasSemana"
+                placeholder="dias da semana"
+                value={formData.DiasSemana || ""}
+                onChange={handleFormChange}
+                disabled
+              />
+            </div>
+            <div className="form-group form-group--turma">
+              <label>turma</label>
               <input
                 type="text"
                 name="Turma"
-                placeholder="Turma"
+                placeholder="turma"
                 value={formData.Turma || ""}
                 onChange={handleFormChange}
                 disabled={!!editingClass}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>horário</label>
+            <div className="form-group form-group--horario">
+              <label>horário</label>
               <input
                 type="text"
                 name="Horario"
                 placeholder="00:00"
-                value={formData.Horario ? formatHorario(String(formData.Horario)) : ""}
+                value={String(formData.Horario || "")}
                 onChange={handleFormChange}
                 disabled={!!editingClass}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>professor(a)</label>
+            <div className="form-group form-group--professor">
+              <label>professor(a)</label>
               <input
                 type="text"
                 name="Professor"
-                placeholder="Professor"
+                placeholder="professor(a)"
                 value={formData.Professor || ""}
                 onChange={handleFormChange}
                 disabled={!!editingClass}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>nível</label>
+            <div className="form-group form-group--nivel">
+              <label>nível</label>
               <input
                 type="text"
                 name="Nivel"
-                placeholder="Nível"
+                placeholder="nível"
                 value={formData.Nivel || ""}
                 onChange={handleFormChange}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>capacidade</label>
+            <div className="form-group form-group--capacidade">
+              <label>capacidade</label>
               <input
                 type="number"
                 name="CapacidadeMaxima"
-                placeholder="Capacidade Máxima *"
+                placeholder="máximo de alunos *"
                 value={formData.CapacidadeMaxima || ""}
                 onChange={handleFormChange}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "11px", textTransform: "lowercase", color: "#666" }}>cód. turma</label>
+            <div className="form-group form-group--faixaetaria">
+              <label>faixa etária</label>
               <input
                 type="text"
-                name="Atalho"
-                placeholder="Atalho"
-                value={formData.Atalho || ""}
+                name="FaixaEtaria"
+                placeholder="faixa etária"
+                value={formData.FaixaEtaria || ""}
                 onChange={handleFormChange}
-                style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "6px" }}
               />
             </div>
           </div>
-          <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-            <button
-              onClick={handleSave}
-              style={{
-                background: "#28a745",
-                color: "white",
-                border: "none",
-                padding: "10px 20px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
+          <div className="nova-turma-actions">
+            <button onClick={handleSave} className="btn-success">
               ✓ Salvar
             </button>
-            <button
-              onClick={() => setShowForm(false)}
-              style={{
-                background: "#6c757d",
-                color: "white",
-                border: "none",
-                padding: "10px 20px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
+            <button onClick={() => setShowForm(false)} className="btn-secondary">
               ✕ Cancelar
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       <div style={{ overflowX: "auto" }}>
@@ -446,7 +724,7 @@ export const Classes: React.FC = () => {
                 </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                   <button
-                    onClick={() => handleGoToAttendance(classData.Turma)}
+                    onClick={() => handleGoToAttendance(classData)}
                     style={{
                       background: "#28a745",
                       color: "white",

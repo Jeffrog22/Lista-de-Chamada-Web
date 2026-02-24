@@ -98,6 +98,28 @@ class ImportClass(SQLModel, table=True):
     capacidade: int = 0
     dias_semana: str = ""
 
+
+class ImportClassCreate(SQLModel):
+    """Model for creating a new ImportClass"""
+    turma_label: str
+    horario: str
+    professor: str
+    nivel: Optional[str] = None
+    faixa_etaria: Optional[str] = None
+    capacidade: Optional[int] = None
+    dias_semana: Optional[str] = None
+
+
+class ImportClassUpdate(SQLModel):
+    """Model for updating an existing ImportClass"""
+    turma_label: Optional[str] = None
+    horario: Optional[str] = None
+    professor: Optional[str] = None
+    nivel: Optional[str] = None
+    faixa_etaria: Optional[str] = None
+    capacidade: Optional[int] = None
+    dias_semana: Optional[str] = None
+
 class ImportStudent(SQLModel, table=True):
     __tablename__ = "import_students"
     __table_args__ = (

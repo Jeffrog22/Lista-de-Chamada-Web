@@ -2,13 +2,10 @@ const cleanDigits = (value?: string) => String(value || "").replace(/\D/g, "");
 
 export const maskHorarioInput = (raw: string): string => {
   const digits = cleanDigits(raw).slice(0, 4);
-  if (digits.length < 3) {
+  if (digits.length < 4) {
     return digits;
   }
-  if (digits.length === 3) {
-    return digits;
-  }
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
 };
 
 const validateDigitsLength = (digits: string): boolean => {
