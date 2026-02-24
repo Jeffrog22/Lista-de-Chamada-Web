@@ -498,9 +498,15 @@ const DashboardCharts: React.FC = () => {
                 <span>{total}</span>
               </div>
               <div className="native-occurrence-track">
-                <div className="native-occurrence-presente" style={{ width: `${presenteW}%` }} />
-                <div className="native-occurrence-ausente" style={{ width: `${ausenteW}%` }} />
-                <div className="native-occurrence-justificado" style={{ width: `${justificadoW}%` }} />
+                <div className="native-occurrence-presente" style={{ width: `${presenteW}%` }}>
+                  {item.presente > 0 && presenteW > 8 && <span className="occurrence-segment-label">{item.presente}</span>}
+                </div>
+                <div className="native-occurrence-ausente" style={{ width: `${ausenteW}%` }}>
+                  {item.ausente > 0 && ausenteW > 8 && <span className="occurrence-segment-label">{item.ausente}</span>}
+                </div>
+                <div className="native-occurrence-justificado" style={{ width: `${justificadoW}%` }}>
+                  {item.justificado > 0 && justificadoW > 8 && <span className="occurrence-segment-label">{item.justificado}</span>}
+                </div>
               </div>
             </div>
           );

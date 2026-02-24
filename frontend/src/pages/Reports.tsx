@@ -437,7 +437,29 @@ export const Reports: React.FC = () => {
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
   const [summaryTurmaToggle, setSummaryTurmaToggle] = useState<"terca-quinta" | "quarta-sexta">("terca-quinta");
-  const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<"Daniela" | "Jefferson">("Daniela");
+  const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<string>("");
+
+  const summaryProfessorOptions = useMemo(() => {
+    const options = Array.from(
+      new Set(
+        classesData
+          .filter((cls) => getSummaryScheduleGroup(cls.turma) === summaryTurmaToggle)
+          .map((cls) => String(cls.professor || "").trim())
+          .filter(Boolean)
+      )
+    );
+    return options.sort((a, b) => a.localeCompare(b));
+  }, [classesData, summaryTurmaToggle]);
+
+  useEffect(() => {
+    if (summaryProfessorOptions.length === 0) {
+      setSummaryProfessorToggle("");
+      return;
+    }
+    if (!summaryProfessorToggle || !summaryProfessorOptions.includes(summaryProfessorToggle)) {
+      setSummaryProfessorToggle(summaryProfessorOptions[0]);
+    }
+  }, [summaryProfessorOptions, summaryProfessorToggle]);
 
   const refreshVacanciesSnapshot = (isMounted?: () => boolean) => {
     getBootstrap()
@@ -908,11 +930,11 @@ export const Reports: React.FC = () => {
 
     const selectedWeekdays = weekdaysBySummaryGroup[summaryTurmaToggle] || [];
     const endKey = toDateKey(effectiveEnd);
-    const filteredClasses = classesData.filter(
-      (cls) =>
-        getSummaryScheduleGroup(cls.turma) === summaryTurmaToggle &&
-        normalizeText(cls.professor) === normalizeText(summaryProfessorToggle)
-    );
+    const filteredClasses = classesData.filter((cls) => {
+      if (getSummaryScheduleGroup(cls.turma) !== summaryTurmaToggle) return false;
+      if (!summaryProfessorToggle) return true;
+      return normalizeText(cls.professor) === normalizeText(summaryProfessorToggle);
+    });
 
     const byHorarioMap = new Map<string, { previstas: number; registradas: number }>();
 
@@ -1467,16 +1489,19 @@ export const Reports: React.FC = () => {
                       )}
                     </div>
                     <div className="reports-record-chips">
-                      {(["feriado", "ponte", "reuniao", "evento"] as CalendarEventForm["type"][]).map((type) => (
-                        <button
-                          key={type}
-                          className="reports-record-chip"
-                          disabled={!selectedCalendarDate}
-                          onClick={() => selectedCalendarDate && handleOpenEventModal(selectedCalendarDate, type)}
-                        >
-                          {type}
-                        </button>
-                      ))}
+                      {(["feriado", "ponte", "reuniao", "evento"] as CalendarEventForm["type"][]).map((type) => {
+                        const typeLabel = type === "reuniao" ? "reunião" : type;
+                        return (
+                          <button
+                            key={type}
+                            className="reports-record-chip"
+                            disabled={!selectedCalendarDate}
+                            onClick={() => selectedCalendarDate && handleOpenEventModal(selectedCalendarDate, type)}
+                          >
+                            {typeLabel}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div className="reports-class-metrics">
                       {selectedDateEvents.length === 0 && (
@@ -1510,7 +1535,7 @@ export const Reports: React.FC = () => {
                 <div className="vagas-bar">
                   <div className="vagas-bar-fill" style={{ width: `${plannedDaysProgress.pct}%` }} />
                 </div>
-                <div className="vagas-footer">ano letivo {selectedYear}</div>
+                <div className="vagas-footer">ano {selectedYear}</div>
               </div>
 
               <div className="report-card">
@@ -1539,7 +1564,7 @@ export const Reports: React.FC = () => {
 
               {showAproveitamentoDetails && (
                 <div className="report-card">
-                  <h3>Aulas previstas x registradas</h3>
+                  <h3>Aulas registradas x previstas</h3>
                   <div className="reports-kpi-line">
                     <span>{summaryLessonsByHorario.totalRegistradas}/{summaryLessonsByHorario.totalPrevistas}</span>
                     <strong>
@@ -1567,20 +1592,25 @@ export const Reports: React.FC = () => {
                     </div>
 
                     <div className="reports-summary-toggle-group">
-                      <button
-                        type="button"
-                        className={`reports-summary-toggle-chip ${summaryProfessorToggle === "Daniela" ? "active" : ""}`}
-                        onClick={() => setSummaryProfessorToggle("Daniela")}
-                      >
-                        Daniela
-                      </button>
-                      <button
-                        type="button"
-                        className={`reports-summary-toggle-chip ${summaryProfessorToggle === "Jefferson" ? "active" : ""}`}
-                        onClick={() => setSummaryProfessorToggle("Jefferson")}
-                      >
-                        Jefferson
-                      </button>
+                      {summaryProfessorOptions.map((professor) => (
+                        <button
+                          key={professor}
+                          type="button"
+                          className={`reports-summary-toggle-chip ${summaryProfessorToggle === professor ? "active" : ""}`}
+                          onClick={() => setSummaryProfessorToggle(professor)}
+                        >
+                          {professor}
+                        </button>
+                      ))}
+                      {summaryProfessorOptions.length === 0 && (
+                        <button
+                          type="button"
+                          className="reports-summary-toggle-chip"
+                          disabled
+                        >
+                          Sem professor
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1606,7 +1636,7 @@ export const Reports: React.FC = () => {
                       <div className="reports-section placeholder">Sem dados para os filtros selecionados.</div>
                     )}
                   </div>
-                  <div className="vagas-footer">Eixo Y: horários</div>
+                  <div className="vagas-footer">horários</div>
                 </div>
               )}
 
