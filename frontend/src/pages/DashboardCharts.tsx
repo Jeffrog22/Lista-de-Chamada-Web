@@ -61,6 +61,16 @@ interface SimpleData {
   valor: number;
 }
 
+interface AttendanceTarget {
+  turma: string;
+  horario: string;
+  professor: string;
+}
+
+interface TopAbsentData extends SimpleData {
+  attendanceTarget?: AttendanceTarget;
+}
+
 interface ClassSummary {
   turma: string;
   horario: string;
@@ -172,6 +182,7 @@ const DashboardCharts: React.FC = () => {
 
   const [classSummaries, setClassSummaries] = useState<ClassSummary[]>([]);
   const [studentsAggregated, setStudentsAggregated] = useState<StudentAggregate[]>([]);
+  const [reportClasses, setReportClasses] = useState<ReportClass[]>([]);
   const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -190,6 +201,7 @@ const DashboardCharts: React.FC = () => {
         if (!isMounted) return;
         const data = normalizeReportPayload(response.data);
         setHasData(data.length > 0);
+        setReportClasses(data);
 
         const summaries: ClassSummary[] = data.map((classItem) => {
           const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
@@ -248,6 +260,7 @@ const DashboardCharts: React.FC = () => {
       .catch(() => {
         if (!isMounted) return;
         setHasData(false);
+        setReportClasses([]);
         setClassSummaries([]);
         setStudentsAggregated([]);
       })
@@ -416,10 +429,34 @@ const DashboardCharts: React.FC = () => {
       .slice(0, 5)
       .map((item) => ({ name: item.name, valor: item.frequencia }));
 
-    const topAusentes = [...studentsAggregated]
+    const studentAbsenceTargetMap = new Map<string, { faltas: number; attendanceTarget: AttendanceTarget }>();
+    reportClasses.forEach((classItem) => {
+      classItem.alunos.forEach((student) => {
+        const key = normalize(student.nome || '');
+        if (!key) return;
+        const current = studentAbsenceTargetMap.get(key);
+        const faltas = Number(student.faltas || 0);
+        if (!current || faltas > current.faltas) {
+          studentAbsenceTargetMap.set(key, {
+            faltas,
+            attendanceTarget: {
+              turma: classItem.turma || '-',
+              horario: classItem.horario || '',
+              professor: classItem.professor || '-',
+            },
+          });
+        }
+      });
+    });
+
+    const topAusentes: TopAbsentData[] = [...studentsAggregated]
       .sort((a, b) => b.faltas - a.faltas)
       .slice(0, 5)
-      .map((item) => ({ name: item.name, valor: item.faltas }));
+      .map((item) => ({
+        name: item.name,
+        valor: item.faltas,
+        attendanceTarget: studentAbsenceTargetMap.get(normalize(item.name))?.attendanceTarget,
+      }));
 
     const occurrenceClasses = classSummaries
       .filter((item) => getScheduleGroup(item.turma) === occurrenceGroup)
@@ -454,6 +491,7 @@ const DashboardCharts: React.FC = () => {
     calendarSettings,
     classSummaries,
     dateScope,
+    reportClasses,
     studentsAggregated,
     selectedMonth,
     occurrenceGroup,
@@ -462,15 +500,55 @@ const DashboardCharts: React.FC = () => {
 
   const yearOptions = Array.from({ length: 4 }, (_, i) => String(new Date().getFullYear() - 2 + i));
 
-  const renderFrequencyBars = (data: SimpleData[], colorClass: string, suffix = '%') => {
+  const handleGoToAttendance = (target?: AttendanceTarget) => {
+    if (!target?.turma) return;
+    localStorage.setItem('attendanceTargetTurma', target.turma);
+    localStorage.setItem(
+      'attendanceSelection',
+      JSON.stringify({
+        turma: target.turma,
+        horario: target.horario || '',
+        professor: target.professor || '',
+      })
+    );
+    window.location.hash = 'attendance';
+  };
+
+  const renderFrequencyBars = (
+    data: SimpleData[],
+    colorClass: string,
+    suffix = '%',
+    options?: { clickableTargets?: Record<string, AttendanceTarget | undefined> }
+  ) => {
     const maxValue = data.reduce((acc, item) => Math.max(acc, item.valor), 0);
     return (
       <div className="native-bars">
         {data.map((item) => {
           const width = maxValue > 0 ? (item.valor / maxValue) * 100 : 0;
+          const clickableTarget = options?.clickableTargets?.[item.name];
           return (
             <div className="native-bar-row" key={`${colorClass}-${item.name}`}>
-              <span className="native-label">{item.name}</span>
+              {clickableTarget ? (
+                <button
+                  type="button"
+                  className="native-label"
+                  onClick={() => handleGoToAttendance(clickableTarget)}
+                  title="Abrir chamada do aluno"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    margin: 0,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    textAlign: 'left',
+                  }}
+                >
+                  {item.name}
+                </button>
+              ) : (
+                <span className="native-label">{item.name}</span>
+              )}
               <div className="native-bar-track">
                 <div className={`native-bar-fill ${colorClass}`} style={{ width: `${width}%` }} />
               </div>
@@ -643,7 +721,16 @@ const DashboardCharts: React.FC = () => {
 
           <div className="chart-card">
             <h4>Top 5 alunos mais ausentes</h4>
-            {renderFrequencyBars(dashboardData.topAusentes, 'bar-ausente', '')}
+            {renderFrequencyBars(
+              dashboardData.topAusentes,
+              'bar-ausente',
+              '',
+              {
+                clickableTargets: Object.fromEntries(
+                  dashboardData.topAusentes.map((item) => [item.name, item.attendanceTarget])
+                ),
+              }
+            )}
           </div>
         </div>
       )}

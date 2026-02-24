@@ -8,7 +8,8 @@ import json
 import re
 import uuid
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import unicodedata
 import pandas as pd
 import requests
 from pydantic import BaseModel, conint, Field
@@ -597,6 +598,69 @@ def append_justifications_log(entries: List[JustificationLogEntry]):
 
 def _normalize_text(value: Optional[str]) -> str:
     return str(value or "").strip().lower()
+
+
+def _normalize_text_fold(value: Optional[str]) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    return "".join(ch for ch in unicodedata.normalize("NFD", raw) if unicodedata.category(ch) != "Mn")
+
+
+def _infer_schedule_group(turma_label: str, turma_codigo: str) -> str:
+    label = _normalize_text_fold(turma_label)
+    code = _normalize_text_fold(turma_codigo)
+    if ("terca" in label and "quinta" in label) or "tq" in code:
+        return "tq"
+    if ("quarta" in label and "sexta" in label) or "qs" in code:
+        return "qs"
+    return "other"
+
+
+def _load_allowed_schedule_days(today: date) -> Dict[str, set[str]]:
+    allowed = {"tq": set(), "qs": set()}
+    calendar_path = os.path.join(DATA_DIR, "academicCalendar.json")
+    if not os.path.exists(calendar_path):
+        return allowed
+
+    try:
+        with open(calendar_path, "r", encoding="utf-8") as handle:
+            calendar_payload = json.load(handle)
+    except Exception:
+        return allowed
+
+    settings = calendar_payload.get("settings") or {}
+    events = calendar_payload.get("events") or []
+
+    start_raw = str(settings.get("inicioAulas") or "").strip()
+    if not start_raw:
+        return allowed
+
+    try:
+        start_date = datetime.strptime(start_raw, "%Y-%m-%d").date()
+    except Exception:
+        return allowed
+
+    closed_days = set()
+    for event in events:
+        day = str((event or {}).get("date") or "").strip()
+        if day:
+            closed_days.add(day)
+
+    cursor = start_date
+    while cursor <= today:
+        key = cursor.isoformat()
+        if key in closed_days:
+            cursor += timedelta(days=1)
+            continue
+        weekday = cursor.weekday()  # mon=0 ... sun=6
+        if weekday in {1, 3}:  # terça/quinta
+            allowed["tq"].add(key)
+        if weekday in {2, 4}:  # quarta/sexta
+            allowed["qs"].add(key)
+        cursor += timedelta(days=1)
+
+    return allowed
 
 def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str]:
     nome = _normalize_text(item.get("nome") or item.get("Nome"))
@@ -1538,8 +1602,12 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     class_by_code = {str(c.codigo or ""): c for c in classes}
     class_by_label = {str(c.turma_label or ""): c for c in classes}
 
-    # load all attendance log entries
+    # load all attendance log entries (sorted to let the newest snapshot win)
     items = _load_json_list(os.path.join(DATA_DIR, "baseChamada.json"))
+    items = sorted(items, key=lambda item: str((item or {}).get("saved_at") or ""))
+
+    today = datetime.utcnow().date()
+    allowed_schedule_days = _load_allowed_schedule_days(today)
 
     students: Dict[str, Dict[str, Any]] = {}
 
@@ -1551,6 +1619,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 "ids": set(),
                 "attendance_by_date": {},  # date -> { status, nivel, turmaCodigo }
                 "per_level": {},
+                "event_by_key": {},  # deduped event map
                 "first_presence": None,
                 "last_presence": None,
                 "exclusion_date": None,
@@ -1561,6 +1630,9 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     for item in items:
         turma_codigo = str(item.get("turmaCodigo") or "").strip()
         turma_label = str(item.get("turmaLabel") or "").strip()
+        turma_horario = _normalize_horario_key(item.get("horario") or "")
+        turma_professor = _normalize_text(item.get("professor") or "")
+        schedule_group = _infer_schedule_group(turma_label, turma_codigo)
         # resolve nivel from import classes
         nivel = ""
         cls = None
@@ -1588,48 +1660,84 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 # ignore empty markers
                 if mapped == "":
                     continue
-                # record attendance
-                st["attendance_by_date"][date_key] = {
-                    "status": mapped,
-                    "nivel": nivel,
-                    "turmaCodigo": turma_codigo or turma_label,
-                }
-                # update first/last presence (consider 'c' or 'j' as attendance)
-                if mapped in {"c", "j"}:
-                    try:
-                        parsed = datetime.strptime(date_key, "%Y-%m-%d").date()
-                    except Exception:
-                        parsed = None
-                    if parsed:
-                        if st["first_presence"] is None or parsed < st["first_presence"]:
-                            st["first_presence"] = parsed
-                        if st["last_presence"] is None or parsed > st["last_presence"]:
-                            st["last_presence"] = parsed
-                # update per-level counters
-                level_key = nivel or "(sem-nivel)"
-                lvl = st["per_level"].setdefault(level_key, {
-                    "first": None,
-                    "last": None,
-                    "presencas": 0,
-                    "faltas": 0,
-                    "justificativas": 0,
-                })
-                # update min/max dates
                 try:
                     parsed_d = datetime.strptime(date_key, "%Y-%m-%d").date()
                 except Exception:
-                    parsed_d = None
-                if parsed_d:
-                    if lvl["first"] is None or parsed_d < lvl["first"]:
-                        lvl["first"] = parsed_d
-                    if lvl["last"] is None or parsed_d > lvl["last"]:
-                        lvl["last"] = parsed_d
-                if mapped == "c":
-                    lvl["presencas"] += 1
-                elif mapped == "f":
-                    lvl["faltas"] += 1
-                elif mapped == "j":
-                    lvl["justificativas"] += 1
+                    continue
+
+                # enforce expected class days for known schedules (T/Q and Q/S)
+                if schedule_group in {"tq", "qs"}:
+                    if date_key not in allowed_schedule_days.get(schedule_group, set()):
+                        continue
+
+                # dedupe snapshots: same student/day/schedule should count once (latest wins)
+                if schedule_group in {"tq", "qs"}:
+                    event_key = (date_key, schedule_group)
+                else:
+                    event_key = (
+                        date_key,
+                        _normalize_text(turma_codigo or turma_label),
+                        turma_horario,
+                        turma_professor,
+                    )
+
+                st["event_by_key"][event_key] = {
+                    "date": parsed_d,
+                    "status": mapped,
+                    "nivel": nivel or "(sem-nivel)",
+                }
+
+    # build per-student aggregates from deduped events
+    for _, st in students.items():
+        st["attendance_by_date"] = {}
+        st["per_level"] = {}
+        st["first_presence"] = None
+        st["last_presence"] = None
+
+        deduped_events = sorted(
+            st.get("event_by_key", {}).values(),
+            key=lambda event: event.get("date") or date.min,
+        )
+
+        for event in deduped_events:
+            parsed_d = event.get("date")
+            if not parsed_d:
+                continue
+            date_key = parsed_d.isoformat()
+            mapped = str(event.get("status") or "")
+            level_key = str(event.get("nivel") or "(sem-nivel)")
+
+            st["attendance_by_date"][date_key] = {
+                "status": mapped,
+                "nivel": level_key,
+                "turmaCodigo": "",
+            }
+
+            if mapped in {"c", "j"}:
+                if st["first_presence"] is None or parsed_d < st["first_presence"]:
+                    st["first_presence"] = parsed_d
+                if st["last_presence"] is None or parsed_d > st["last_presence"]:
+                    st["last_presence"] = parsed_d
+
+            lvl = st["per_level"].setdefault(level_key, {
+                "first": None,
+                "last": None,
+                "presencas": 0,
+                "faltas": 0,
+                "justificativas": 0,
+            })
+
+            if lvl["first"] is None or parsed_d < lvl["first"]:
+                lvl["first"] = parsed_d
+            if lvl["last"] is None or parsed_d > lvl["last"]:
+                lvl["last"] = parsed_d
+
+            if mapped == "c":
+                lvl["presencas"] += 1
+            elif mapped == "f":
+                lvl["faltas"] += 1
+            elif mapped == "j":
+                lvl["justificativas"] += 1
 
     # load exclusions
     excluded = _load_json_list(os.path.join(DATA_DIR, "excludedStudents.json"))
@@ -1639,7 +1747,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             continue
         key = _normalize_text(nome)
         if key not in students:
-            students[key] = {"nome": nome, "ids": set(), "attendance_by_date": {}, "per_level": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
+            students[key] = {"nome": nome, "ids": set(), "attendance_by_date": {}, "per_level": {}, "event_by_key": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
         date_str = str(ex.get("dataExclusao") or "").strip()
         if date_str:
             try:
@@ -1651,7 +1759,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
     # build output list
     out: List[Dict[str, Any]] = []
-    today = datetime.utcnow().date()
     for key, st in sorted(students.items(), key=lambda t: t[1]["nome"].lower()):
         first = st.get("first_presence")
         last = st.get("last_presence")
