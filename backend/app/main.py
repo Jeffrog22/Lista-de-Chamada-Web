@@ -600,6 +600,44 @@ def _normalize_text(value: Optional[str]) -> str:
     return str(value or "").strip().lower()
 
 
+def _to_proper_case(value: Optional[str]) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+
+    lower_particles = {"da", "de", "do", "das", "dos", "e"}
+    tokens = re.split(r"(\s+)", raw)
+    words: List[str] = []
+    word_index = 0
+
+    for token in tokens:
+        if token.isspace() or token == "":
+            words.append(token)
+            continue
+
+        chunk_parts = re.split(r"([-'])", token)
+        rebuilt: List[str] = []
+        local_word = ""
+        for part in chunk_parts:
+            if part in {"-", "'"}:
+                rebuilt.append(part)
+                continue
+            piece = part.strip()
+            if not piece:
+                rebuilt.append(part)
+                continue
+            p = piece.lower()
+            if word_index > 0 and p in lower_particles:
+                local_word = p
+            else:
+                local_word = p[:1].upper() + p[1:]
+            rebuilt.append(local_word)
+        words.append("".join(rebuilt))
+        word_index += 1
+
+    return "".join(words)
+
+
 def _normalize_text_fold(value: Optional[str]) -> str:
     raw = str(value or "").strip().lower()
     if not raw:
@@ -1189,19 +1227,52 @@ def _attendance_log_lookup_keys(item: Dict[str, Any]) -> List[str]:
     horario = str(item.get("horario") or "").strip()
     professor = str(item.get("professor") or "").strip()
 
-    keys: List[str] = []
-    key_fields = [horario, professor]
+    def _horario_variants(value: str) -> List[str]:
+        raw = str(value or "").strip()
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        variants: List[str] = []
+        for candidate in [raw, digits, f"{digits[:2]}:{digits[2:4]}" if len(digits) >= 4 else ""]:
+            token = str(candidate or "").strip()
+            if token and token not in variants:
+                variants.append(token)
+        return variants or [""]
 
-    if turma_codigo:
-        keys.append("|".join(["codigo", turma_codigo, *key_fields]))
-    if turma_label:
-        keys.append("|".join(["label", turma_label, *key_fields]))
+    def _professor_variants(value: str) -> List[str]:
+        raw = str(value or "").strip()
+        normalized = _normalize_text(raw)
+        variants: List[str] = []
+        for candidate in [raw, normalized]:
+            token = str(candidate or "").strip()
+            if token and token not in variants:
+                variants.append(token)
+        return variants or [""]
+
+    def _turma_variants(value: str) -> List[str]:
+        raw = str(value or "").strip()
+        normalized = _normalize_text(raw)
+        variants: List[str] = []
+        for candidate in [raw, normalized]:
+            token = str(candidate or "").strip()
+            if token and token not in variants:
+                variants.append(token)
+        return variants or [""]
+
+    keys: List[str] = []
+    key_fields: List[List[str]] = [_horario_variants(horario), _professor_variants(professor)]
+
+    for horario_key in key_fields[0]:
+        for professor_key in key_fields[1]:
+            if turma_codigo:
+                keys.append("|".join(["codigo", turma_codigo, horario_key, professor_key]))
+            for turma_key in _turma_variants(turma_label):
+                keys.append("|".join(["label", turma_key, horario_key, professor_key]))
 
     # retrocompatibilidade para registros antigos sem horario/professor
     if turma_codigo:
         keys.append(f"codigo|{turma_codigo}||")
     if turma_label:
         keys.append(f"label|{turma_label}||")
+        keys.append(f"label|{_normalize_text(turma_label)}||")
 
     return keys
 
@@ -1421,17 +1492,40 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
         horario = (cls.horario or "").strip()
         professor = (cls.professor or "").strip()
 
-        composite_codigo = f"codigo|{turma_key}|{horario}|{professor}" if turma_key else ""
-        composite_label = f"label|{turma_label}|{horario}|{professor}" if turma_label else ""
+        horario_digits = "".join(ch for ch in horario if ch.isdigit())
+        horario_variants = [h for h in [horario, horario_digits, f"{horario_digits[:2]}:{horario_digits[2:4]}" if len(horario_digits) >= 4 else ""] if h]
+        professor_variants = [p for p in [professor, _normalize_text(professor)] if p]
+        if not horario_variants:
+            horario_variants = [""]
+        if not professor_variants:
+            professor_variants = [""]
+
+        turma_variants = [t for t in [turma_label, _normalize_text(turma_label)] if t]
+        composite_keys: List[str] = []
+        if turma_key:
+            for h in horario_variants:
+                for p in professor_variants:
+                    composite_keys.append(f"codigo|{turma_key}|{h}|{p}")
+        for turma_candidate in turma_variants:
+            for h in horario_variants:
+                for p in professor_variants:
+                    composite_keys.append(f"label|{turma_candidate}|{h}|{p}")
+
         fallback_codigo = f"codigo|{turma_key}||" if turma_key else ""
         fallback_label = f"label|{turma_label}||" if turma_label else ""
+        fallback_label_normalized = f"label|{_normalize_text(turma_label)}||" if turma_label else ""
 
-        log_entry = (
-            (latest_logs.get(composite_codigo) if composite_codigo else None)
-            or (latest_logs.get(composite_label) if composite_label else None)
-            or (latest_logs.get(fallback_codigo) if fallback_codigo else None)
-            or (latest_logs.get(fallback_label) if fallback_label else None)
-        )
+        log_entry = None
+        for key in composite_keys:
+            log_entry = latest_logs.get(key)
+            if log_entry:
+                break
+        if log_entry is None:
+            log_entry = (
+                (latest_logs.get(fallback_codigo) if fallback_codigo else None)
+                or (latest_logs.get(fallback_label) if fallback_label else None)
+                or (latest_logs.get(fallback_label_normalized) if fallback_label_normalized else None)
+            )
 
         excluded_names = {
             _normalize_text(entry.get("nome") or entry.get("Nome") or "")
@@ -1473,7 +1567,7 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                 class_students.append(
                     ReportStudent(
                         id=name_to_id.get(_normalize_text(nome), nome or "0"),
-                        nome=nome,
+                        nome=_to_proper_case(nome),
                         presencas=presencas,
                         faltas=faltas,
                         justificativas=justificativas,
@@ -1488,7 +1582,7 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                 class_students.append(
                     ReportStudent(
                         id=str(student.id),
-                        nome=student.nome,
+                        nome=_to_proper_case(student.nome),
                         presencas=0,
                         faltas=0,
                         justificativas=0,
@@ -1601,6 +1695,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     classes = session.exec(select(models.ImportClass)).all()
     class_by_code = {str(c.codigo or ""): c for c in classes}
     class_by_label = {str(c.turma_label or ""): c for c in classes}
+    class_by_label_norm = {_normalize_text_fold(c.turma_label or ""): c for c in classes if str(c.turma_label or "").strip()}
 
     # load all attendance log entries (sorted to let the newest snapshot win)
     items = _load_json_list(os.path.join(DATA_DIR, "baseChamada.json"))
@@ -1608,14 +1703,20 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
     today = datetime.utcnow().date()
     allowed_schedule_days = _load_allowed_schedule_days(today)
+    min_allowed_day: Dict[str, str] = {}
+    for group_name in {"tq", "qs"}:
+        values = sorted(allowed_schedule_days.get(group_name, set()))
+        if values:
+            min_allowed_day[group_name] = values[0]
 
     students: Dict[str, Dict[str, Any]] = {}
+    matheus_manual_key = _normalize_text_fold("Matheus Henrique de Souza Marciano")
 
     def _ensure_student(name: str):
         key = _normalize_text(name)
         if key not in students:
             students[key] = {
-                "nome": name,
+                "nome": _to_proper_case(name),
                 "ids": set(),
                 "attendance_by_date": {},  # date -> { status, nivel, turmaCodigo }
                 "per_level": {},
@@ -1632,6 +1733,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         turma_label = str(item.get("turmaLabel") or "").strip()
         turma_horario = _normalize_horario_key(item.get("horario") or "")
         turma_professor = _normalize_text(item.get("professor") or "")
+        source_tag = _normalize_text(item.get("source") or "")
         schedule_group = _infer_schedule_group(turma_label, turma_codigo)
         # resolve nivel from import classes
         nivel = ""
@@ -1640,6 +1742,8 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             cls = class_by_code.get(turma_codigo)
         elif turma_label and turma_label in class_by_label:
             cls = class_by_label.get(turma_label)
+        elif turma_label:
+            cls = class_by_label_norm.get(_normalize_text_fold(turma_label))
         if cls:
             nivel = str(cls.nivel or "")
 
@@ -1649,6 +1753,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             if not nome:
                 continue
             st = _ensure_student(nome)
+            is_matheus_manual = _normalize_text_fold(nome) == matheus_manual_key and "csv" in source_tag
             attendance_map = record.get("attendance") or {}
             # iterate dates in chronological order
             for date_key in sorted(attendance_map.keys()):
@@ -1666,9 +1771,12 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                     continue
 
                 # enforce expected class days for known schedules (T/Q and Q/S)
-                if schedule_group in {"tq", "qs"}:
-                    if date_key not in allowed_schedule_days.get(schedule_group, set()):
-                        continue
+                if schedule_group in {"tq", "qs"} and not is_matheus_manual:
+                    group_days = allowed_schedule_days.get(schedule_group, set())
+                    if group_days:
+                        group_min = min_allowed_day.get(schedule_group)
+                        if date_key not in group_days and (group_min is None or date_key >= group_min):
+                            continue
 
                 # dedupe snapshots: same student/day/schedule should count once (latest wins)
                 if schedule_group in {"tq", "qs"}:
@@ -1747,7 +1855,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             continue
         key = _normalize_text(nome)
         if key not in students:
-            students[key] = {"nome": nome, "ids": set(), "attendance_by_date": {}, "per_level": {}, "event_by_key": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
+            students[key] = {"nome": _to_proper_case(nome), "ids": set(), "attendance_by_date": {}, "per_level": {}, "event_by_key": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
         date_str = str(ex.get("dataExclusao") or "").strip()
         if date_str:
             try:
@@ -1802,7 +1910,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             ))
         out.append(StudentStatisticsOut(
             id=None,
-            nome=st.get("nome") or key,
+            nome=_to_proper_case(st.get("nome") or key),
             firstPresence=first.isoformat() if first else None,
             lastPresence=last.isoformat() if last else None,
             exclusionDate=exclusion.isoformat() if exclusion else None,
