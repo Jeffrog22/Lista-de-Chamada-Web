@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -43,6 +43,22 @@ interface ReportClassLite {
   horario: string;
   professor: string;
   alunos: ReportStudentLite[];
+}
+
+interface LevelHistoryLite {
+  nivel: string;
+  firstDate?: string;
+  lastDate?: string;
+}
+
+interface StudentStatisticsLite {
+  nome: string;
+  levels?: LevelHistoryLite[];
+}
+
+interface TransferLockInfo {
+  lockBeforeDate: string;
+  fromNivel: string;
 }
 
 type RenewalSeverity = "yellow" | "orange" | "red";
@@ -917,6 +933,7 @@ export const Attendance: React.FC = () => {
   }));
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
+  const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
 
@@ -927,6 +944,15 @@ export const Attendance: React.FC = () => {
     });
   }, [attendance, sortDir]);
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
+
+  const getTransferLockForDate = useCallback(
+    (studentName: string, dateKey: string): TransferLockInfo | null => {
+      const info = transferLocksByName[normalizeText(studentName)];
+      if (!info) return null;
+      return dateKey < info.lockBeforeDate ? info : null;
+    },
+    [transferLocksByName]
+  );
 
   // Estados para o Modal de Justificativa
   const [showJustificationModal, setShowJustificationModal] = useState(false);
@@ -1608,8 +1634,52 @@ export const Attendance: React.FC = () => {
           );
           backendByName.set(studentKey, { attendance: mappedAttendance });
         });
+
+        const statsResponse = await getStatistics();
+        const statsRows = Array.isArray(statsResponse?.data) ? (statsResponse.data as StudentStatisticsLite[]) : [];
+        const selectedNivelNormalized = normalizeText(selectedClass.nivel || "");
+        const transferLocks: Record<string, TransferLockInfo> = {};
+
+        if (selectedNivelNormalized) {
+          statsRows.forEach((row) => {
+            const studentKey = normalizeText(row?.nome || "");
+            if (!studentKey) return;
+
+            const levels = Array.isArray(row?.levels) ? row.levels : [];
+            const currentLevel = levels.find(
+              (level) => normalizeText(level?.nivel || "") === selectedNivelNormalized && !!level?.firstDate
+            );
+            if (!currentLevel?.firstDate) return;
+            const currentStartDate = currentLevel.firstDate;
+
+            const previousCandidates = levels
+              .filter(
+                (level) =>
+                  !!level?.lastDate &&
+                  !!level?.nivel &&
+                  normalizeText(level.nivel) !== selectedNivelNormalized &&
+                    level.lastDate < currentStartDate
+              )
+              .sort((a, b) => String(b.lastDate || "").localeCompare(String(a.lastDate || "")));
+
+            const previousLevel = previousCandidates[0];
+            if (!previousLevel?.nivel) return;
+
+            transferLocks[studentKey] = {
+              lockBeforeDate: currentStartDate,
+              fromNivel: previousLevel.nivel,
+            };
+          });
+        }
+
+        if (isMounted) {
+          setTransferLocksByName(transferLocks);
+        }
       } catch {
         // mantém hidratação local quando backend de relatórios indisponível
+        if (isMounted) {
+          setTransferLocksByName({});
+        }
       }
 
       if (!isMounted) return;
@@ -1675,7 +1745,9 @@ export const Attendance: React.FC = () => {
   const handleStatusChange = (id: number, date: string) => {
     const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
     const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
-    if (dayClosed || classBlockedByMeeting) return;
+    const student = attendance.find((item) => item.id === id);
+    const transferLocked = student ? !!getTransferLockForDate(student.aluno, date) : false;
+    if (dayClosed || classBlockedByMeeting || transferLocked) return;
 
     // Salva o estado atual no histórico antes de modificar
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
@@ -1802,6 +1874,12 @@ export const Attendance: React.FC = () => {
 
     if (!targetDate) {
       alert("Dia não encontrado nas datas exibidas deste mês.");
+      return;
+    }
+
+    const targetStudent = attendance.find((item) => item.id === justificationStudentId);
+    if (targetStudent && getTransferLockForDate(targetStudent.aluno, targetDate)) {
+      alert("Data bloqueada por transferência de nível.");
       return;
     }
 
@@ -2154,10 +2232,14 @@ export const Attendance: React.FC = () => {
                     const status = item.attendance[date];
                     const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
                     const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
+                    const transferLock = getTransferLockForDate(item.aluno, date);
                     const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
                     const meetingEvent = getBlockingMeetingEventForDate(date);
-                    const isLockedDate = dayClosed || classBlockedByMeeting;
-                    const cellTooltip = holidayBridgeEvent
+                    const isTransferLocked = !!transferLock;
+                    const isLockedDate = dayClosed || classBlockedByMeeting || isTransferLocked;
+                    const cellTooltip = isTransferLocked
+                      ? `Transf. > ${transferLock?.fromNivel || "Nível anterior"}`
+                      : holidayBridgeEvent
                       ? buildHolidayBridgeReason(holidayBridgeEvent)
                       : meetingEvent
                         ? buildMeetingReason(meetingEvent)
@@ -2167,6 +2249,12 @@ export const Attendance: React.FC = () => {
                     let buttonLabel = "-";
                     let buttonColor = "#e8e8e8";
                     let buttonTextColor = "#666";
+
+                    if (isTransferLocked && !status) {
+                      buttonLabel = "—";
+                      buttonColor = "#f1f3f5";
+                      buttonTextColor = "#6c757d";
+                    }
 
                     if (status === "Presente") {
                       buttonLabel = "✓";
