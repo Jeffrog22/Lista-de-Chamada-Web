@@ -1702,15 +1702,8 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     items = sorted(items, key=lambda item: str((item or {}).get("saved_at") or ""))
 
     today = datetime.utcnow().date()
-    allowed_schedule_days = _load_allowed_schedule_days(today)
-    min_allowed_day: Dict[str, str] = {}
-    for group_name in {"tq", "qs"}:
-        values = sorted(allowed_schedule_days.get(group_name, set()))
-        if values:
-            min_allowed_day[group_name] = values[0]
 
     students: Dict[str, Dict[str, Any]] = {}
-    matheus_manual_key = _normalize_text_fold("Matheus Henrique de Souza Marciano")
 
     def _ensure_student(name: str):
         key = _normalize_text(name)
@@ -1733,7 +1726,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         turma_label = str(item.get("turmaLabel") or "").strip()
         turma_horario = _normalize_horario_key(item.get("horario") or "")
         turma_professor = _normalize_text(item.get("professor") or "")
-        source_tag = _normalize_text(item.get("source") or "")
         schedule_group = _infer_schedule_group(turma_label, turma_codigo)
         # resolve nivel from import classes
         nivel = ""
@@ -1753,7 +1745,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             if not nome:
                 continue
             st = _ensure_student(nome)
-            is_matheus_manual = _normalize_text_fold(nome) == matheus_manual_key and "csv" in source_tag
             attendance_map = record.get("attendance") or {}
             # iterate dates in chronological order
             for date_key in sorted(attendance_map.keys()):
@@ -1769,14 +1760,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                     parsed_d = datetime.strptime(date_key, "%Y-%m-%d").date()
                 except Exception:
                     continue
-
-                # enforce expected class days for known schedules (T/Q and Q/S)
-                if schedule_group in {"tq", "qs"} and not is_matheus_manual:
-                    group_days = allowed_schedule_days.get(schedule_group, set())
-                    if group_days:
-                        group_min = min_allowed_day.get(schedule_group)
-                        if date_key not in group_days and (group_min is None or date_key >= group_min):
-                            continue
 
                 # dedupe snapshots: same student/day/schedule should count once (latest wins)
                 if schedule_group in {"tq", "qs"}:
