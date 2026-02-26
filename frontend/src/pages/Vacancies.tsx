@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getBootstrap } from "../api";
+import { getBootstrap, getExcludedStudents } from "../api";
 import "./Vacancies.css";
 
 type Periodo = "Todos" | "Manha" | "Tarde";
@@ -11,6 +11,7 @@ interface ActiveStudentLite {
   turma?: string;
   turmaCodigo?: string;
   horario?: string;
+  professor?: string;
 }
 
 interface TurmaMeta {
@@ -30,6 +31,19 @@ interface BootstrapClassLite {
   nivel: string;
   professor: string;
   capacidade: number;
+}
+
+interface ExclusionLite {
+  nome?: string;
+  Nome?: string;
+  turma?: string;
+  turmaCodigo?: string;
+  horario?: string;
+  professor?: string;
+  Turma?: string;
+  TurmaCodigo?: string;
+  Horario?: string;
+  Professor?: string;
 }
 
 const formatHorario = (value: string) => {
@@ -64,8 +78,16 @@ const parsePeriodo = (horario: string): Periodo => {
 
 const normalizeText = (value: string) => String(value || "").trim().toLowerCase();
 
-const buildClassKey = (turmaLabel: string, horario: string, nivel: string) =>
-  `${normalizeText(turmaLabel)}||${normalizeText(formatHorario(horario))}||${normalizeText(nivel)}`;
+const normalizeHorarioKey = (value: string) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 3) return `0${digits}`;
+  if (digits.length >= 4) return digits.slice(0, 4);
+  return digits;
+};
+
+const buildClassKey = (turmaLabel: string, horario: string, nivel: string, professor: string) =>
+  `${normalizeText(turmaLabel)}||${normalizeHorarioKey(horario)}||${normalizeText(nivel)}||${normalizeText(professor)}`;
 
 const formatNivelLabel = (nivel: string) => {
   const raw = String(nivel || "").trim();
@@ -78,6 +100,7 @@ const formatNivelLabel = (nivel: string) => {
 export const Vacancies: React.FC = () => {
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
   const [classesSnapshot, setClassesSnapshot] = useState<BootstrapClassLite[]>([]);
+  const [excludedSnapshot, setExcludedSnapshot] = useState<ExclusionLite[]>([]);
   const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
 
@@ -87,9 +110,9 @@ export const Vacancies: React.FC = () => {
 
   const loadBootstrap = () => {
     setLoadingBootstrap(true);
-    return getBootstrap()
-      .then((response) => {
-        const data = response.data as {
+    return Promise.all([getBootstrap(), getExcludedStudents()])
+      .then(([bootstrapResponse, exclusionsResponse]) => {
+        const data = bootstrapResponse.data as {
           classes: Array<{
             id: number;
             codigo: string;
@@ -110,6 +133,10 @@ export const Vacancies: React.FC = () => {
           }>;
         };
 
+        const exclusions = Array.isArray(exclusionsResponse?.data)
+          ? (exclusionsResponse.data as ExclusionLite[])
+          : [];
+
         const classById = new Map<number, (typeof data.classes)[number]>();
         data.classes.forEach((cls) => classById.set(cls.id, cls));
 
@@ -122,6 +149,7 @@ export const Vacancies: React.FC = () => {
             turma: cls?.turma_label || cls?.codigo || "",
             turmaCodigo: cls?.codigo || "",
             horario: cls?.horario || "",
+            professor: cls?.professor || "",
           } as ActiveStudentLite;
         });
 
@@ -137,10 +165,12 @@ export const Vacancies: React.FC = () => {
 
         setStudentsSnapshot(mappedStudents);
         setClassesSnapshot(mappedClasses);
+        setExcludedSnapshot(exclusions);
       })
       .catch(() => {
         setStudentsSnapshot([]);
         setClassesSnapshot([]);
+        setExcludedSnapshot([]);
       })
       .finally(() => {
         setLoadingBootstrap(false);
@@ -156,13 +186,13 @@ export const Vacancies: React.FC = () => {
     const meta: Record<string, TurmaMeta> = {};
     classesSnapshot.forEach((cls) => {
       const turmaLabel = cls.turmaLabel || cls.codigo || "";
-      const key = buildClassKey(turmaLabel, cls.horario || "", cls.nivel || "");
+      const key = buildClassKey(turmaLabel, cls.horario || "", cls.nivel || "", cls.professor || "");
       if (!key) return;
       const resolvedProfessor =
         cls.professor ||
         classesSnapshot.find(
           (candidate) =>
-            buildClassKey(candidate.turmaLabel || candidate.codigo || "", candidate.horario || "", candidate.nivel || "") === key &&
+            buildClassKey(candidate.turmaLabel || candidate.codigo || "", candidate.horario || "", candidate.nivel || "", candidate.professor || "") === key &&
             String(candidate.professor || "").trim()
         )?.professor ||
         "-";
@@ -205,7 +235,7 @@ export const Vacancies: React.FC = () => {
 
   const turmasFiltradas = useMemo(() => {
     return filteredClasses
-      .map((item) => buildClassKey(item.turmaLabel || item.codigo || "", item.horario || "", item.nivel || ""))
+      .map((item) => buildClassKey(item.turmaLabel || item.codigo || "", item.horario || "", item.nivel || "", item.professor || ""))
       .filter(Boolean)
       .sort((a, b) => {
       const horarioA = turmaMeta[a]?.horario || "";
@@ -221,14 +251,44 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta]);
 
   const studentsCountByClassKey = useMemo(() => {
+    const isExcludedStudent = (student: ActiveStudentLite, exclusion: ExclusionLite) => {
+      const studentName = normalizeText(student?.nome || "");
+      const exclusionName = normalizeText(exclusion?.nome || exclusion?.Nome || "");
+      if (!studentName || !exclusionName || studentName !== exclusionName) return false;
+
+      const studentTurma = normalizeText(student?.turma || "");
+      const studentTurmaCodigo = normalizeText(student?.turmaCodigo || "");
+      const studentHorario = normalizeHorarioKey(student?.horario || "");
+      const studentProfessor = normalizeText(student?.professor || "");
+
+      const exclusionTurma = normalizeText(exclusion?.turma || exclusion?.Turma || "");
+      const exclusionTurmaCodigo = normalizeText(exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
+      const exclusionHorario = normalizeHorarioKey(exclusion?.horario || exclusion?.Horario || "");
+      const exclusionProfessor = normalizeText(exclusion?.professor || exclusion?.Professor || "");
+
+      const turmaMatches =
+        !exclusionTurma && !exclusionTurmaCodigo
+          ? true
+          : [studentTurma, studentTurmaCodigo].includes(exclusionTurma) ||
+            [studentTurma, studentTurmaCodigo].includes(exclusionTurmaCodigo);
+      const horarioMatches = !exclusionHorario || !studentHorario || exclusionHorario === studentHorario;
+      const professorMatches = !exclusionProfessor || !studentProfessor || exclusionProfessor === studentProfessor;
+
+      return turmaMatches && horarioMatches && professorMatches;
+    };
+
+    const activeStudents = studentsSnapshot.filter(
+      (student) => !excludedSnapshot.some((exclusion) => isExcludedStudent(student, exclusion))
+    );
+
     const counts: Record<string, number> = {};
-    studentsSnapshot.forEach((student) => {
-      const key = buildClassKey(student.turma || "", student.horario || "", student.nivel || "");
+    activeStudents.forEach((student) => {
+      const key = buildClassKey(student.turma || "", student.horario || "", student.nivel || "", student.professor || "");
       if (!key) return;
       counts[key] = (counts[key] || 0) + 1;
     });
     return counts;
-  }, [studentsSnapshot]);
+  }, [studentsSnapshot, excludedSnapshot]);
 
   const alunosAtivos = useMemo(
     () => turmasFiltradas.reduce((acc, turma) => acc + (studentsCountByClassKey[turma] || 0), 0),

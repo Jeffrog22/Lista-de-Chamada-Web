@@ -61,6 +61,32 @@ interface TransferLockInfo {
   fromNivel: string;
 }
 
+interface TransferHistoryEntry {
+  nome?: string;
+  fromNivel?: string;
+  toNivel?: string;
+  fromTurma?: string;
+  toTurma?: string;
+  fromHorario?: string;
+  toHorario?: string;
+  fromProfessor?: string;
+  toProfessor?: string;
+  effectiveDate?: string;
+}
+
+interface NormalizedTransferHistoryEntry {
+  nome: string;
+  fromNivel: string;
+  toNivel: string;
+  fromTurma: string;
+  toTurma: string;
+  fromHorario: string;
+  toHorario: string;
+  fromProfessor: string;
+  toProfessor: string;
+  effectiveDate: string;
+}
+
 type RenewalSeverity = "yellow" | "orange" | "red";
 
 interface RenewalAlertInfo {
@@ -77,8 +103,8 @@ interface PoolLogEntry {
   turmaLabel: string;
   horario: string;
   professor: string;
-  clima1: string; // Estado (sol, chuvoso, etc)
-  clima2: string; // Sensação (calor, frio, etc)
+  clima1: string; // Condição climática (CPTEC/API ou log)
+  clima2: string; // Sensação térmica (chips)
   statusAula: "normal" | "justificada" | "cancelada";
   nota: "aula" | "feriado" | "ponte-feriado" | "reuniao" | "ocorrencia";
   tipoOcorrencia: string;
@@ -92,12 +118,55 @@ type ClimaCache = {
   selectedIcons: string[];
   apiTemp?: string;
   apiCondition?: string;
+  apiConditionCode?: string;
+  weatherCondition?: string;
+  cacheVersion?: string;
+  cachedAt?: number;
 };
 
-// Opções de Clima para a Matriz de Decisão
+const WEATHER_CACHE_VERSION = "cptec-v1";
+const WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+
+// Opções de Sensação Térmica (ordem solicitada)
 const WEATHER_ICONS = {
-  conditions: ["Sol", "Parcialmente Nublado", "Nublado", "Chuvoso", "Temporal"],
-  sensations: ["Calor", "Frio", "Vento", "Agradavel"]
+  sensations: ["Calor", "Abafado", "Agradável", "Vento", "Frio"]
+};
+
+const JUSTIFIED_CPTEC_CODES = new Set([
+  "ci", "c", "in", "pp", "cm", "pt", "pm", "np", "pc", "cv", "ch", "t", "e", "n", "nv",
+  "psc", "pcm", "pct", "npt", "ncm", "npm", "npp", "ct", "ppt", "ppm",
+]);
+
+const normalizeSensation = (value: string) => {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "agradavel") return "Agradável";
+  if (raw === "abafado") return "Abafado";
+  if (raw === "calor") return "Calor";
+  if (raw === "vento") return "Vento";
+  if (raw === "frio") return "Frio";
+  return "";
+};
+
+const normalizeSensationList = (values: string[]) => {
+  const allowed = new Set(WEATHER_ICONS.sensations);
+  const unique: string[] = [];
+  for (const value of values) {
+    const normalized = normalizeSensation(value);
+    if (!normalized || !allowed.has(normalized) || unique.includes(normalized)) continue;
+    unique.push(normalized);
+  }
+  return unique;
+};
+
+const getFallbackSensationByTemp = (rawTemp: string) => {
+  const temp = Number(rawTemp);
+  if (!Number.isFinite(temp)) return "Agradável";
+  if (temp >= 31) return "Calor";
+  if (temp >= 27) return "Abafado";
+  if (temp >= 21) return "Agradável";
+  if (temp >= 17) return "Vento";
+  return "Frio";
 };
 
 // Coordenadas fixas para API (simulação)
@@ -112,6 +181,7 @@ const DEFAULT_POOL_TEMP = "28";
 export const Attendance: React.FC = () => {
   const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
   const attendanceSelectionStorageKey = "attendanceSelection";
+  const transferHistoryStorageKey = "studentTransferHistory";
   const defaultClassOptions: ClassOption[] = [];
 
   const defaultStudentsPerClass: { [key: string]: string[] } = {};
@@ -954,6 +1024,57 @@ export const Attendance: React.FC = () => {
     [transferLocksByName]
   );
 
+  const sanitizeTransferHistory = useCallback((input: TransferHistoryEntry[]): NormalizedTransferHistoryEntry[] => {
+    const seen = new Map<string, NormalizedTransferHistoryEntry>();
+    input.forEach((entry) => {
+      const normalized: NormalizedTransferHistoryEntry = {
+        nome: String(entry?.nome || "").trim(),
+        fromNivel: String(entry?.fromNivel || "").trim(),
+        toNivel: String(entry?.toNivel || "").trim(),
+        fromTurma: String(entry?.fromTurma || "").trim(),
+        toTurma: String(entry?.toTurma || "").trim(),
+        fromHorario: String(entry?.fromHorario || "").trim(),
+        toHorario: String(entry?.toHorario || "").trim(),
+        fromProfessor: String(entry?.fromProfessor || "").trim(),
+        toProfessor: String(entry?.toProfessor || "").trim(),
+        effectiveDate: String(entry?.effectiveDate || "").trim(),
+      };
+
+      if (!normalized.nome || !normalized.effectiveDate) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized.effectiveDate)) return;
+
+      const key = [
+        normalizeText(normalized.nome),
+        normalizeText(normalized.fromNivel),
+        normalizeText(normalized.toNivel),
+        normalizeText(normalized.toTurma),
+        normalizeHorarioDigits(normalized.toHorario),
+        normalizeText(normalized.toProfessor),
+        normalized.effectiveDate,
+      ].join("|");
+
+      seen.set(key, normalized);
+    });
+
+    return Array.from(seen.values());
+  }, []);
+
+  const loadTransferHistory = useCallback((): NormalizedTransferHistoryEntry[] => {
+    try {
+      const raw = localStorage.getItem(transferHistoryStorageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      const list = Array.isArray(parsed) ? (parsed as TransferHistoryEntry[]) : [];
+      const cleaned = sanitizeTransferHistory(list);
+      if (JSON.stringify(cleaned) !== JSON.stringify(list)) {
+        localStorage.setItem(transferHistoryStorageKey, JSON.stringify(cleaned));
+      }
+      return cleaned;
+    } catch {
+      return [];
+    }
+  }, [sanitizeTransferHistory]);
+
   // Estados para o Modal de Justificativa
   const [showJustificationModal, setShowJustificationModal] = useState(false);
   const [justificationStudentId, setJustificationStudentId] = useState<number | null>(null);
@@ -980,6 +1101,8 @@ export const Attendance: React.FC = () => {
     cloro: 1.5,
     cloroEnabled: true,
     selectedIcons: [] as string[],
+    weatherCondition: "",
+    weatherConditionCode: "",
     incidentType: "",
     incidentNote: "",
     incidentImpact: "aula" as "aula" | "dia",
@@ -996,13 +1119,12 @@ export const Attendance: React.FC = () => {
     }
   }, [cloroLocked, poolData.cloroEnabled]);
 
-  // Simulação da API Climatempo
-  const fetchClimatempoData = async (date: string) => {
+  const fetchWeatherData = async (date: string) => {
     try {
       const response = await getWeather(date);
-      return response.data as { temp: string; condition: string };
+      return response.data as { temp: string; condition: string; conditionCode?: string };
     } catch (error) {
-      return { temp: "26", condition: "Parcialmente Nublado" };
+      return { temp: "26", condition: "Parcialmente Nublado", conditionCode: "" };
     }
   };
 
@@ -1014,14 +1136,27 @@ export const Attendance: React.FC = () => {
     try {
       const raw = localStorage.getItem(climaCacheKey(date));
       if (!raw) return null;
-      return JSON.parse(raw) as ClimaCache;
+      const parsed = JSON.parse(raw) as ClimaCache;
+      if (!parsed || typeof parsed !== "object") return null;
+      const version = String(parsed.cacheVersion || "");
+      const cachedAt = Number(parsed.cachedAt || 0);
+      if (version !== WEATHER_CACHE_VERSION) return null;
+      if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > WEATHER_CACHE_TTL_MS) return null;
+      return parsed;
     } catch {
       return null;
     }
   };
 
   const setClimaCache = (date: string, payload: ClimaCache) => {
-    localStorage.setItem(climaCacheKey(date), JSON.stringify(payload));
+    localStorage.setItem(
+      climaCacheKey(date),
+      JSON.stringify({
+        ...payload,
+        cacheVersion: WEATHER_CACHE_VERSION,
+        cachedAt: Date.now(),
+      })
+    );
     localStorage.setItem(lastClimaCacheDateKey, date);
   };
 
@@ -1128,18 +1263,8 @@ export const Attendance: React.FC = () => {
     return "";
   };
 
-  const buildIconsFromApi = (apiData: { temp: string; condition: string }) => {
-    const autoIcons: string[] = [];
-    if (apiData.condition === "Ceu Limpo") autoIcons.push("Sol");
-    if (apiData.condition === "Chuva Fraca") autoIcons.push("Chuvoso");
-    if (apiData.condition.includes("Nublado")) autoIcons.push("Nublado");
-
-    const tempNum = parseInt(apiData.temp, 10);
-    if (tempNum > 28) autoIcons.push("Calor");
-    else if (tempNum < 20) autoIcons.push("Frio");
-    else autoIcons.push("Agradavel");
-
-    return autoIcons.slice(0, 2);
+  const buildSensationFromApi = (apiData: { temp: string }) => {
+    return [getFallbackSensationByTemp(String(apiData.temp || ""))];
   };
 
   const handleDateClick = async (date: string) => {
@@ -1177,6 +1302,8 @@ export const Attendance: React.FC = () => {
       cloro: 1.5,
       cloroEnabled: true,
       selectedIcons: [],
+      weatherCondition: "",
+      weatherConditionCode: "",
       incidentType: "",
       incidentNote: "",
       incidentImpact: "aula",
@@ -1207,21 +1334,25 @@ export const Attendance: React.FC = () => {
         cloroPpm: number | null;
       };
 
-      const icons = [
-        ...(data.clima1 ? data.clima1.split(", ") : []),
-        ...(data.clima2 ? data.clima2.split(", ") : []),
-      ].filter(Boolean);
+      const icons = normalizeSensationList(
+        (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
+      );
+      const inferredCondition = String(data.clima1 || "").trim();
+      const normalizedTemp = normalizeNumberInput(data.tempExterna);
+      const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
 
       const cloroValue = data.cloroPpm;
       const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
       const modalLogType: ModalLogType = data.nota === "ocorrencia" ? "ocorrencia" : "aula";
       setPoolData(prev => ({
         ...prev,
-        tempExterna: normalizeNumberInput(data.tempExterna),
+        tempExterna: normalizedTemp,
         tempPiscina: normalizeNumberInput(data.tempPiscina),
         cloro: cloroEnabled ? cloroValue : 1.5,
         cloroEnabled,
-        selectedIcons: icons,
+        selectedIcons: icons.length ? icons : [fallbackSensation],
+        weatherCondition: inferredCondition,
+        weatherConditionCode: "",
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
         incidentNote: "",
         incidentImpact: "aula",
@@ -1250,20 +1381,24 @@ export const Attendance: React.FC = () => {
             cloroPpm: number | null;
           };
 
-          const icons = [
-            ...(data.clima1 ? data.clima1.split(", ") : []),
-            ...(data.clima2 ? data.clima2.split(", ") : []),
-          ].filter(Boolean);
+          const icons = normalizeSensationList(
+            (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
+          );
+          const inferredCondition = String(data.clima1 || "").trim();
+          const normalizedTemp = normalizeNumberInput(data.tempExterna);
+          const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
 
           const cloroValue = data.cloroPpm;
           const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
           setPoolData(prev => ({
             ...prev,
-            tempExterna: normalizeNumberInput(data.tempExterna),
+            tempExterna: normalizedTemp,
             tempPiscina: normalizeNumberInput(data.tempPiscina),
             cloro: cloroEnabled ? cloroValue : 1.5,
             cloroEnabled,
-            selectedIcons: icons,
+            selectedIcons: icons.length ? icons : [fallbackSensation],
+            weatherCondition: inferredCondition,
+            weatherConditionCode: "",
             incidentType: "",
             incidentNote: "",
             incidentImpact: "aula",
@@ -1272,10 +1407,12 @@ export const Attendance: React.FC = () => {
 
           const existingCache = getClimaCache(date);
           setClimaCache(date, {
-            tempExterna: normalizeNumberInput(data.tempExterna),
-            selectedIcons: icons,
+            tempExterna: normalizedTemp,
+            selectedIcons: icons.length ? icons : [fallbackSensation],
             apiTemp: existingCache?.apiTemp,
             apiCondition: existingCache?.apiCondition,
+            apiConditionCode: existingCache?.apiConditionCode,
+            weatherCondition: inferredCondition,
           });
 
           setClimaPrefillApplied(true);
@@ -1293,7 +1430,9 @@ export const Attendance: React.FC = () => {
       setPoolData(prev => ({
         ...prev,
         tempExterna: normalizeNumberInput(climaCache.tempExterna),
-        selectedIcons: climaCache.selectedIcons || [],
+        selectedIcons: normalizeSensationList(climaCache.selectedIcons || []),
+        weatherCondition: String(climaCache.weatherCondition || climaCache.apiCondition || ""),
+        weatherConditionCode: String(climaCache.apiConditionCode || ""),
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
@@ -1306,49 +1445,63 @@ export const Attendance: React.FC = () => {
       setPoolData(prev => ({
         ...prev,
         tempExterna: normalizeNumberInput(fallbackCache.tempExterna),
-        selectedIcons: fallbackCache.selectedIcons || [],
+        selectedIcons: normalizeSensationList(fallbackCache.selectedIcons || []),
+        weatherCondition: String(fallbackCache.weatherCondition || fallbackCache.apiCondition || ""),
+        weatherConditionCode: String(fallbackCache.apiConditionCode || ""),
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
-      return;
     }
 
     // Pré-carregar dados da API
-    const apiData = await fetchClimatempoData(date);
+    const apiData = await fetchWeatherData(date);
     const apiTemp = String(apiData.temp || "");
     const apiCondition = String(apiData.condition || "");
+    const apiConditionCode = String(apiData.conditionCode || "").toLowerCase();
 
     if (climaCache) {
-      const hasApiSignature = Boolean(climaCache.apiTemp && climaCache.apiCondition);
+      const hasApiSignature = Boolean(climaCache.apiTemp && climaCache.apiCondition && climaCache.apiConditionCode);
       const cacheMatchesApi =
         (climaCache.apiTemp || "") === apiTemp &&
-        (climaCache.apiCondition || "") === apiCondition;
+        (climaCache.apiCondition || "") === apiCondition &&
+        String(climaCache.apiConditionCode || "") === apiConditionCode;
 
       if (cacheMatchesApi || !hasApiSignature) {
         if (!hasApiSignature) {
           setClimaCache(date, {
             tempExterna: climaCache.tempExterna,
-            selectedIcons: climaCache.selectedIcons || [],
+            selectedIcons: normalizeSensationList(climaCache.selectedIcons || []),
             apiTemp,
             apiCondition,
+            apiConditionCode,
+            weatherCondition: apiCondition,
           });
         }
+        setPoolData(prev => ({
+          ...prev,
+          weatherCondition: apiCondition,
+          weatherConditionCode: apiConditionCode,
+        }));
         setShowDateModal(true);
         return;
       }
     }
 
-    const autoIcons = buildIconsFromApi(apiData);
+    const autoIcons = buildSensationFromApi(apiData);
     setPoolData(prev => ({
       ...prev,
       tempExterna: normalizeNumberInput(apiData.temp),
-      selectedIcons: autoIcons,
+      selectedIcons: normalizeSensationList(autoIcons),
+      weatherCondition: apiCondition,
+      weatherConditionCode: apiConditionCode,
     }));
     setClimaCache(date, {
       tempExterna: normalizeNumberInput(apiData.temp),
-      selectedIcons: autoIcons,
+      selectedIcons: normalizeSensationList(autoIcons),
       apiTemp,
       apiCondition,
+      apiConditionCode,
+      weatherCondition: apiCondition,
     });
     setClimaPrefillApplied(true);
     setShowDateModal(true);
@@ -1363,10 +1516,14 @@ export const Attendance: React.FC = () => {
     if (!shouldApply) return;
     const cache = getClimaCache(modalDate);
     if (cache) {
+      const sensations = normalizeSensationList(cache.selectedIcons || []);
+      const normalizedTemp = normalizeNumberInput(cache.tempExterna);
       setPoolData(prev => ({
         ...prev,
-        tempExterna: normalizeNumberInput(cache.tempExterna),
-        selectedIcons: cache.selectedIcons || [],
+        tempExterna: normalizedTemp,
+        selectedIcons: sensations.length ? sensations : [getFallbackSensationByTemp(normalizedTemp)],
+        weatherCondition: String(cache.weatherCondition || cache.apiCondition || ""),
+        weatherConditionCode: String(cache.apiConditionCode || ""),
       }));
     }
     setClimaPrefillApplied(true);
@@ -1383,17 +1540,11 @@ export const Attendance: React.FC = () => {
 
   // Matriz de Decisão
   const getSuggestedStatus = (): "normal" | "justificada" => {
-    const { selectedIcons } = poolData;
+    const { selectedIcons, weatherConditionCode } = poolData;
     const i = selectedIcons;
-    
-    // Regras de Justificativa (Prioridade)
-    const justifiedTriggers = ["Chuvoso", "Temporal", "Frio"];
-    if (i.some(icon => justifiedTriggers.includes(icon))) return "justificada";
-    
-    // Combinações específicas
-    if (i.includes("Sol") && i.includes("Chuvoso")) return "justificada";
-    if (i.includes("Parcialmente Nublado") && (i.includes("Chuvoso") || i.includes("Temporal") || i.includes("Vento"))) return "justificada";
-    if (i.includes("Nublado") || i.includes("Vento")) return "justificada";
+
+    if (JUSTIFIED_CPTEC_CODES.has(String(weatherConditionCode || "").toLowerCase())) return "justificada";
+    if (i.includes("Frio") || i.includes("Vento")) return "justificada";
 
     return "normal";
   };
@@ -1454,8 +1605,8 @@ export const Attendance: React.FC = () => {
       turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
       horario: selectedClass.horario || selectedHorario || "",
       professor: selectedClass.professor || selectedProfessor || "",
-      clima1: poolData.selectedIcons.filter(i => WEATHER_ICONS.conditions.includes(i)).join(", "),
-      clima2: poolData.selectedIcons.filter(i => WEATHER_ICONS.sensations.includes(i)).join(", "),
+      clima1: String(poolData.weatherCondition || "").trim(),
+      clima2: normalizeSensationList(poolData.selectedIcons).join(", "),
       statusAula: effectiveLogType === "aula" ? statusSugerido : "cancelada",
       nota: effectiveLogType,
       tipoOcorrencia: effectiveLogType === "ocorrencia" ? 
@@ -1470,9 +1621,11 @@ export const Attendance: React.FC = () => {
         const existingCache = getClimaCache(modalDate);
         setClimaCache(modalDate, {
           tempExterna: normalizeNumberInput(poolData.tempExterna),
-          selectedIcons: poolData.selectedIcons,
+          selectedIcons: normalizeSensationList(poolData.selectedIcons),
           apiTemp: existingCache?.apiTemp,
           apiCondition: existingCache?.apiCondition,
+          apiConditionCode: poolData.weatherConditionCode || existingCache?.apiConditionCode,
+          weatherCondition: poolData.weatherCondition || existingCache?.weatherCondition,
         });
       }
       const response = await savePoolLog(logEntry);
@@ -1671,6 +1824,40 @@ export const Attendance: React.FC = () => {
             };
           });
         }
+
+        const transferHistory = loadTransferHistory();
+        const classTurmaNorm = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
+        const classHorarioNorm = normalizeHorarioDigits(selectedClass.horario || selectedHorario || "");
+        const classProfessorNorm = normalizeText(selectedClass.professor || selectedProfessor || "");
+
+        transferHistory.forEach((entry) => {
+          const studentKey = normalizeText(entry?.nome || "");
+          if (!studentKey) return;
+
+          const toNivelNorm = normalizeText(entry?.toNivel || "");
+          if (selectedNivelNormalized && toNivelNorm && toNivelNorm !== selectedNivelNormalized) return;
+
+          const toTurmaNorm = normalizeText(entry?.toTurma || "");
+          const toHorarioNorm = normalizeHorarioDigits(entry?.toHorario || "");
+          const toProfessorNorm = normalizeText(entry?.toProfessor || "");
+
+          const turmaMatches = !toTurmaNorm || !classTurmaNorm || toTurmaNorm === classTurmaNorm;
+          const horarioMatches = !toHorarioNorm || !classHorarioNorm || toHorarioNorm === classHorarioNorm;
+          const professorMatches = !toProfessorNorm || !classProfessorNorm || toProfessorNorm === classProfessorNorm;
+          if (!turmaMatches || !horarioMatches || !professorMatches) return;
+
+          const effectiveDate = String(entry?.effectiveDate || "").trim();
+          if (!effectiveDate || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) return;
+
+          const fromNivel = String(entry?.fromNivel || "").trim() || "Nível anterior";
+          const existing = transferLocks[studentKey];
+          if (!existing || effectiveDate > existing.lockBeforeDate) {
+            transferLocks[studentKey] = {
+              lockBeforeDate: effectiveDate,
+              fromNivel,
+            };
+          }
+        });
 
         if (isMounted) {
           setTransferLocksByName(transferLocks);
@@ -2635,9 +2822,14 @@ export const Attendance: React.FC = () => {
             {/* NÍVEL 2: AULA (CARD CLIMA) */}
             {modalStep === "aula" && (
               <div className="card-clima">
-                <h4 style={{ marginTop: 0, color: "#444" }}>🌤️ Clima e Sensação</h4>
+                <h4 style={{ marginTop: 0, color: "#444" }}>🌤️ Condição Climática e Sensação</h4>
+                <div style={{ marginBottom: "12px", fontSize: "12px", color: "#555" }}>
+                  <strong>Condição climática:</strong>{" "}
+                  {poolData.weatherCondition || "Indisponível"}
+                  {poolData.weatherConditionCode ? ` (${poolData.weatherConditionCode})` : ""}
+                </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "15px" }}>
-                  {[...WEATHER_ICONS.conditions, ...WEATHER_ICONS.sensations].map(icon => (
+                  {WEATHER_ICONS.sensations.map(icon => (
                     <button
                       key={icon}
                       onClick={() => toggleIcon(icon)}

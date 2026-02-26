@@ -82,6 +82,69 @@ export const Students: React.FC = () => {
     return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
   };
 
+  const transferHistoryStorageKey = "studentTransferHistory";
+
+  const saveTransferHistory = (entry: {
+    nome: string;
+    fromNivel: string;
+    toNivel: string;
+    fromTurma?: string;
+    toTurma?: string;
+    fromHorario?: string;
+    toHorario?: string;
+    fromProfessor?: string;
+    toProfessor?: string;
+    effectiveDate: string;
+  }) => {
+    try {
+      const raw = localStorage.getItem(transferHistoryStorageKey);
+      const current = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(current) ? current : [];
+
+      const normalizedEntry = {
+        ...entry,
+        nome: String(entry.nome || "").trim(),
+        fromNivel: String(entry.fromNivel || "").trim(),
+        toNivel: String(entry.toNivel || "").trim(),
+        fromTurma: String(entry.fromTurma || "").trim(),
+        toTurma: String(entry.toTurma || "").trim(),
+        fromHorario: String(entry.fromHorario || "").trim(),
+        toHorario: String(entry.toHorario || "").trim(),
+        fromProfessor: String(entry.fromProfessor || "").trim(),
+        toProfessor: String(entry.toProfessor || "").trim(),
+        effectiveDate: String(entry.effectiveDate || "").trim(),
+      };
+
+      const dedupeKey = [
+        normalizeText(normalizedEntry.nome),
+        normalizeText(normalizedEntry.fromNivel),
+        normalizeText(normalizedEntry.toNivel),
+        normalizeText(normalizedEntry.toTurma),
+        normalizeHorarioKey(normalizedEntry.toHorario),
+        normalizeText(normalizedEntry.toProfessor),
+        normalizedEntry.effectiveDate,
+      ].join("|");
+
+      const filtered = list.filter((item: any) => {
+        const key = [
+          normalizeText(item?.nome || ""),
+          normalizeText(item?.fromNivel || ""),
+          normalizeText(item?.toNivel || ""),
+          normalizeText(item?.toTurma || ""),
+          normalizeHorarioKey(item?.toHorario || ""),
+          normalizeText(item?.toProfessor || ""),
+          String(item?.effectiveDate || "").trim(),
+        ].join("|");
+        return key !== dedupeKey;
+      });
+
+      filtered.push(normalizedEntry);
+      localStorage.setItem(transferHistoryStorageKey, JSON.stringify(filtered));
+    } catch {
+      // ignore storage failures
+    }
+  };
+
 
   const dedupeStudents = (list: Student[]) => {
     const seen = new Map<string, Student>();
@@ -721,6 +784,30 @@ export const Students: React.FC = () => {
       dataAtestado: formData.atestado ? formData.dataAtestado : undefined,
       idade: age,
     };
+
+    const previousStudent = editingId ? students.find((s) => s.id === editingId) : null;
+    if (previousStudent) {
+      const changedNivel = normalizeText(previousStudent.nivel || "") !== normalizeText(studentData.nivel || "");
+      const changedClass =
+        normalizeText(previousStudent.turmaLabel || previousStudent.turma || "") !== normalizeText(studentData.turmaLabel || studentData.turma || "") ||
+        normalizeHorarioKey(previousStudent.horario || "") !== normalizeHorarioKey(studentData.horario || "") ||
+        normalizeText(previousStudent.professor || "") !== normalizeText(studentData.professor || "");
+
+      if (changedNivel || changedClass) {
+        saveTransferHistory({
+          nome: studentData.nome,
+          fromNivel: previousStudent.nivel || "",
+          toNivel: studentData.nivel || "",
+          fromTurma: previousStudent.turmaLabel || previousStudent.turma || "",
+          toTurma: studentData.turmaLabel || studentData.turma || "",
+          fromHorario: previousStudent.horario || "",
+          toHorario: studentData.horario || "",
+          fromProfessor: previousStudent.professor || "",
+          toProfessor: studentData.professor || "",
+          effectiveDate: new Date().toISOString().slice(0, 10),
+        });
+      }
+    }
 
     // update state directly; persistence handled by effect
     setStudents((prev) => {

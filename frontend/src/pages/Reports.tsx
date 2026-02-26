@@ -132,6 +132,14 @@ interface WeatherSnapshot {
   condition: string;
 }
 
+interface WeatherCacheRecord extends WeatherSnapshot {
+  cacheVersion: string;
+  cachedAt: number;
+}
+
+const REPORTS_WEATHER_CACHE_VERSION = "cptec-v1";
+const REPORTS_WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${item.turma}||${item.horario}||${item.professor}`;
 
@@ -168,8 +176,11 @@ const getWeatherCache = (date: string): WeatherSnapshot | null => {
   try {
     const raw = localStorage.getItem(weatherCacheKey(date));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<WeatherSnapshot>;
+    const parsed = JSON.parse(raw) as Partial<WeatherCacheRecord>;
     if (!parsed || typeof parsed !== "object") return null;
+    if (String(parsed.cacheVersion || "") !== REPORTS_WEATHER_CACHE_VERSION) return null;
+    const cachedAt = Number(parsed.cachedAt || 0);
+    if (!Number.isFinite(cachedAt) || Date.now() - cachedAt > REPORTS_WEATHER_CACHE_TTL_MS) return null;
     if (!parsed.temp || !parsed.condition) return null;
     return {
       temp: String(parsed.temp),
@@ -181,7 +192,12 @@ const getWeatherCache = (date: string): WeatherSnapshot | null => {
 };
 
 const setWeatherCache = (date: string, snapshot: WeatherSnapshot) => {
-  localStorage.setItem(weatherCacheKey(date), JSON.stringify(snapshot));
+  const record: WeatherCacheRecord = {
+    ...snapshot,
+    cacheVersion: REPORTS_WEATHER_CACHE_VERSION,
+    cachedAt: Date.now(),
+  };
+  localStorage.setItem(weatherCacheKey(date), JSON.stringify(record));
 };
 
 const fetchWeatherSnapshot = async (dateKey: string) => {
@@ -1202,14 +1218,14 @@ export const Reports: React.FC = () => {
         <button className={`reports-tab ${activeTab === "resumo" ? "active" : ""}`} onClick={() => setActiveTab("resumo")}>
           📊 Resumo Geral
         </button>
-        <button className={`reports-tab ${activeTab === "frequencias" ? "active" : ""}`} onClick={() => setActiveTab("frequencias")}>
-          📅 Frequências
-        </button>
         <button className={`reports-tab ${activeTab === "graficos" ? "active" : ""}`} onClick={() => setActiveTab("graficos")}>
           📈 Gráficos
         </button>
         <button className={`reports-tab ${activeTab === "estatisticas" ? "active" : ""}`} onClick={() => setActiveTab("estatisticas")}>
           📈 Estatísticas
+        </button>
+        <button className={`reports-tab ${activeTab === "frequencias" ? "active" : ""}`} onClick={() => setActiveTab("frequencias")}>
+          📅 Frequências
         </button>
       </div>
 

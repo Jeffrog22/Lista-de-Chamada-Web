@@ -3223,5 +3223,207 @@
         }
       }
     ]
+  },
+  {
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "mes": "2026-02",
+    "registros": [
+      {
+        "aluno_nome": "Lua Machado Pereira",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Aylla Victória Silva Souza",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Justificado",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Helloisa de Jesus Inez",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Falta",
+          "2026-02-11": "Justificado",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Falta",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Isaque Galdino Autor",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "João Miguel Lima França",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Justificado",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": "Justificado"
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "João Miguel de Souza Silva",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Justificado",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Falta",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Laura Ferreira Barbosa",
+        "attendance": {
+          "2026-02-04": "Justificado",
+          "2026-02-06": "Falta",
+          "2026-02-11": "Justificado",
+          "2026-02-13": "Falta",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Falta",
+          "2026-02-25": "Justificado",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Lorena Vitória Silveira dos Santos",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Miguel Soares Bastos",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Justificado",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Nicole Yasmin Silveira dos Santos",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Presente",
+          "2026-02-25": "Presente",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      },
+      {
+        "aluno_nome": "Rafaela Aguiar Prata",
+        "attendance": {
+          "2026-02-04": "Presente",
+          "2026-02-06": "Presente",
+          "2026-02-11": "Presente",
+          "2026-02-13": "Presente",
+          "2026-02-18": "Justificado",
+          "2026-02-20": "Falta",
+          "2026-02-25": "Justificado",
+          "2026-02-27": ""
+        },
+        "justifications": {
+          "2026-02-18": "Ponte: Carnaval"
+        }
+      }
+    ],
+    "saved_at": "2026-02-26T02:31:09.606286+00:00"
   }
 ]

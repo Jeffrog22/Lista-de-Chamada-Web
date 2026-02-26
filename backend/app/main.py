@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, date
 import unicodedata
 import pandas as pd
 import requests
+import xml.etree.ElementTree as ET
 from pydantic import BaseModel, conint, Field
 import csv
 from io import StringIO, BytesIO
@@ -424,37 +425,92 @@ class ImportStudentUpsertPayload(BaseModel):
 
 @app.get("/weather")
 def get_weather(date: str):
-    token = os.getenv("CLIMATEMPO_TOKEN")
-    base_url = os.getenv("CLIMATEMPO_BASE_URL")
-    lat = os.getenv("CLIMATEMPO_LAT", "-23.049194")
-    lon = os.getenv("CLIMATEMPO_LON", "-47.007278")
-
-    if not token or not base_url:
-        return {"temp": "26", "condition": "Parcialmente Nublado"}
+    cptec_url = os.getenv(
+        "CPTEC_WEATHER_URL",
+        "http://servicos.cptec.inpe.br/XML/cidade/7dias/5678/previsao.xml",
+    )
+    tempo_map = {
+        "ec": "Encoberto com Chuvas Isoladas",
+        "ci": "Chuvas Isoladas",
+        "c": "Chuva",
+        "in": "Instável",
+        "pp": "Possibilidade de Pancadas de Chuva",
+        "cm": "Chuva pela Manhã",
+        "cn": "Chuva à Noite",
+        "pt": "Pancadas de Chuva à Tarde",
+        "pm": "Pancadas de Chuva pela Manhã",
+        "np": "Nublado e Pancadas de Chuva",
+        "pc": "Pancadas de Chuva",
+        "pn": "Parcialmente Nublado",
+        "cv": "Chuvisco",
+        "ch": "Chuvoso",
+        "t": "Tempestade",
+        "ps": "Predomínio de Sol",
+        "e": "Encoberto",
+        "n": "Nublado",
+        "cl": "Céu Claro",
+        "nv": "Nevoeiro",
+        "g": "Geada",
+        "ne": "Neve",
+        "pnt": "Pancadas de Chuva à Noite",
+        "psc": "Possibilidade de Chuva",
+        "pcm": "Possibilidade de Chuva pela Manhã",
+        "pct": "Possibilidade de Chuva à Tarde",
+        "pcn": "Possibilidade de Chuva à Noite",
+        "npt": "Nublado com Pancadas à Tarde",
+        "npn": "Nublado com Pancadas à Noite",
+        "ncn": "Nublado com Possibilidade de Chuva à Noite",
+        "nct": "Nublado com Possibilidade de Chuva à Tarde",
+        "ncm": "Nublado com Possibilidade de Chuva pela Manhã",
+        "npm": "Nublado com Pancadas pela Manhã",
+        "npp": "Nublado com Possibilidade de Chuva",
+        "vn": "Variação de Nebulosidade",
+        "ct": "Chuva à Tarde",
+        "ppn": "Possibilidade de Pancadas de Chuva à Noite",
+        "ppt": "Possibilidade de Pancadas de Chuva à Tarde",
+        "ppm": "Possibilidade de Pancadas de Chuva pela Manhã",
+    }
 
     try:
-        resp = requests.get(
-            base_url,
-            params={"token": token, "lat": lat, "lon": lon, "date": date},
-            timeout=10,
-        )
+        resp = requests.get(cptec_url, timeout=10)
         resp.raise_for_status()
-        data = resp.json()
-        temp = (
-            data.get("temp")
-            or data.get("temperature")
-            or data.get("data", {}).get("temperature")
-            or "26"
-        )
-        condition = (
-            data.get("condition")
-            or data.get("text")
-            or data.get("data", {}).get("condition")
-            or "Parcialmente Nublado"
-        )
-        return {"temp": str(temp), "condition": str(condition)}
+        root = ET.fromstring(resp.content)
+        previsoes = root.findall(".//previsao")
+        if not previsoes:
+            return {"temp": "26", "condition": "Parcialmente Nublado", "conditionCode": ""}
+
+        target = None
+        for item in previsoes:
+            dia = (item.findtext("dia") or "").strip()
+            if dia == date:
+                target = item
+                break
+        if target is None:
+            target = previsoes[0]
+
+        minima_txt = (target.findtext("minima") or "").strip()
+        maxima_txt = (target.findtext("maxima") or "").strip()
+        tempo_code = (target.findtext("tempo") or "").strip().lower()
+
+        temp = "26"
+        try:
+            if minima_txt and maxima_txt:
+                temp = str(round((float(minima_txt) + float(maxima_txt)) / 2))
+            elif maxima_txt:
+                temp = str(round(float(maxima_txt)))
+            elif minima_txt:
+                temp = str(round(float(minima_txt)))
+        except Exception:
+            temp = "26"
+
+        condition = tempo_map.get(tempo_code, "Parcialmente Nublado")
+        return {
+            "temp": str(temp),
+            "condition": condition,
+            "conditionCode": tempo_code,
+        }
     except Exception:
-        return {"temp": "26", "condition": "Parcialmente Nublado"}
+        return {"temp": "26", "condition": "Parcialmente Nublado", "conditionCode": ""}
 
 @app.post("/pool-log")
 def append_pool_log(entry: PoolLogEntryModel):

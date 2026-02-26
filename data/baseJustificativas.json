@@ -5368,5 +5368,205 @@
     "horario": "1300",
     "professor": "Daniela",
     "saved_at": "2026-02-24T00:46:20.446799+00:00"
+  },
+  {
+    "aluno_nome": "Lua Machado Pereira",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.914151+00:00"
+  },
+  {
+    "aluno_nome": "Aylla Victória Silva Souza",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.914957+00:00"
+  },
+  {
+    "aluno_nome": "Helloisa de Jesus Inez",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915011+00:00"
+  },
+  {
+    "aluno_nome": "Isaque Galdino Autor",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915057+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel Lima França",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915101+00:00"
+  },
+  {
+    "aluno_nome": "João Miguel de Souza Silva",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915144+00:00"
+  },
+  {
+    "aluno_nome": "Laura Ferreira Barbosa",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915186+00:00"
+  },
+  {
+    "aluno_nome": "Lorena Vitória Silveira dos Santos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915228+00:00"
+  },
+  {
+    "aluno_nome": "Miguel Soares Bastos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915268+00:00"
+  },
+  {
+    "aluno_nome": "Nicole Yasmin Silveira dos Santos",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915309+00:00"
+  },
+  {
+    "aluno_nome": "Pedro Henrique Carvalho de Araújo",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915350+00:00"
+  },
+  {
+    "aluno_nome": "Rafaela Aguiar Prata",
+    "data": "2026-02-18",
+    "motivo": "Ponte: Carnaval",
+    "turmaCodigo": "jqs02",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0930",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T02:31:04.915390+00:00"
+  },
+  {
+    "aluno_nome": "Augusto de Almeida",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.303850+00:00"
+  },
+  {
+    "aluno_nome": "Bianca Almeida de Moura Coelho",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.303995+00:00"
+  },
+  {
+    "aluno_nome": "Bruno Nunes Marques",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304047+00:00"
+  },
+  {
+    "aluno_nome": "José Francisco da Silva",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304091+00:00"
+  },
+  {
+    "aluno_nome": "Katia Cilene Tibúrcio da Silva",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304135+00:00"
+  },
+  {
+    "aluno_nome": "Liliam de Sales Cambraia",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304178+00:00"
+  },
+  {
+    "aluno_nome": "Lucas Cordeiro da Silva",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304220+00:00"
+  },
+  {
+    "aluno_nome": "Samuel Ometto Franco",
+    "data": "2026-02-25",
+    "motivo": "Condições Climáticas",
+    "turmaCodigo": "jqs01",
+    "turmaLabel": "Quarta e Sexta",
+    "horario": "0800",
+    "professor": "Jefferson",
+    "saved_at": "2026-02-26T03:58:33.304260+00:00"
   }
 ]
