@@ -1,7 +1,25 @@
 from sqlmodel import create_engine, Session
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+
+def _normalize_database_url(raw_url: str) -> str:
+    url = (raw_url or "").strip()
+    if not url:
+        return "sqlite:///./dev.db"
+
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+    if url.startswith("postgresql+psycopg2://") and "sslmode=" not in url:
+        separator = "&" if "?" in url else "?"
+        url = f"{url}{separator}sslmode=require"
+
+    return url
+
+
+DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./dev.db"))
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 

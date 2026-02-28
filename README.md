@@ -4,6 +4,11 @@ Scaffold mínimo para transformar o projeto "Lista-de-Chamada" em uma versão we
 
 Siga as instruções em docs/TUTORIAL.md (ou neste README) para rodar localmente.
 
+## Deploy com Supabase (produção)
+
+Para usar banco persistente (Supabase) no backend Render, siga o guia completo em `docs/SUPABASE_RENDER_PASSO_A_PASSO.md`.
+Esse fluxo configura `DATABASE_URL` e `CORS_ORIGINS`, valida a conexão e confirma os headers CORS para o frontend da Vercel.
+
 ## Clima real no calendário
 
 Para sair do fallback e usar clima real:

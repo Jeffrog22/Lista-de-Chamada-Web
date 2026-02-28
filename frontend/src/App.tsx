@@ -6,8 +6,10 @@ import { Reports } from "./pages/Reports";
 import { Vacancies } from "./pages/Vacancies";
 import { Exclusions } from "./pages/Exclusions";
 import { Login } from "./pages/Login";
-import { getBootstrap, importDataFile } from "./api";
+import { getBootstrap, getImportDataStatus, importDataFile } from "./api";
 import "./App.simple.css";
+
+type ApiResponse<T = any> = { data: T };
 
 type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | "reports" | "vacancies";
 
@@ -26,6 +28,7 @@ export default function App() {
   const [teacherUnit, setTeacherUnit] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [lastImportInfo, setLastImportInfo] = useState<any>(null);
 
   useEffect(() => {
     // Atualizar token quando localStorage muda
@@ -43,7 +46,17 @@ export default function App() {
         // ignore
       }
     }
+    getImportDataStatus()
+      .then((res: ApiResponse) => setLastImportInfo(res.data || null))
+      .catch(() => setLastImportInfo(null));
   }, []);
+
+  const formatImportDate = (value?: string | null) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("pt-BR");
+  };
 
   useEffect(() => {
     const onHashChange = () => {
@@ -147,6 +160,8 @@ export default function App() {
       setUpdateStatus("Carregando dados...");
       const res = await getBootstrap();
       applyBootstrap(res.data);
+      const statusRes = await getImportDataStatus();
+      setLastImportInfo(statusRes.data || null);
       setUpdateStatus("Base atualizada.");
       window.setTimeout(() => setUpdateStatus(null), 2000);
     } catch (err: any) {
@@ -181,7 +196,7 @@ export default function App() {
           <button className="menu-button" onClick={toggleSidebar}>
             ☰
           </button>
-          <h1>📋 Protótipo</h1>
+          <h1>📋 {teacherUnit ? teacherUnit : "Protótipo"}</h1>
         </div>
         <div className="header-right">
           <span className="user-info">
@@ -191,6 +206,9 @@ export default function App() {
           {updateStatus && (
             <span className="user-info">{updateStatus}</span>
           )}
+          <span className="user-info">
+            Último import: {lastImportInfo?.last_import_by || "-"} em {formatImportDate(lastImportInfo?.last_import_at)}
+          </span>
           <input
             ref={fileInputRef}
             type="file"

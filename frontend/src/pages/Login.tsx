@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { getBootstrap, importDataFile } from "../api";
+import { getBootstrap, getImportDataStatus, importDataFile } from "../api";
+
+type ApiResponse<T = any> = { data: T };
 
 interface TeacherProfile {
   name: string;
@@ -20,12 +22,23 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
 
   useEffect(() => {
     getBootstrap()
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
+    getImportDataStatus()
+      .then((res: ApiResponse) => setImportStatusInfo(res.data || null))
+      .catch(() => setImportStatusInfo(null));
   }, []);
+
+  const formatImportDate = (value?: string | null) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("pt-BR");
+  };
 
   const calculateAge = (dateString: string) => {
     if (!dateString) return 0;
@@ -97,6 +110,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       if (file) {
         setStatus("Enviando arquivo...");
         await importDataFile(file);
+        const importStatus = await getImportDataStatus();
+        setImportStatusInfo(importStatus.data || null);
       }
 
       setStatus("Carregando dados...");
@@ -120,6 +135,10 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       <h2>Cadastro Inicial - Importacao de Dados</h2>
       <p style={{ color: "#666", fontSize: 12, marginTop: 6 }}>
         Backend import: {backendOnline ? "online" : "offline"} (porta 8001)
+      </p>
+      <p style={{ color: "#666", fontSize: 12, marginTop: 4 }}>
+        Último import: {importStatusInfo?.last_import_by || "-"} em {formatImportDate(importStatusInfo?.last_import_at)}
+        {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>

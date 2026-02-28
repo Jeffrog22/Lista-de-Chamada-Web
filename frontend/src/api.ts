@@ -116,6 +116,9 @@ export const importDataFile = (file: File) => {
   });
 };
 
+export const getImportDataStatus = () =>
+  API.get("/api/import-data/status");
+
 // Login
 export const login = (username: string, password: string) =>
   API.post("/token", new URLSearchParams({ username, password }), {

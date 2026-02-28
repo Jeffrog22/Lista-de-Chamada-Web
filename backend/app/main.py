@@ -42,14 +42,14 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
 
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-]
+cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=cors_origin_regex if cors_origin_regex else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -376,6 +376,39 @@ class ImportResult(BaseModel):
     classes_updated: int
     students_created: int
     students_updated: int
+
+class ImportStatusOut(BaseModel):
+    filename: Optional[str] = None
+    last_import_at: Optional[str] = None
+    rows_processed: int = 0
+    units_created: int = 0
+    units_updated: int = 0
+    classes_created: int = 0
+    classes_updated: int = 0
+    students_created: int = 0
+    students_updated: int = 0
+
+
+def _import_status_file() -> str:
+    return os.path.join(DATA_DIR, "import_status.json")
+
+
+def _save_import_status(status: Dict[str, Any]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(_import_status_file(), "w", encoding="utf-8") as f:
+        json.dump(status, f, ensure_ascii=False, indent=2)
+
+
+def _load_import_status() -> Dict[str, Any]:
+    file_path = _import_status_file()
+    if not os.path.exists(file_path):
+        return {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
 
 class ImportUnitOut(BaseModel):
     id: int
@@ -2105,6 +2138,7 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
         "students_created": 0,
         "students_updated": 0,
     }
+    rows_processed = 0
 
     try:
         for row in reader:
@@ -2116,6 +2150,8 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
 
             if not unidade or not codigo or not horario or not aluno_nome:
                 continue
+
+            rows_processed += 1
 
             unit = get_or_create_import_unit(session, unidade)
             if unit.id:
@@ -2157,9 +2193,23 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
             student.atestado = parse_bool(row.get("atestado") or "")
 
         session.commit()
+        _save_import_status(
+            {
+                "filename": file.filename,
+                "last_import_at": datetime.utcnow().isoformat(),
+                "rows_processed": rows_processed,
+                **counters,
+            }
+        )
         return ImportResult(**counters)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"import error: {exc}")
+
+
+@app.get("/api/import-data/status", response_model=ImportStatusOut)
+def get_import_data_status() -> ImportStatusOut:
+    payload = _load_import_status()
+    return ImportStatusOut(**payload)
 
 @app.get("/api/bootstrap", response_model=BootstrapOut)
 def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_session)) -> BootstrapOut:
