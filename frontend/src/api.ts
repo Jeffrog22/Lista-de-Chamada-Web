@@ -98,6 +98,12 @@ export const saveAcademicCalendarEvent = (data: any) =>
 export const deleteAcademicCalendarEvent = (eventId: string) =>
   API.delete(`/academic-calendar/events/${encodeURIComponent(eventId)}`).catch(() => ({ data: { ok: false } }));
 
+// Planning uploads
+export const getPlanningFiles = () => API.get("/planning-files");
+export const savePlanningFile = (data: any) => API.post("/planning-files", data);
+export const deletePlanningFile = (id: string) =>
+  API.delete(`/planning-files/${encodeURIComponent(id)}`);
+
 // Import backend (multi-unit)
 export const getBootstrap = (unitId?: number) =>
   API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);

@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import {
   deleteAcademicCalendarEvent,
@@ -6,11 +6,14 @@ import {
   downloadMultiClassExcelReport,
   getAcademicCalendar,
   getBootstrap,
+  getPlanningFiles,
   getReports,
   getStatistics,
   getWeather,
   saveAcademicCalendarEvent,
   saveAcademicCalendarSettings,
+  savePlanningFile,
+  deletePlanningFile,
 } from "../api";
 import {
   isDateClosedForAttendance,
@@ -185,6 +188,57 @@ const normalizeText = (value: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+
+const toTitleCase = (value: string) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return trimmed;
+  return trimmed
+    .toLowerCase()
+    .split(/\s+/g)
+    .map((word) => (word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : word))
+    .join(" ");
+};
+
+const toSentenceCase = (value: string) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return trimmed;
+  const lower = trimmed.toLowerCase();
+  return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
+};
+
+const formatFileNameSentenceCase = (fileName: string) => {
+  const trimmed = String(fileName || "").trim();
+  if (!trimmed) return trimmed;
+  const lastDot = trimmed.lastIndexOf(".");
+  const base = lastDot > 0 ? trimmed.slice(0, lastDot) : trimmed;
+  const extension = lastDot > 0 ? trimmed.slice(lastDot) : "";
+  const normalizedBase = base.toLowerCase();
+  const sentenceBase = normalizedBase
+    ? `${normalizedBase.charAt(0).toUpperCase()}${normalizedBase.slice(1)}`
+    : normalizedBase;
+  return `${sentenceBase}${extension}`;
+};
+
+const normalizeTargetKey = (value: string) =>
+  normalizeText(value || "").replace(/\s+/g, "");
+
+const extractProfileFromTarget = (value: string) => {
+  let trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  trimmed = trimmed.replace(/^planejamento\s+/i, "");
+  trimmed = trimmed.replace(/\s+-\s+/g, " ");
+  trimmed = trimmed.replace(/\b20\d{2}\b.*$/i, "");
+  trimmed = trimmed.replace(/\s+/g, " ").trim();
+  return trimmed;
+};
+
+const formatPlanningTargetForDisplay = (value: string) => {
+  const trimmed = String(value || "").trim();
+  const profile = extractProfileFromTarget(trimmed);
+  if (profile) return toTitleCase(profile);
+  if (!trimmed) return trimmed;
+  return toTitleCase(trimmed);
+};
 
 const isWeatherAlertCondition = (condition: string) => {
   const normalized = normalizeText(condition);
@@ -415,6 +469,47 @@ const parseHeaderTargetYear = (lines: string[], sourceName: string, defaultYear:
   }
 
   return { target, year };
+};
+
+const parseOptionalNumber = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+};
+
+const normalizePlanningBlocks = (value: unknown): PlanningBlock[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : null))
+    .filter(Boolean)
+    .map((block) => ({
+      id: String(block.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
+      type: (String(block.type || "general") as PlanningBlockType),
+      key: String(block.key || ""),
+      label: String(block.label || ""),
+      text: String(block.text || ""),
+      month: block.month ? String(block.month) : undefined,
+      week: parseOptionalNumber(block.week),
+      startDay: parseOptionalNumber(block.startDay),
+      endDay: parseOptionalNumber(block.endDay),
+    }));
+};
+
+const normalizePlanningFiles = (payload: unknown): PlanningFileData[] => {
+  if (!Array.isArray(payload)) return [];
+  const normalized = payload
+    .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : null))
+    .filter(Boolean)
+    .map((record) => ({
+      id: String(record.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
+      sourceName: String(record.sourceName || ""),
+      target: String(record.target || ""),
+      year: Number(record.year || new Date().getFullYear()),
+      blocks: normalizePlanningBlocks(record.blocks),
+      createdAt: String(record.createdAt || new Date().toISOString()),
+    }))
+    .filter((file) => file.sourceName);
+
+  return normalized.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 };
 
 const detectMonthFromLine = (line: string): string | null => {
@@ -788,12 +883,25 @@ export const Reports: React.FC = () => {
       if (!raw) return;
       const parsed = JSON.parse(raw) as PlanningStore;
       if (parsed && Array.isArray(parsed.files)) {
-        setPlanningStore({ files: parsed.files.filter((item) => item && typeof item === "object") });
+        setPlanningStore({ files: normalizePlanningFiles(parsed.files) });
       }
     } catch {
       setPlanningStore({ files: [] });
     }
   }, []);
+
+  const refreshPlanningStoreFromBackend = useCallback(async () => {
+    try {
+      const response = await getPlanningFiles();
+      setPlanningStore({ files: normalizePlanningFiles(response.data) });
+    } catch {
+      // keep cached data when backend is unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshPlanningStoreFromBackend();
+  }, [refreshPlanningStoreFromBackend]);
 
   useEffect(() => {
     localStorage.setItem(PLANNING_STORAGE_KEY, JSON.stringify(planningStore));
@@ -847,8 +955,10 @@ export const Reports: React.FC = () => {
     }
   }, [planningTargets, planningSelectedTarget]);
 
+  const planningSelectedTargetKey = normalizeTargetKey(planningSelectedTarget);
+
   const planningLookupResults = useMemo(() => {
-    if (!planningSelectedTarget) return [] as PlanningBlock[];
+    if (!planningSelectedTargetKey) return [] as PlanningBlock[];
 
     const dateObj = new Date(`${selectedPlanningDateKey}T00:00:00`);
     const selectedDay = Number.isNaN(dateObj.getTime()) ? null : dateObj.getDate();
@@ -858,14 +968,14 @@ export const Reports: React.FC = () => {
 
     const filesForTargetByYear = planningStore.files.filter(
       (file) =>
-        normalizeText(file.target || "") === normalizeText(planningSelectedTarget) &&
+        normalizeTargetKey(file.target || "") === planningSelectedTargetKey &&
         Number(file.year || 0) === selectedYear
     );
 
     const filesForTarget = filesForTargetByYear.length > 0
       ? filesForTargetByYear
       : planningStore.files.filter(
-          (file) => normalizeText(file.target || "") === normalizeText(planningSelectedTarget)
+          (file) => normalizeTargetKey(file.target || "") === planningSelectedTargetKey
         );
 
     const matched: Array<PlanningBlock & { _score: number }> = [];
@@ -903,7 +1013,7 @@ export const Reports: React.FC = () => {
       .filter((item) => item._score === bestScore)
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ _score, ...block }) => block);
-  }, [planningSelectedTarget, planningStore.files, selectedPlanningWeekKey, selectedPlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
+  }, [planningSelectedTargetKey, planningStore.files, selectedPlanningWeekKey, selectedPlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
 
   const handlePlanningUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -930,8 +1040,9 @@ export const Reports: React.FC = () => {
       if (importedFiles.length === 0) {
         setPlanningStatus("Nenhum item de planejamento encontrado.");
       } else {
-        setPlanningStore((prev) => ({ files: [...importedFiles, ...prev.files] }));
+        await Promise.all(importedFiles.map((file) => savePlanningFile(file)));
         setPlanningStatus(`${importedFiles.length} arquivo(s) de planejamento importado(s).`);
+        await refreshPlanningStoreFromBackend();
       }
     } catch {
       setPlanningStatus("Falha ao importar arquivos de planejamento.");
@@ -941,8 +1052,13 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const removePlanningFile = (fileId: string) => {
-    setPlanningStore((prev) => ({ files: prev.files.filter((file) => file.id !== fileId) }));
+  const removePlanningFile = async (fileId: string) => {
+    try {
+      await deletePlanningFile(fileId);
+      await refreshPlanningStoreFromBackend();
+    } catch {
+      setPlanningStatus("Falha ao remover arquivo de planejamento.");
+    }
   };
 
   const formatHorario = (value?: string) => {
@@ -2301,7 +2417,7 @@ export const Reports: React.FC = () => {
                       className={`reports-professor-chip ${planningSelectedTarget === target ? "active" : ""}`}
                       onClick={() => setPlanningSelectedTarget(target)}
                     >
-                      {target}
+                      {formatPlanningTargetForDisplay(target)}
                     </button>
                   ))}
                 </div>
@@ -2393,151 +2509,156 @@ export const Reports: React.FC = () => {
       )}
 
       {activeTab === "frequencias" && (
-        <div className="reports-section">
-          <div className="reports-filters">
-            <div className="reports-filter-field">
-              <label>Mês</label>
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-              />
-            </div>
-            <div className="reports-filter-field">
-              <label>Turma</label>
-              <select
-                value={selectedTurmaLabel}
-                onChange={(e) => setSelectedTurmaLabel(e.target.value)}
-                disabled={turmaOptions.length === 0}
-              >
-                {turmaOptions.map((turma) => (
-                  <option key={turma} value={turma}>{turma}</option>
-                ))}
-              </select>
-              <div className="reports-filter-note">
-                cod.turma: <strong>{selectedClassCodeLower}</strong>
+        <div className="reports-section reports-frequency-layout">
+          <div className="reports-frequency-column reports-frequency-main">
+            <h3 className="reports-frequency-heading">Frequência</h3>
+            <div className="reports-filters">
+              <div className="reports-filter-field">
+                <label>Mês</label>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                />
+              </div>
+              <div className="reports-filter-field">
+                <label>Turma</label>
+                <select
+                  value={selectedTurmaLabel}
+                  onChange={(e) => setSelectedTurmaLabel(e.target.value)}
+                  disabled={turmaOptions.length === 0}
+                >
+                  {turmaOptions.map((turma) => (
+                    <option key={turma} value={turma}>{turma}</option>
+                  ))}
+                </select>
+                <div className="reports-filter-note">
+                  cod.turma: <strong>{selectedClassCodeLower}</strong>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="report-card" style={{ marginBottom: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Planejamento</h3>
-            <div className="reports-filter-field">
-              <label>Selecionar arquivos (PDF/TXT)</label>
-              <input
-                type="file"
-                accept=".pdf,.txt"
-                multiple
-                disabled={planningBusy}
-                onChange={handlePlanningUpload}
-              />
-              <div className="reports-filter-note">Envie de 1 a 4 arquivos por vez.</div>
-              {planningStatus && <div className="reports-filter-note">{planningStatus}</div>}
-            </div>
-
-            <div className="reports-class-metrics" style={{ marginTop: 10 }}>
-              {planningStore.files.length === 0 && (
-                <div className="reports-section placeholder">Nenhum planejamento carregado.</div>
-              )}
-              {planningStore.files.map((file) => (
-                <div key={file.id} className="reports-class-metric-row" style={{ alignItems: "flex-start" }}>
-                  <div>
-                    <strong>{file.target}</strong>
-                    <span style={{ marginLeft: 8 }}>Ano {file.year}</span>
-                    <div className="reports-filter-note">{file.sourceName} • {file.blocks.length} bloco(s)</div>
-                  </div>
-                  <button
-                    className="btn-secondary"
-                    onClick={() => removePlanningFile(file.id)}
-                    style={{
-                      marginLeft: "auto",
-                      width: 20,
-                      height: 20,
-                      minWidth: 20,
-                      borderRadius: 999,
-                      padding: 0,
-                      fontSize: 11,
-                      lineHeight: 1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
+            <div className="reports-professor-chips">
+              <button
+                type="button"
+                className={`reports-professor-chip ${selectedProfessor === "" ? "active" : ""}`}
+                onClick={() => setSelectedProfessor("")}
+              >
+                Todos
+              </button>
+              {professorOptions.map((professor) => (
+                <button
+                  key={professor}
+                  type="button"
+                  className={`reports-professor-chip ${selectedProfessor === professor ? "active" : ""}`}
+                  onClick={() => setSelectedProfessor(professor)}
+                >
+                  {professor}
+                </button>
               ))}
             </div>
-          </div>
 
-          <div className="reports-professor-chips">
-            <button
-              type="button"
-              className={`reports-professor-chip ${selectedProfessor === "" ? "active" : ""}`}
-              onClick={() => setSelectedProfessor("")}
-            >
-              Todos
-            </button>
-            {professorOptions.map((professor) => (
-              <button
-                key={professor}
-                type="button"
-                className={`reports-professor-chip ${selectedProfessor === professor ? "active" : ""}`}
-                onClick={() => setSelectedProfessor(professor)}
-              >
-                {professor}
-              </button>
-            ))}
-          </div>
-
-          <div className="reports-class-grid">
-            <div className="reports-class-grid-header">
-              <span>
-                <button
-                  type="button"
-                  className={`reports-select-toggle-chip ${allGridSelected ? "active" : ""}`}
-                  onClick={handleToggleAllGrid}
-                >
-                  {allGridSelected ? "Desmarcar todas" : "Selecionar todas"}
-                </button>
-              </span>
-              <span>Horário</span>
-              <span>Nível</span>
+            <div className="reports-class-grid">
+              <div className="reports-class-grid-header">
+                <span>
+                  <button
+                    type="button"
+                    className={`reports-select-toggle-chip ${allGridSelected ? "active" : ""}`}
+                    onClick={handleToggleAllGrid}
+                  >
+                    {allGridSelected ? "Desmarcar todas" : "Selecionar todas"}
+                  </button>
+                </span>
+                <span>Horário</span>
+                <span>Nível</span>
+              </div>
+              {exportClassGrid.map((item) => {
+                const key = classSelectionKey(item);
+                return (
+                  <label key={key} className="reports-class-grid-row">
+                    <input
+                      type="checkbox"
+                      checked={selectedExportClassKeys.includes(key)}
+                      onChange={() => toggleExportClass(key)}
+                    />
+                    <span>{formatHorario(item.horario)}</span>
+                    <span>{item.nivel || "-"}</span>
+                  </label>
+                );
+              })}
+              {exportClassGrid.length === 0 && (
+                <div className="reports-class-grid-empty">Nenhuma turma encontrada para os filtros selecionados.</div>
+              )}
             </div>
-            {exportClassGrid.map((item) => {
-              const key = classSelectionKey(item);
-              return (
-                <label key={key} className="reports-class-grid-row">
-                  <input
-                    type="checkbox"
-                    checked={selectedExportClassKeys.includes(key)}
-                    onChange={() => toggleExportClass(key)}
-                  />
-                  <span>{formatHorario(item.horario)}</span>
-                  <span>{item.nivel || "-"}</span>
-                </label>
-              );
-            })}
-            {exportClassGrid.length === 0 && (
-              <div className="reports-class-grid-empty">Nenhuma turma encontrada para os filtros selecionados.</div>
-            )}
+
+            <div className="reports-export-actions">
+              <button
+                onClick={handleGenerateExcel}
+                className="btn-primary"
+                disabled={selectedExportClassKeys.length === 0}
+              >
+                Exportar chamada (.xlsx)
+              </button>
+              <button
+                onClick={handleGenerateChamadaPdf}
+                className="btn-secondary"
+                disabled={selectedExportClassKeys.length === 0}
+              >
+                Exportar chamada.pdf
+              </button>
+            </div>
           </div>
 
-          <div className="reports-export-actions">
-            <button
-              onClick={handleGenerateExcel}
-              className="btn-primary"
-              disabled={selectedExportClassKeys.length === 0}
-            >
-              Exportar chamada (.xlsx)
-            </button>
-            <button
-              onClick={handleGenerateChamadaPdf}
-              className="btn-secondary"
-              disabled={selectedExportClassKeys.length === 0}
-            >
-              Exportar chamada.pdf
-            </button>
+          <div className="reports-frequency-column reports-frequency-planning">
+            <div className="report-card" style={{ marginBottom: 14 }}>
+              <h3 style={{ marginTop: 0 }}>Planejamento</h3>
+              <div className="reports-filter-field">
+                <label>Selecionar arquivos (PDF/TXT)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.txt"
+                  multiple
+                  disabled={planningBusy}
+                  onChange={handlePlanningUpload}
+                />
+                <div className="reports-filter-note">Envie de 1 a 4 arquivos por vez.</div>
+                {planningStatus && <div className="reports-filter-note">{planningStatus}</div>}
+              </div>
+
+              <div className="reports-class-metrics" style={{ marginTop: 10 }}>
+                {planningStore.files.length === 0 && (
+                  <div className="reports-section placeholder">Nenhum planejamento carregado.</div>
+                )}
+                {planningStore.files.map((file) => (
+                  <div key={file.id} className="reports-class-metric-row" style={{ alignItems: "flex-start" }}>
+                    <div>
+                      <strong>{formatPlanningTargetForDisplay(file.target)}</strong>
+                      <span style={{ marginLeft: 8 }}>Ano {file.year}</span>
+                      <div className="reports-filter-note">{formatFileNameSentenceCase(file.sourceName)} • {file.blocks.length} bloco(s)</div>
+                    </div>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => removePlanningFile(file.id)}
+                      style={{
+                        marginLeft: "auto",
+                        width: 20,
+                        height: 20,
+                        minWidth: 20,
+                        borderRadius: 999,
+                        padding: 0,
+                        fontSize: 11,
+                        lineHeight: 1,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

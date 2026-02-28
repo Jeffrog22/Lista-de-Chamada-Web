@@ -198,6 +198,27 @@ class AcademicCalendarEventPayload(BaseModel):
     description: Optional[str] = ""
     teacher: Optional[str] = ""
 
+
+class PlanningBlockModel(BaseModel):
+    id: str
+    type: str
+    key: str
+    label: str
+    text: str
+    month: Optional[str] = None
+    week: Optional[int] = None
+    startDay: Optional[int] = None
+    endDay: Optional[int] = None
+
+
+class PlanningFileModel(BaseModel):
+    id: str
+    sourceName: str
+    target: str
+    year: int
+    blocks: List[PlanningBlockModel] = Field(default_factory=list)
+    createdAt: str
+
 def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     payload: List[Dict[str, Any]] = []
@@ -252,6 +273,41 @@ def _save_academic_calendar_state(state: Dict[str, Any]) -> None:
     file_path = _academic_calendar_file()
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+@app.get("/planning-files")
+def get_planning_files() -> List[Dict[str, Any]]:
+    return _load_planning_files()
+
+
+@app.post("/planning-files")
+def save_planning_file(file_data: PlanningFileModel) -> Dict[str, Any]:
+    files = _load_planning_files()
+    files = [entry for entry in files if entry.get("id") != file_data.id]
+    entry = file_data.dict()
+    files.insert(0, entry)
+    _save_planning_files(files)
+    return entry
+
+
+@app.delete("/planning-files/{file_id}")
+def delete_planning_file(file_id: str) -> Dict[str, bool]:
+    files = _load_planning_files()
+    filtered = [entry for entry in files if entry.get("id") != file_id]
+    _save_planning_files(filtered)
+    return {"ok": True}
+
+
+def _planning_files_path() -> str:
+    return os.path.join(DATA_DIR, "planningFiles.json")
+
+
+def _load_planning_files() -> List[Dict[str, Any]]:
+    return _load_json_list(_planning_files_path())
+
+
+def _save_planning_files(items: List[Dict[str, Any]]) -> None:
+    _save_json_list(_planning_files_path(), items)
 
 def _month_bounds(month: str) -> tuple[str, str]:
     year, month_num = month.split("-")

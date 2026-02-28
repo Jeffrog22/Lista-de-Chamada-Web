@@ -403,6 +403,36 @@
   margin-top: 14px;
 }
 
+.reports-frequency-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.reports-frequency-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reports-frequency-heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.reports-frequency-planning .report-card {
+  height: 100%;
+}
+
+@media (max-width: 1100px) {
+  .reports-frequency-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .reports-level-note {
   font-size: 16px;
   color: #4b5563;
