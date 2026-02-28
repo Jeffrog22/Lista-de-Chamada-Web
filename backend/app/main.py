@@ -43,7 +43,17 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
 
 cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
-origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+
+
+def _normalize_origin(origin: str) -> str:
+    return origin.strip().strip("\"'").rstrip("/")
+
+
+origins = [
+    _normalize_origin(origin)
+    for origin in cors_origins_raw.split(",")
+    if _normalize_origin(origin)
+]
 cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
 
 app.add_middleware(
