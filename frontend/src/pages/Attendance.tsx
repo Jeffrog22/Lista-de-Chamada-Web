@@ -129,7 +129,7 @@ const WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
 
 // Opções de Sensação Térmica (ordem solicitada)
 const WEATHER_ICONS = {
-  sensations: ["Calor", "Abafado", "Agradável", "Vento", "Frio"]
+  sensations: ["Calor", "Abafado", "Agradável", "Seco", "Vento", "Frio"]
 };
 
 const JUSTIFIED_CPTEC_CODES = new Set([
@@ -143,6 +143,7 @@ const normalizeSensation = (value: string) => {
   if (raw === "agradavel") return "Agradável";
   if (raw === "abafado") return "Abafado";
   if (raw === "calor") return "Calor";
+  if (raw === "seco") return "Seco";
   if (raw === "vento") return "Vento";
   if (raw === "frio") return "Frio";
   return "";
@@ -2828,20 +2829,23 @@ export const Attendance: React.FC = () => {
                   {poolData.weatherCondition || "Indisponível"}
                   {poolData.weatherConditionCode ? ` (${poolData.weatherConditionCode})` : ""}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "15px" }}>
+                <div style={{ display: "flex", flexWrap: "nowrap", gap: "6px", marginBottom: "15px" }}>
                   {WEATHER_ICONS.sensations.map(icon => (
                     <button
                       key={icon}
                       onClick={() => toggleIcon(icon)}
                       style={{
-                        padding: "6px 12px",
+                        padding: "4px 8px",
                         borderRadius: "20px",
                         border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
                         background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
                         color: poolData.selectedIcons.includes(icon) ? "#667eea" : "#666",
                         cursor: "pointer",
-                        fontSize: "12px",
-                        fontWeight: 600
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        flex: "1 1 0",
+                        minWidth: 0,
+                        whiteSpace: "nowrap"
                       }}
                     >
                       {icon}

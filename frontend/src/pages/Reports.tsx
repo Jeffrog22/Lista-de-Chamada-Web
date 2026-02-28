@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
@@ -137,8 +138,43 @@ interface WeatherCacheRecord extends WeatherSnapshot {
   cachedAt: number;
 }
 
+type PlanningBlockType = "month" | "week" | "date" | "general";
+
+interface PlanningBlock {
+  id: string;
+  type: PlanningBlockType;
+  key: string;
+  label: string;
+  text: string;
+  month?: string;
+  week?: number;
+  startDay?: number;
+  endDay?: number;
+}
+
+interface PlanningFileData {
+  id: string;
+  sourceName: string;
+  target: string;
+  year: number;
+  blocks: PlanningBlock[];
+  createdAt: string;
+}
+
+interface PlanningStore {
+  files: PlanningFileData[];
+}
+
 const REPORTS_WEATHER_CACHE_VERSION = "cptec-v1";
 const REPORTS_WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const PLANNING_STORAGE_KEY = "reports:planning:v1";
+
+if (!(pdfjsLib as any).GlobalWorkerOptions?.workerSrc) {
+  (pdfjsLib as any).GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+}
 
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${item.turma}||${item.horario}||${item.professor}`;
@@ -326,6 +362,339 @@ const toDateKey = (date: Date) => {
 
 const getCurrentLocalDateKey = () => toDateKey(new Date());
 
+const getWeekOfMonth = (date: Date) => Math.floor((date.getDate() - 1) / 7) + 1;
+
+const monthNameToNumber: Record<string, string> = {
+  janeiro: "01",
+  fevereiro: "02",
+  marco: "03",
+  abril: "04",
+  maio: "05",
+  junho: "06",
+  julho: "07",
+  agosto: "08",
+  setembro: "09",
+  outubro: "10",
+  novembro: "11",
+  dezembro: "12",
+};
+
+const normalizeParserText = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const parseHeaderTargetYear = (lines: string[], sourceName: string, defaultYear: number) => {
+  const firstLines = lines.slice(0, Math.min(12, lines.length));
+  const sourceFallback = sourceName.replace(/\.[^.]+$/, "").trim() || "Geral";
+  let target = sourceFallback;
+  let year = defaultYear;
+
+  for (const line of firstLines) {
+    const clean = String(line || "").trim();
+    if (!clean) continue;
+    const fullMatch = clean.match(/planejamento\s+(.+?)\s+(20\d{2})/i);
+    if (fullMatch) {
+      target = fullMatch[1].replace(/[:\-–]+$/g, "").trim() || sourceFallback;
+      year = Number(fullMatch[2]);
+      return { target, year };
+    }
+
+    const onlyTargetMatch = clean.match(/planejamento\s+(.+)$/i);
+    if (onlyTargetMatch && !/\b20\d{2}\b/.test(clean)) {
+      const parsedTarget = onlyTargetMatch[1].replace(/[:\-–]+$/g, "").trim();
+      if (parsedTarget) target = parsedTarget;
+    }
+
+    const yearMatch = clean.match(/\b(20\d{2})\b/);
+    if (yearMatch) {
+      year = Number(yearMatch[1]);
+    }
+  }
+
+  return { target, year };
+};
+
+const detectMonthFromLine = (line: string): string | null => {
+  const normalized = normalizeParserText(line);
+  for (const [name, monthNumber] of Object.entries(monthNameToNumber)) {
+    if (normalized.includes(name)) return monthNumber;
+  }
+  return null;
+};
+
+const normalizePlanningLineSpacing = (line: string) => {
+  let next = String(line || "").replace(/\s{2,}/g, " ").trim();
+  next = next.replace(/(^|[\s:/-])([A-ZÀ-Ý])\s+([a-zà-ÿ]{2,})/gu, "$1$2$3");
+  next = next.replace(/(^|[\s:/\-()])([b-df-hj-np-tv-zç])\s+([a-zà-ÿ]{3,})/gu, "$1$2$3");
+  return next;
+};
+
+const buildPlanningFileData = (
+  raw: string,
+  sourceName: string,
+  defaultYear: number,
+  defaultMonth: string
+): PlanningFileData | null => {
+  const text = String(raw || "").replace(/\r/g, "\n").replace(/\n{3,}/g, "\n\n");
+  const rawLines = text
+    .split("\n")
+    .map((line) => normalizePlanningLineSpacing(line))
+    .filter(Boolean);
+  if (rawLines.length === 0) return null;
+
+  const lines: string[] = [];
+  for (let index = 0; index < rawLines.length; index += 1) {
+    const current = rawLines[index];
+    const next = rawLines[index + 1] || "";
+    const next2 = rawLines[index + 2] || "";
+
+    const currentNormalized = normalizeParserText(current);
+    const nextNormalized = normalizeParserText(next);
+
+    if (/^\d{1,2}\s*[aª]?$/.test(currentNormalized) && /^sem(?:ana)?[:\-]?$/.test(nextNormalized)) {
+      let merged = `${current} ${next}`;
+      if (/^\d{1,2}\s*(a|ate|-)\s*\d{1,2}/i.test(next2)) {
+        merged = `${merged} ${next2}`;
+        index += 2;
+      } else {
+        index += 1;
+      }
+      lines.push(merged);
+      continue;
+    }
+
+    if (/^\d{1,2}\s*[aª]?\s*sem(?:ana)?[:\-]?$/.test(currentNormalized) && /^\d{1,2}\s*(a|ate|-)\s*\d{1,2}/i.test(next)) {
+      lines.push(`${current} ${next}`);
+      index += 1;
+      continue;
+    }
+
+    lines.push(current);
+  }
+
+  const header = parseHeaderTargetYear(lines, sourceName, defaultYear);
+  let currentMonth = "";
+
+  const blocks: PlanningBlock[] = [];
+  let currentBlock: PlanningBlock | null = null;
+
+  const flushCurrentBlock = () => {
+    if (!currentBlock) return;
+    let cleanedText = String(currentBlock.text || "").trim();
+
+    if (
+      currentBlock.type === "week" &&
+      typeof currentBlock.startDay === "number" &&
+      typeof currentBlock.endDay === "number" &&
+      cleanedText
+    ) {
+      const lines = cleanedText
+        .split("\n")
+        .map((line) => normalizePlanningLineSpacing(line))
+        .filter(Boolean);
+
+      if (lines.length > 0) {
+        const firstLineNormalized = normalizeParserText(lines[0]);
+        const rangeRegex = new RegExp(
+          `^(?:de\\s+)?0?${currentBlock.startDay}\\s*(?:a|-|ate)\\s*0?${currentBlock.endDay}(?:\\b|\\s|$)`
+        );
+        if (rangeRegex.test(firstLineNormalized)) {
+          lines.shift();
+        }
+      }
+
+      cleanedText = lines.join("\n").trim();
+    }
+
+    if (cleanedText.length > 0) {
+      blocks.push({ ...currentBlock, text: cleanedText });
+    }
+    currentBlock = null;
+  };
+
+  for (const line of lines) {
+    const clean = normalizePlanningLineSpacing(line);
+    const normalized = normalizeParserText(clean);
+    if (!clean) continue;
+    if (/^planejamento\b/.test(normalized)) continue;
+
+    const monthFromLine = detectMonthFromLine(clean);
+    if (monthFromLine && normalized.length <= 24) {
+      flushCurrentBlock();
+      currentMonth = monthFromLine;
+      currentBlock = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: "month",
+        key: `${header.year}-${currentMonth}`,
+        label: clean,
+        text: "",
+        month: currentMonth,
+      };
+      continue;
+    }
+
+    const dateMatch = clean.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?\b/);
+    if (dateMatch) {
+      flushCurrentBlock();
+      const day = String(Number(dateMatch[1])).padStart(2, "0");
+      const month = String(Number(dateMatch[2])).padStart(2, "0");
+      const year = dateMatch[3] ? Number(dateMatch[3]) : header.year;
+      currentMonth = month;
+      const trailing = clean.slice((dateMatch.index || 0) + dateMatch[0].length).trim().replace(/^[:\-–]+\s*/, "");
+      currentBlock = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: "date",
+        key: `${year}-${month}-${day}`,
+        label: clean,
+        text: trailing,
+        month,
+      };
+      continue;
+    }
+
+    const weekMatch = normalized.match(/(\d{1,2})\s*(?:a|ª)?\s*sem(?:ana)?\b|sem(?:ana)?\s*(\d{1,2})\b/);
+    if (weekMatch) {
+      flushCurrentBlock();
+      const week = Number(weekMatch[1] || weekMatch[2]);
+      const rangeMatch = normalized.match(/(?:de\s+)?(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})/i);
+      const startDay = rangeMatch ? Number(rangeMatch[1]) : undefined;
+      const endDay = rangeMatch ? Number(rangeMatch[2]) : undefined;
+      const semHeaderMatch = clean.match(/^\s*(?:\d{1,2}\s*(?:a|ª)?\s*sem(?:ana)?|sem(?:ana)?\s*\d{1,2})\s*:?\s*/i);
+      const trailingAfterHeader = semHeaderMatch
+        ? clean.slice(semHeaderMatch[0].length).trim().replace(/^[:\-–]+\s*/, "")
+        : "";
+      currentBlock = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: "week",
+        key: `${header.year}-${currentMonth || defaultMonth}-sem-${week}`,
+        label: clean,
+        text: trailingAfterHeader,
+        month: currentMonth || defaultMonth,
+        week,
+        startDay,
+        endDay,
+      };
+      continue;
+    }
+
+    if (!currentBlock) {
+      currentBlock = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: "general",
+        key: `${header.year}-${currentMonth || defaultMonth}-geral`,
+        label: "Geral",
+        text: "",
+        month: currentMonth || undefined,
+      };
+    }
+
+    currentBlock.text = currentBlock.text ? `${currentBlock.text}\n${clean}` : clean;
+  }
+
+  flushCurrentBlock();
+  if (blocks.length === 0) return null;
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    sourceName,
+    target: header.target,
+    year: header.year,
+    blocks,
+    createdAt: new Date().toISOString(),
+  };
+};
+
+const readPlanningTextFromFile = async (file: File): Promise<string> => {
+  if (file.name.toLowerCase().endsWith(".txt")) {
+    return file.text();
+  }
+
+  if (file.name.toLowerCase().endsWith(".pdf")) {
+    const buffer = await file.arrayBuffer();
+    const loadingTask = (pdfjsLib as any).getDocument({ data: buffer });
+    const pdf = await loadingTask.promise;
+    const parts: string[] = [];
+
+    const buildTextLinesFromPdfItems = (items: any[]) => {
+      const validItems = items
+        .map((item) => {
+          const rawText = String(item?.str || "");
+          const text = rawText.replace(/\s+/g, " ").trim();
+          const transform = Array.isArray(item?.transform) ? item.transform : [];
+          const x = Number(transform[4] || 0);
+          const y = Number(transform[5] || 0);
+          const width = Number(item?.width || 0);
+          return { text, x, y, width };
+        })
+        .filter((item) => item.text.length > 0);
+
+      if (validItems.length === 0) return [] as string[];
+
+      const sorted = validItems.sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
+        return a.x - b.x;
+      });
+
+      const rows: Array<{ y: number; cells: Array<{ text: string; x: number; width: number }> }> = [];
+      for (const item of sorted) {
+        const row = rows.find((entry) => Math.abs(entry.y - item.y) <= 2);
+        if (row) {
+          row.cells.push({ text: item.text, x: item.x, width: item.width });
+        } else {
+          rows.push({ y: item.y, cells: [{ text: item.text, x: item.x, width: item.width }] });
+        }
+      }
+
+      return rows
+        .sort((a, b) => b.y - a.y)
+        .map((row) => {
+          const sortedCells = row.cells.sort((a, b) => a.x - b.x);
+          let merged = "";
+          let previousEndX: number | null = null;
+
+          sortedCells.forEach((cell) => {
+            if (!merged) {
+              merged = cell.text;
+              previousEndX = cell.x + (cell.width > 0 ? cell.width : Math.max(1, cell.text.length * 3));
+              return;
+            }
+
+            const safePreviousEndX = previousEndX ?? cell.x;
+            const gap = cell.x - safePreviousEndX;
+            const punctuationStart = /^[,.;:!?)]/.test(cell.text);
+            const punctuationEnd = /[(\/-]$/.test(merged);
+            const needsSpace = gap > 1.4 && !punctuationStart && !punctuationEnd;
+
+            merged = `${merged}${needsSpace ? " " : ""}${cell.text}`;
+            previousEndX = cell.x + (cell.width > 0 ? cell.width : Math.max(1, cell.text.length * 3));
+          });
+
+          return merged.replace(/\s{2,}/g, " ").trim();
+        })
+        .filter(Boolean);
+    };
+
+    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+      const page = await pdf.getPage(pageIndex);
+      const content = await page.getTextContent();
+      const pageText = buildTextLinesFromPdfItems(content.items as any[]).join("\n");
+      if (pageText) parts.push(pageText);
+    }
+    return parts.join("\n");
+  }
+
+  return "";
+};
+
+const weekKeyFromDateKey = (dateKey: string) => {
+  const d = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "semana:1";
+  return `semana:${getWeekOfMonth(d)}`;
+};
+
 const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const weekdayMonToSun = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const monthOptions = [
@@ -393,7 +762,13 @@ export const Reports: React.FC = () => {
       loadStats();
     }
   }, [activeTab]);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState("");
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(getCurrentLocalDateKey());
+  const [planningStore, setPlanningStore] = useState<PlanningStore>({ files: [] });
+  const [planningBusy, setPlanningBusy] = useState(false);
+  const [planningStatus, setPlanningStatus] = useState("");
+  const [planningCardOpen, setPlanningCardOpen] = useState(false);
+  const [planningCardDate, setPlanningCardDate] = useState(getCurrentLocalDateKey());
+  const [planningSelectedTarget, setPlanningSelectedTarget] = useState("");
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [eventForm, setEventForm] = useState<CalendarEventForm>({
     date: "",
@@ -406,6 +781,23 @@ export const Reports: React.FC = () => {
 
   const [selectedYear, selectedMonthNumber] = selectedMonth.split("-");
   const [showAproveitamentoDetails, setShowAproveitamentoDetails] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PLANNING_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as PlanningStore;
+      if (parsed && Array.isArray(parsed.files)) {
+        setPlanningStore({ files: parsed.files.filter((item) => item && typeof item === "object") });
+      }
+    } catch {
+      setPlanningStore({ files: [] });
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(PLANNING_STORAGE_KEY, JSON.stringify(planningStore));
+  }, [planningStore]);
 
   const updateCalendarPeriod = (nextYear: string, nextMonth: string) => {
     if (!nextYear || !nextMonth) return;
@@ -429,6 +821,129 @@ export const Reports: React.FC = () => {
   };
 
   const yearOptions = Array.from({ length: 9 }, (_, idx) => String(new Date().getFullYear() - 4 + idx));
+
+  const selectedPlanningDateKey = planningCardDate || selectedCalendarDate || getCurrentLocalDateKey();
+  const selectedPlanningWeekKey = useMemo(() => weekKeyFromDateKey(selectedPlanningDateKey), [selectedPlanningDateKey]);
+  const selectedPlanningMonthKey = selectedPlanningDateKey.slice(0, 7);
+
+  const planningTargets = useMemo(() => {
+    const uniqueTargets = Array.from(
+      new Set(
+        planningStore.files
+          .map((file) => String(file.target || "").trim())
+          .filter(Boolean)
+      )
+    );
+    return uniqueTargets.sort((a, b) => a.localeCompare(b));
+  }, [planningStore.files]);
+
+  useEffect(() => {
+    if (planningTargets.length === 0) {
+      setPlanningSelectedTarget("");
+      return;
+    }
+    if (!planningSelectedTarget || !planningTargets.includes(planningSelectedTarget)) {
+      setPlanningSelectedTarget(planningTargets[0]);
+    }
+  }, [planningTargets, planningSelectedTarget]);
+
+  const planningLookupResults = useMemo(() => {
+    if (!planningSelectedTarget) return [] as PlanningBlock[];
+
+    const dateObj = new Date(`${selectedPlanningDateKey}T00:00:00`);
+    const selectedDay = Number.isNaN(dateObj.getTime()) ? null : dateObj.getDate();
+    const selectedWeek = Number.isNaN(dateObj.getTime()) ? null : Number(selectedPlanningWeekKey.replace("semana:", ""));
+    const selectedYear = Number.isNaN(dateObj.getTime()) ? Number(selectedMonth.slice(0, 4)) : dateObj.getFullYear();
+    const selectedMonthNumber = selectedPlanningMonthKey.slice(5, 7);
+
+    const filesForTargetByYear = planningStore.files.filter(
+      (file) =>
+        normalizeText(file.target || "") === normalizeText(planningSelectedTarget) &&
+        Number(file.year || 0) === selectedYear
+    );
+
+    const filesForTarget = filesForTargetByYear.length > 0
+      ? filesForTargetByYear
+      : planningStore.files.filter(
+          (file) => normalizeText(file.target || "") === normalizeText(planningSelectedTarget)
+        );
+
+    const matched: Array<PlanningBlock & { _score: number }> = [];
+    filesForTarget.forEach((file) => {
+      file.blocks.forEach((block) => {
+        if (block.type !== "week") return;
+
+        const hasText = String(block.text || "").trim().length > 0;
+        if (!hasText) return;
+
+        const monthMatches = !block.month || block.month === selectedMonthNumber;
+        if (!monthMatches) return;
+
+        const weekMatches = selectedWeek !== null && typeof block.week === "number" && block.week === selectedWeek;
+        const rangeMatches =
+          selectedDay !== null &&
+          typeof block.startDay === "number" &&
+          typeof block.endDay === "number" &&
+          selectedDay >= block.startDay &&
+          selectedDay <= block.endDay;
+
+        const score = rangeMatches ? 5 : weekMatches ? 4 : 0;
+
+        if (score > 0) {
+          matched.push({ ...block, _score: score });
+        }
+      });
+    });
+
+    if (matched.length === 0) return [] as PlanningBlock[];
+
+    const bestScore = Math.max(...matched.map((item) => item._score));
+
+    return matched
+      .filter((item) => item._score === bestScore)
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map(({ _score, ...block }) => block);
+  }, [planningSelectedTarget, planningStore.files, selectedPlanningWeekKey, selectedPlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
+
+  const handlePlanningUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+    if (files.length > 4) {
+      setPlanningStatus("Selecione no máximo 4 arquivos por vez.");
+      event.target.value = "";
+      return;
+    }
+
+    setPlanningBusy(true);
+    setPlanningStatus("Processando arquivos...");
+    try {
+      const importedFiles: PlanningFileData[] = [];
+      const defaultYear = Number(selectedMonth.split("-")[0]) || new Date().getFullYear();
+      const defaultMonth = selectedMonth.split("-")[1] || "01";
+
+      for (const file of files) {
+        const text = await readPlanningTextFromFile(file);
+        const parsed = buildPlanningFileData(text, file.name, defaultYear, defaultMonth);
+        if (parsed) importedFiles.push(parsed);
+      }
+
+      if (importedFiles.length === 0) {
+        setPlanningStatus("Nenhum item de planejamento encontrado.");
+      } else {
+        setPlanningStore((prev) => ({ files: [...importedFiles, ...prev.files] }));
+        setPlanningStatus(`${importedFiles.length} arquivo(s) de planejamento importado(s).`);
+      }
+    } catch {
+      setPlanningStatus("Falha ao importar arquivos de planejamento.");
+    } finally {
+      setPlanningBusy(false);
+      event.target.value = "";
+    }
+  };
+
+  const removePlanningFile = (fileId: string) => {
+    setPlanningStore((prev) => ({ files: prev.files.filter((file) => file.id !== fileId) }));
+  };
 
   const formatHorario = (value?: string) => {
     const raw = String(value || "").trim();
@@ -1225,7 +1740,7 @@ export const Reports: React.FC = () => {
           📈 Estatísticas
         </button>
         <button className={`reports-tab ${activeTab === "frequencias" ? "active" : ""}`} onClick={() => setActiveTab("frequencias")}>
-          📅 Frequências
+          📅 Frequência e Planejamento
         </button>
       </div>
 
@@ -1307,7 +1822,7 @@ export const Reports: React.FC = () => {
               <div className="report-card reports-calendar-card">
                 <div className="reports-calendar-header">
                   <div className="reports-calendar-title-row">
-                    <h3>Calendário</h3>
+                    <h3>Calendário/ Planejamento</h3>
                     <div className="reports-calendar-period-filter">
                       <button
                         type="button"
@@ -1440,6 +1955,11 @@ export const Reports: React.FC = () => {
                           key={dateKey}
                           className={`reports-calendar-day ${isClosed ? "is-closed" : ""} ${isWinterBreak ? "is-winter" : ""} ${hasWeatherAlert ? "is-weather-alert" : ""} ${selectedCalendarDate === dateKey ? "is-selected" : ""}`}
                           onClick={() => setSelectedCalendarDate(dateKey)}
+                          onDoubleClick={() => {
+                            setSelectedCalendarDate(dateKey);
+                            setPlanningCardDate(dateKey);
+                            setPlanningCardOpen(true);
+                          }}
                         >
                           <div className="reports-calendar-day-top">
                             <strong>{String(dateObj.getDate()).padStart(2, "0")}</strong>
@@ -1758,6 +2278,117 @@ export const Reports: React.FC = () => {
               </div>
             </div>
           )}
+
+          {planningCardOpen && (
+            <div className="reports-event-modal-backdrop" onClick={() => setPlanningCardOpen(false)}>
+              <div className="reports-event-modal" onClick={(e) => e.stopPropagation()}>
+                <h3>Planejamento</h3>
+                <div className="reports-filter-note" style={{ marginBottom: 12 }}>
+                  Data selecionada: <strong>{planningCardDate.split("-").reverse().join("/")}</strong>
+                  {" "}• Semana: <strong>{selectedPlanningWeekKey.replace("semana:", "")}</strong>
+                </div>
+
+                <div className="reports-professor-chips" style={{ marginBottom: 12 }}>
+                  {planningTargets.length === 0 && (
+                    <div className="reports-section placeholder" style={{ width: "100%" }}>
+                      Nenhum planejamento carregado.
+                    </div>
+                  )}
+                  {planningTargets.map((target) => (
+                    <button
+                      key={target}
+                      type="button"
+                      className={`reports-professor-chip ${planningSelectedTarget === target ? "active" : ""}`}
+                      onClick={() => setPlanningSelectedTarget(target)}
+                    >
+                      {target}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="reports-class-metrics">
+                  {planningSelectedTarget && planningLookupResults.length === 0 && (
+                    <div className="reports-section placeholder">
+                      Não há planejamento carregado para este período e perfil.
+                    </div>
+                  )}
+
+                  {planningLookupResults.map((block) => {
+                    const lines = String(block.text || "")
+                      .split("\n")
+                      .map((line) => line.trim())
+                      .filter(Boolean);
+
+                    const parseCategoryLine = (line: string) => {
+                      const match = line.match(/^\s*([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s]{1,30})\s*:\s*(.*)$/);
+                      if (!match) return null;
+                      const category = match[1].trim();
+                      const content = match[2] ?? "";
+                      return { category, content };
+                    };
+
+                    const weekTitle = (() => {
+                      if (typeof block.week === "number") {
+                        if (typeof block.startDay === "number" && typeof block.endDay === "number") {
+                          return `${block.week}ª SEM · ${String(block.startDay).padStart(2, "0")} a ${String(block.endDay).padStart(2, "0")}`;
+                        }
+                        return `${block.week}ª SEM`;
+                      }
+                      return block.label;
+                    })();
+
+                    return (
+                      <div
+                        key={block.id}
+                        className="reports-class-metric-row"
+                        style={{ alignItems: "flex-start", display: "block", paddingTop: 10, paddingBottom: 10 }}
+                      >
+                        <strong style={{ display: "block", marginBottom: 6 }}>{weekTitle}</strong>
+                        <div style={{ display: "grid", gap: 4 }}>
+                          {lines.map((line, idx) => (
+                            (() => {
+                              const parsed = parseCategoryLine(line);
+                              if (!parsed) {
+                                return (
+                                  <div key={`${block.id}-${idx}`} style={{ lineHeight: 1.35 }}>
+                                    {line}
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div key={`${block.id}-${idx}`} style={{ lineHeight: 1.35, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                                  <span
+                                    style={{
+                                      fontWeight: 700,
+                                      fontSize: 12,
+                                      padding: "2px 8px",
+                                      borderRadius: 999,
+                                      background: "var(--gray-100)",
+                                      color: "var(--text)",
+                                    }}
+                                  >
+                                    {parsed.category}
+                                  </span>
+                                  <span>{parsed.content}</span>
+                                </div>
+                              );
+                            })()
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="reports-period-actions">
+                  <button className="btn-secondary" onClick={() => setPlanningCardOpen(false)}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1786,6 +2417,56 @@ export const Reports: React.FC = () => {
               <div className="reports-filter-note">
                 cod.turma: <strong>{selectedClassCodeLower}</strong>
               </div>
+            </div>
+          </div>
+
+          <div className="report-card" style={{ marginBottom: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Planejamento</h3>
+            <div className="reports-filter-field">
+              <label>Selecionar arquivos (PDF/TXT)</label>
+              <input
+                type="file"
+                accept=".pdf,.txt"
+                multiple
+                disabled={planningBusy}
+                onChange={handlePlanningUpload}
+              />
+              <div className="reports-filter-note">Envie de 1 a 4 arquivos por vez.</div>
+              {planningStatus && <div className="reports-filter-note">{planningStatus}</div>}
+            </div>
+
+            <div className="reports-class-metrics" style={{ marginTop: 10 }}>
+              {planningStore.files.length === 0 && (
+                <div className="reports-section placeholder">Nenhum planejamento carregado.</div>
+              )}
+              {planningStore.files.map((file) => (
+                <div key={file.id} className="reports-class-metric-row" style={{ alignItems: "flex-start" }}>
+                  <div>
+                    <strong>{file.target}</strong>
+                    <span style={{ marginLeft: 8 }}>Ano {file.year}</span>
+                    <div className="reports-filter-note">{file.sourceName} • {file.blocks.length} bloco(s)</div>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => removePlanningFile(file.id)}
+                    style={{
+                      marginLeft: "auto",
+                      width: 20,
+                      height: 20,
+                      minWidth: 20,
+                      borderRadius: 999,
+                      padding: 0,
+                      fontSize: 11,
+                      lineHeight: 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
 
