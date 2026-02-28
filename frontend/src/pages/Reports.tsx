@@ -199,13 +199,6 @@ const toTitleCase = (value: string) => {
     .join(" ");
 };
 
-const toSentenceCase = (value: string) => {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return trimmed;
-  const lower = trimmed.toLowerCase();
-  return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
-};
-
 const formatFileNameSentenceCase = (fileName: string) => {
   const trimmed = String(fileName || "").trim();
   if (!trimmed) return trimmed;
@@ -480,7 +473,7 @@ const normalizePlanningBlocks = (value: unknown): PlanningBlock[] => {
   if (!Array.isArray(value)) return [];
   return value
     .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : null))
-    .filter(Boolean)
+    .filter((block): block is Record<string, unknown> => Boolean(block))
     .map((block) => ({
       id: String(block.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
       type: (String(block.type || "general") as PlanningBlockType),
@@ -498,7 +491,7 @@ const normalizePlanningFiles = (payload: unknown): PlanningFileData[] => {
   if (!Array.isArray(payload)) return [];
   const normalized = payload
     .map((item) => (item && typeof item === "object" ? (item as Record<string, unknown>) : null))
-    .filter(Boolean)
+    .filter((record): record is Record<string, unknown> => Boolean(record))
     .map((record) => ({
       id: String(record.id || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`),
       sourceName: String(record.sourceName || ""),
