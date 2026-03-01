@@ -183,6 +183,8 @@ export const Attendance: React.FC = () => {
   const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
   const attendanceSelectionStorageKey = "attendanceSelection";
   const transferHistoryStorageKey = "studentTransferHistory";
+  const attendanceRetroModeStorageKey = "attendanceRetroModeEnabled";
+  const attendanceReferenceMonthStorageKey = "attendanceReferenceMonth";
   const defaultClassOptions: ClassOption[] = [];
 
   const defaultStudentsPerClass: { [key: string]: string[] } = {};
@@ -512,7 +514,27 @@ export const Attendance: React.FC = () => {
   const [selectedProfessor, setSelectedProfessor] = useState<string>(
     storedSelection?.professor || classOptions[0]?.professor || ""
   );
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const todayDateKey = new Date().toISOString().split("T")[0];
+  const currentMonthKey = todayDateKey.slice(0, 7);
+  const [retroModeEnabled, setRetroModeEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(attendanceRetroModeStorageKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [referenceMonth, setReferenceMonth] = useState<string>(() => {
+    try {
+      const storedMonth = localStorage.getItem(attendanceReferenceMonthStorageKey);
+      if (storedMonth && /^\d{4}-\d{2}$/.test(storedMonth)) {
+        return storedMonth;
+      }
+    } catch {
+      // ignore
+    }
+    return currentMonthKey;
+  });
+  const [selectedDate, setSelectedDate] = useState<string>(todayDateKey);
 
   useEffect(() => {
     const latest = loadFromStorage();
@@ -567,6 +589,18 @@ export const Attendance: React.FC = () => {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(attendanceRetroModeStorageKey, retroModeEnabled ? "1" : "0");
+    if (!retroModeEnabled) {
+      setReferenceMonth(currentMonthKey);
+    }
+  }, [retroModeEnabled, attendanceRetroModeStorageKey, currentMonthKey]);
+
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}$/.test(referenceMonth)) return;
+    localStorage.setItem(attendanceReferenceMonthStorageKey, referenceMonth);
+  }, [referenceMonth, attendanceReferenceMonthStorageKey]);
 
   // whenever classOptions change or selection values modify,
   // ensure the selectedTurma is canonical when a matching class exists
@@ -885,11 +919,17 @@ export const Attendance: React.FC = () => {
   };
 
   // Gerar datas pré-determinadas baseadas no dia da semana (DEFINIR ANTES DO STATE)
-  const generateDates = (daysOfWeek: string[]) => {
+  const generateDates = (daysOfWeek: string[], targetMonth: string) => {
     const dates = [];
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    const [targetYearRaw, targetMonthRaw] = String(targetMonth || "").split("-");
+    const parsedYear = Number(targetYearRaw);
+    const parsedMonth = Number(targetMonthRaw);
+    const fallback = new Date();
+    const currentMonth =
+      Number.isInteger(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12
+        ? parsedMonth - 1
+        : fallback.getMonth();
+    const currentYear = Number.isInteger(parsedYear) && parsedYear > 2000 ? parsedYear : fallback.getFullYear();
 
     // Mapa: nome do dia -> número (0=domingo, 1=segunda, etc)
     const dayMap: { [key: string]: number } = {
@@ -956,12 +996,17 @@ export const Attendance: React.FC = () => {
 
     return [] as string[];
   })();
-  const availableDates = generateDates(resolvedDiasSemana);
+  const effectiveMonthKey = retroModeEnabled ? referenceMonth : currentMonthKey;
+  const availableDates = generateDates(resolvedDiasSemana, effectiveMonthKey);
   const dateDates = availableDates.map((d) => d.split(" ")[0]); // Pega apenas a data (YYYY-MM-DD)
 
-  const monthKey = useMemo(() => {
-    const base = dateDates[0] || selectedDate || new Date().toISOString().split("T")[0];
-    return base.slice(0, 7);
+  const monthKey = useMemo(() => effectiveMonthKey, [effectiveMonthKey]);
+
+  useEffect(() => {
+    if (dateDates.length === 0) return;
+    if (!dateDates.includes(selectedDate)) {
+      setSelectedDate(dateDates[0]);
+    }
   }, [dateDates, selectedDate]);
 
   useEffect(() => {
@@ -1717,7 +1762,10 @@ export const Attendance: React.FC = () => {
 
   // Formato: mmm/aaaa (ex: jan/2026)
   const currentMonthFormatted = (() => {
-    const now = new Date();
+    const monthRef = retroModeEnabled ? referenceMonth : currentMonthKey;
+    const [yearRaw, monthRaw] = monthRef.split("-");
+    const year = Number(yearRaw);
+    const monthIndex = Number(monthRaw) - 1;
     const months = [
       "jan",
       "fev",
@@ -1732,7 +1780,11 @@ export const Attendance: React.FC = () => {
       "nov",
       "dez",
     ];
-    return `${months[now.getMonth()]}/${now.getFullYear()}`;
+    if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+      const now = new Date();
+      return `${months[now.getMonth()]}/${now.getFullYear()}`;
+    }
+    return `${months[monthIndex]}/${year}`;
   })();
 
   const selectedDaysKey = selectedClass.diasSemana.join("|");
@@ -1746,7 +1798,7 @@ export const Attendance: React.FC = () => {
         return;
       }
 
-      const newDates = generateDates(selectedClass.diasSemana).map((d) => d.split(" ")[0]);
+      const newDates = generateDates(selectedClass.diasSemana, monthKey).map((d) => d.split(" ")[0]);
       const storedRecords = loadAttendanceStorage();
       const storedByName = new Map(
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
@@ -2272,6 +2324,31 @@ export const Attendance: React.FC = () => {
           <div style={{ fontSize: "16px", fontWeight: 700, color: "#2c3e50", marginTop: "4px" }}>
             {currentMonthFormatted}
           </div>
+        </div>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: 600, color: "#495057" }}>
+            <input
+              type="checkbox"
+              checked={retroModeEnabled}
+              onChange={(e) => setRetroModeEnabled(e.target.checked)}
+            />
+            Permitir lançamento retroativo
+          </label>
+          <input
+            type="month"
+            value={referenceMonth}
+            max={currentMonthKey}
+            disabled={!retroModeEnabled}
+            onChange={(e) => setReferenceMonth(e.target.value || currentMonthKey)}
+            style={{
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #ced4da",
+              background: retroModeEnabled ? "#fff" : "#e9ecef",
+              color: "#495057",
+              fontWeight: 600,
+            }}
+          />
         </div>
       </div>
 
