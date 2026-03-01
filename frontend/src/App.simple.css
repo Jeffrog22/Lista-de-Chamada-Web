@@ -288,6 +288,18 @@ body, html {
   overflow: hidden;
 }
 
+.feature-card-button {
+  width: 100%;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+}
+
+.feature-card-button:focus-visible {
+  outline: 3px solid rgba(102, 126, 234, 0.75);
+  outline-offset: 3px;
+}
+
 .feature-card::before {
   content: '';
   position: absolute;

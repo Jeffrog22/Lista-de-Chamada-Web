@@ -12,6 +12,7 @@ import "./App.simple.css";
 type ApiResponse<T = any> = { data: T };
 
 type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | "reports" | "vacancies";
+type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
 const getViewFromHash = (hash: string): ViewType => {
   const normalized = hash.replace(/^#/, "").trim();
@@ -183,6 +184,19 @@ export default function App() {
     }
   };
 
+  const featureCards: Array<{
+    view: FeatureCardView;
+    icon: string;
+    title: string;
+    description: string;
+  }> = [
+    { view: "attendance", icon: "📝", title: "Chamada", description: "Registre e acompanhe as presenças dos alunos em tempo real" },
+    { view: "students", icon: "👥", title: "Alunos", description: "Gerencie informações dos alunos de forma rápida" },
+    { view: "classes", icon: "📚", title: "Turmas", description: "Configure e organize as turmas facilmente" },
+    { view: "exclusions", icon: "❌", title: "Exclusões", description: "Consulte alunos excluídos e restaure se necessário" },
+    { view: "reports", icon: "📊", title: "Relatórios", description: "Gere relatórios de frequência e consolidados" },
+  ];
+
   if (!token) {
     return <Login onLogin={onLogin} />;
   }
@@ -284,31 +298,18 @@ export default function App() {
         <main className="content-area">
           {currentView === "main" ? (
             <div className="welcome-screen">
-              <div className="feature-card">
-                <span className="feature-icon">📝</span>
-                <h3>Chamada</h3>
-                <p>Registre e acompanhe as presenças dos alunos em tempo real</p>
-              </div>
-              <div className="feature-card">
-                <span className="feature-icon">👥</span>
-                <h3>Alunos</h3>
-                <p>Gerencie informações dos alunos de forma rápida</p>
-              </div>
-              <div className="feature-card">
-                <span className="feature-icon">📚</span>
-                <h3>Turmas</h3>
-                <p>Configure e organize as turmas facilmente</p>
-              </div>
-              <div className="feature-card">
-                <span className="feature-icon">❌</span>
-                <h3>Exclusões</h3>
-                <p>Consulte alunos excluídos e restaure se necessário</p>
-              </div>
-              <div className="feature-card">
-                <span className="feature-icon">📊</span>
-                <h3>Relatórios</h3>
-                <p>Gere relatórios de frequência e consolidados</p>
-              </div>
+              {featureCards.map((card) => (
+                <button
+                  key={card.view}
+                  type="button"
+                  className="feature-card feature-card-button"
+                  onClick={() => showView(card.view)}
+                >
+                  <span className="feature-icon">{card.icon}</span>
+                  <h3>{card.title}</h3>
+                  <p>{card.description}</p>
+                </button>
+              ))}
             </div>
           ) : currentView === "attendance" ? (
             <Attendance />
