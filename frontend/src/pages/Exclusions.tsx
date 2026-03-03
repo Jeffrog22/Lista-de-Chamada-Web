@@ -253,7 +253,7 @@ export const Exclusions: React.FC = () => {
     const counts = new Map<string, number>();
     if (!isCompactViewport) return counts;
     students.forEach((student) => {
-      const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
+      const turma = String(resolveStudentTurmaLabel(student));
       const fullName = resolveStudentName(student);
       const shortName = truncateNameWords(fullName, 2);
       const key = `${normalizeText(turma)}||${normalizeText(shortName)}`;
@@ -266,7 +266,7 @@ export const Exclusions: React.FC = () => {
   const getDisplayStudentName = (student: ExcludedStudent) => {
     const fullName = resolveStudentName(student);
     if (!isCompactViewport) return fullName || "-";
-    const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
+    const turma = String(resolveStudentTurmaLabel(student));
     const twoWords = truncateNameWords(fullName, 2);
     const key = `${normalizeText(turma)}||${normalizeText(twoWords)}`;
     const hasCollision = (mobileTwoWordByTurmaCounts.get(key) || 0) > 1;
@@ -321,8 +321,20 @@ export const Exclusions: React.FC = () => {
     return value;
   };
 
+  const resolveStudentTurmaLabel = (student: ExcludedStudent) => {
+    const raw = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "").trim();
+    const horario = String(student.horario || student.Horario || "");
+    const professor = String(student.professor || student.Professor || "");
+
+    const cls = resolveClassFromTriple(raw, horario, professor);
+    const fromClass = String(cls?.Turma || "").trim();
+    if (fromClass) return fromClass;
+
+    return resolveTurmaLabel(raw) || "-";
+  };
+
   const handleRestoreClick = (student: ExcludedStudent) => {
-    const rawTurma = student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "";
+    const rawTurma = resolveStudentTurmaLabel(student);
     const turmaValue = resolveTurmaLabel(rawTurma) || lastTurma || rawTurma;
     const dataNascimento = normalizeDateValue(student.dataNascimento || "").trim();
     const idade = calculateAge(dataNascimento);
@@ -546,7 +558,7 @@ export const Exclusions: React.FC = () => {
               }}
             >
               <span style={{ fontWeight: 600, textAlign: "left" }}>{getDisplayStudentName(student)}</span>
-              <span>{student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "-"}</span>
+              <span>{resolveStudentTurmaLabel(student)}</span>
               <span>{formatHorario(student.horario || student.Horario || "") || "-"}</span>
               <span>{student.professor || student.Professor || "-"}</span>
               <select
