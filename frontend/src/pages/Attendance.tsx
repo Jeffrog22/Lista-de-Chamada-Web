@@ -196,6 +196,12 @@ export const Attendance: React.FC = () => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
+  const truncateNameWords = (fullName: string, words: number) => {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= words) return parts.join(" ");
+    return parts.slice(0, words).join(" ");
+  };
+
   const parseDiasSemana = (value: string | undefined): string[] => {
     if (!value) return [];
     return value
@@ -558,7 +564,16 @@ export const Attendance: React.FC = () => {
       .then((response) => {
         if (!isMounted) return;
         const payload = Array.isArray(response?.data) ? response.data : [];
-        localStorage.setItem("excludedStudents", JSON.stringify(payload));
+        let localList: any[] = [];
+        try {
+          const localRaw = localStorage.getItem("excludedStudents");
+          const localParsed = localRaw ? JSON.parse(localRaw) : [];
+          localList = Array.isArray(localParsed) ? localParsed : [];
+        } catch {
+          localList = [];
+        }
+        const resolved = payload.length > 0 ? payload : localList;
+        localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         refreshStorageData();
       })
       .catch(() => undefined);
@@ -1052,6 +1067,11 @@ export const Attendance: React.FC = () => {
   const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
+  const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
+    const byWidth = window.innerWidth <= 768;
+    const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
+    return byWidth || byLandscapePhone;
+  });
 
   const sortedAttendance = useMemo(() => {
     return [...attendance].sort((a, b) => {
@@ -1059,6 +1079,50 @@ export const Attendance: React.FC = () => {
       return sortDir === "asc" ? res : -res;
     });
   }, [attendance, sortDir]);
+
+  useEffect(() => {
+    const compactQuery = window.matchMedia("(max-width: 768px)");
+    const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
+
+    const syncViewport = () => {
+      setIsCompactViewport(compactQuery.matches || landscapePhoneQuery.matches);
+    };
+
+    syncViewport();
+
+    const onCompactChange = () => syncViewport();
+    const onLandscapeChange = () => syncViewport();
+
+    compactQuery.addEventListener("change", onCompactChange);
+    landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+
+    return () => {
+      compactQuery.removeEventListener("change", onCompactChange);
+      landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+    };
+  }, []);
+
+  const mobileTwoWordNameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!isCompactViewport) return counts;
+
+    sortedAttendance.forEach((item) => {
+      const shortName = truncateNameWords(item.aluno, 2);
+      const key = normalizeText(shortName);
+      if (!key) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    return counts;
+  }, [isCompactViewport, sortedAttendance]);
+
+  const getDisplayStudentName = (fullName: string) => {
+    if (!isCompactViewport) return fullName;
+    const twoWords = truncateNameWords(fullName, 2);
+    const key = normalizeText(twoWords);
+    const hasCollision = (mobileTwoWordNameCounts.get(key) || 0) > 1;
+    return hasCollision ? truncateNameWords(fullName, 3) : twoWords;
+  };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
 
   const getTransferLockForDate = useCallback(
@@ -2361,6 +2425,9 @@ export const Attendance: React.FC = () => {
             disabled={!retroModeEnabled}
             onChange={(e) => setReferenceMonth(e.target.value || currentMonthKey)}
             style={{
+              width: isCompactViewport ? "182px" : "auto",
+              minWidth: isCompactViewport ? "182px" : "auto",
+              maxWidth: "100%",
               padding: "8px 10px",
               borderRadius: "8px",
               border: "1px solid #ced4da",
@@ -2473,7 +2540,7 @@ export const Attendance: React.FC = () => {
                           ✱
                         </span>
                       )}
-                      <span style={{ borderBottom: "1px dashed #ccc" }}>{item.aluno}</span>
+                      <span style={{ borderBottom: "1px dashed #ccc" }}>{getDisplayStudentName(item.aluno)}</span>
                     </div>
                     {showRenewalAlert && renewalAlert && (
                       <div
@@ -2816,7 +2883,7 @@ export const Attendance: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ background: "#667eea", padding: "15px", color: "white" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold" }}>{activeStudentForNotes.aluno}</h3>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "bold" }}>{getDisplayStudentName(activeStudentForNotes.aluno)}</h3>
               <p style={{ margin: "4px 0 0", fontSize: "12px", opacity: 0.9 }}>Anotações</p>
             </div>
             

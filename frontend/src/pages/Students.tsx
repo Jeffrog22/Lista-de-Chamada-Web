@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { addExclusion, createImportStudent, getBootstrap, updateImportStudent } from "../api";
 
@@ -64,6 +64,40 @@ export const Students: React.FC = () => {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const truncateNameWords = (fullName: string, words: number) => {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= words) return parts.join(" ");
+    return parts.slice(0, words).join(" ");
+  };
+
+  const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
+    const byWidth = window.innerWidth <= 768;
+    const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
+    return byWidth || byLandscapePhone;
+  });
+
+  useEffect(() => {
+    const compactQuery = window.matchMedia("(max-width: 768px)");
+    const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
+
+    const syncViewport = () => {
+      setIsCompactViewport(compactQuery.matches || landscapePhoneQuery.matches);
+    };
+
+    syncViewport();
+
+    const onCompactChange = () => syncViewport();
+    const onLandscapeChange = () => syncViewport();
+
+    compactQuery.addEventListener("change", onCompactChange);
+    landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+
+    return () => {
+      compactQuery.removeEventListener("change", onCompactChange);
+      landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+    };
+  }, []);
 
   const normalizeHorarioKey = (value: string) => {
     const digits = (value || "").replace(/\D/g, "");
@@ -991,6 +1025,34 @@ export const Students: React.FC = () => {
     return sortDir === "asc" ? result : -result;
   });
 
+  const mobileTwoWordByTurmaCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    if (!isCompactViewport) return counts;
+
+    sortedStudents.forEach((student) => {
+      const turmaKey = normalizeText(getTurmaDisplayLabel(student));
+      const twoWords = truncateNameWords(student.nome, 2);
+      const shortNameKey = normalizeText(twoWords);
+      const mapKey = `${turmaKey}||${shortNameKey}`;
+      counts.set(mapKey, (counts.get(mapKey) || 0) + 1);
+    });
+
+    return counts;
+  }, [isCompactViewport, sortedStudents]);
+
+  const getDisplayStudentName = (student: Student) => {
+    const rawName = String(student?.nome || "");
+    if (!isCompactViewport) return rawName;
+
+    const turmaKey = normalizeText(getTurmaDisplayLabel(student));
+    const twoWords = truncateNameWords(rawName, 2);
+    const shortNameKey = normalizeText(twoWords);
+    const mapKey = `${turmaKey}||${shortNameKey}`;
+    const hasCollision = (mobileTwoWordByTurmaCounts.get(mapKey) || 0) > 1;
+
+    return hasCollision ? truncateNameWords(rawName, 3) : twoWords;
+  };
+
   const handleSort = (
     key: "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor"
   ) => {
@@ -1205,7 +1267,7 @@ export const Students: React.FC = () => {
                   onClick={() => handleEditClick(student)}
                   title="Clique para editar"
                 >
-                  <span style={{ borderBottom: "1px dashed #ccc" }}>{student.nome}</span>
+                  <span style={{ borderBottom: "1px dashed #ccc" }}>{getDisplayStudentName(student)}</span>
                 </td>
                 <td style={{ padding: "12px" }}>{student.nivel}</td>
                 <td style={{ padding: "12px", textAlign: "center" }}>{student.idade}</td>
@@ -1287,7 +1349,7 @@ export const Students: React.FC = () => {
           >
             <h3 style={{ margin: "0 0 10px", color: "#2c3e50" }}>Motivo da exclusão</h3>
             <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#555" }}>
-              Informe o motivo para excluir <strong>{studentPendingExclusion.nome}</strong>.
+              Informe o motivo para excluir <strong>{getDisplayStudentName(studentPendingExclusion)}</strong>.
             </p>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
               {exclusionReasonOptions.map((option) => (

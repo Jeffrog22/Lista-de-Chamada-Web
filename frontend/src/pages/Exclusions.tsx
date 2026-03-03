@@ -40,6 +40,11 @@ export const Exclusions: React.FC = () => {
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<ExcludedStudent | null>(null);
+  const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
+    const byWidth = window.innerWidth <= 768;
+    const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
+    return byWidth || byLandscapePhone;
+  });
   const [formData, setFormData] = useState({
     nome: "",
     dataNascimento: "",
@@ -134,17 +139,50 @@ export const Exclusions: React.FC = () => {
     return isValidHorarioPartial(masked) ? masked : value;
   };
 
+  const truncateNameWords = (fullName: string, words: number) => {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= words) return parts.join(" ");
+    return parts.slice(0, words).join(" ");
+  };
+
+  const readExcludedStudentsLocal = () => {
+    try {
+      const raw = localStorage.getItem("excludedStudents");
+      if (!raw) return [] as ExcludedStudent[];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as ExcludedStudent[]) : [];
+    } catch {
+      return [] as ExcludedStudent[];
+    }
+  };
+
+  useEffect(() => {
+    const compactQuery = window.matchMedia("(max-width: 768px)");
+    const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
+
+    const syncViewport = () => {
+      setIsCompactViewport(compactQuery.matches || landscapePhoneQuery.matches);
+    };
+
+    syncViewport();
+
+    const onCompactChange = () => syncViewport();
+    const onLandscapeChange = () => syncViewport();
+
+    compactQuery.addEventListener("change", onCompactChange);
+    landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+
+    return () => {
+      compactQuery.removeEventListener("change", onCompactChange);
+      landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+    };
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     const loadLocal = () => {
-      try {
-        const raw = localStorage.getItem("excludedStudents");
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setStudents(parsed);
-      } catch {
-        // ignore
-      }
+      const local = readExcludedStudentsLocal();
+      if (local.length > 0) setStudents(local);
     };
 
     getExcludedStudents()
@@ -152,8 +190,10 @@ export const Exclusions: React.FC = () => {
         if (!isMounted) return;
         const data = response.data;
         if (Array.isArray(data)) {
-          setStudents(data as ExcludedStudent[]);
-          localStorage.setItem("excludedStudents", JSON.stringify(data));
+          const local = readExcludedStudentsLocal();
+          const resolved = data.length > 0 ? (data as ExcludedStudent[]) : local;
+          setStudents(resolved);
+          localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         } else {
           loadLocal();
         }
@@ -197,6 +237,31 @@ export const Exclusions: React.FC = () => {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
+
+  const mobileTwoWordByTurmaCounts = (() => {
+    const counts = new Map<string, number>();
+    if (!isCompactViewport) return counts;
+    students.forEach((student) => {
+      const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
+      const fullName = String(student.nome || student.Nome || "");
+      const shortName = truncateNameWords(fullName, 2);
+      const key = `${normalizeText(turma)}||${normalizeText(shortName)}`;
+      if (!normalizeText(shortName)) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  })();
+
+  const getDisplayStudentName = (student: ExcludedStudent) => {
+    const fullName = String(student.nome || student.Nome || "");
+    if (!isCompactViewport) return fullName || "-";
+    const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
+    const twoWords = truncateNameWords(fullName, 2);
+    const key = `${normalizeText(turma)}||${normalizeText(twoWords)}`;
+    const hasCollision = (mobileTwoWordByTurmaCounts.get(key) || 0) > 1;
+    const display = hasCollision ? truncateNameWords(fullName, 3) : twoWords;
+    return display || "-";
+  };
 
   const normalizeHorarioDigits = (value?: string) => {
     const digits = String(value || "").replace(/\D/g, "");
@@ -355,7 +420,7 @@ export const Exclusions: React.FC = () => {
   };
 
   const handlePermanentDelete = async (student: ExcludedStudent) => {
-    if (!confirm(`Excluir definitivamente ${student.nome || student.Nome}?`)) return;
+    if (!confirm(`Excluir definitivamente ${getDisplayStudentName(student)}?`)) return;
     const payload = {
       id: student.id,
       nome: student.nome || student.Nome,
@@ -469,7 +534,7 @@ export const Exclusions: React.FC = () => {
                 textAlign: "center",
               }}
             >
-              <span style={{ fontWeight: 600, textAlign: "left" }}>{student.nome || student.Nome || "-"}</span>
+              <span style={{ fontWeight: 600, textAlign: "left" }}>{getDisplayStudentName(student)}</span>
               <span>{student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "-"}</span>
               <span>{formatHorario(student.horario || student.Horario || "") || "-"}</span>
               <span>{student.professor || student.Professor || "-"}</span>
