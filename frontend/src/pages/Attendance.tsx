@@ -445,12 +445,19 @@ export const Attendance: React.FC = () => {
 
       const studentsPerClass: { [key: string]: string[] } = {};
       filteredStudents.forEach((student: any) => {
-        const key = student.turmaCodigo || student.turma;
-        if (!key || !student.nome) return;
-        if (!studentsPerClass[key]) {
-          studentsPerClass[key] = [];
-        }
-        studentsPerClass[key].push(student.nome);
+        const turmaCodigo = String(student.turmaCodigo || "").trim();
+        const turmaLabel = String(student.turmaLabel || student.turma || "").trim();
+        const keys = [turmaCodigo, turmaLabel].filter(Boolean);
+        if (keys.length === 0 || !student.nome) return;
+
+        keys.forEach((key) => {
+          if (!studentsPerClass[key]) {
+            studentsPerClass[key] = [];
+          }
+          if (!studentsPerClass[key].includes(student.nome)) {
+            studentsPerClass[key].push(student.nome);
+          }
+        });
       });
 
       return { classOptions, studentsPerClass, studentsMeta: filteredStudents as ActiveStudentMeta[] };
@@ -1374,6 +1381,23 @@ export const Attendance: React.FC = () => {
 
     try {
       await saveJustificationLog(changedEntries);
+    } catch {
+      // ignore to avoid blocking UI
+    }
+
+    try {
+      await saveAttendanceLog({
+        turmaCodigo: selectedClass.turmaCodigo || "",
+        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+        horario: selectedClass.horario || selectedHorario || "",
+        professor: selectedClass.professor || selectedProfessor || "",
+        mes: monthKey,
+        registros: nextAttendance.map((item) => ({
+          aluno_nome: item.aluno,
+          attendance: item.attendance,
+          justifications: item.justifications || {},
+        })),
+      });
     } catch {
       // ignore to avoid blocking UI
     }

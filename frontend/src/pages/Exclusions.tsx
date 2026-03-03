@@ -259,31 +259,6 @@ export const Exclusions: React.FC = () => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
-  const mobileTwoWordByTurmaCounts = (() => {
-    const counts = new Map<string, number>();
-    if (!isCompactViewport) return counts;
-    students.forEach((student) => {
-      const turma = String(resolveStudentTurmaLabel(student));
-      const fullName = resolveStudentName(student);
-      const shortName = truncateNameWords(fullName, 2);
-      const key = `${normalizeText(turma)}||${normalizeText(shortName)}`;
-      if (!normalizeText(shortName)) return;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return counts;
-  })();
-
-  const getDisplayStudentName = (student: ExcludedStudent) => {
-    const fullName = resolveStudentName(student);
-    if (!isCompactViewport) return fullName || "-";
-    const turma = String(resolveStudentTurmaLabel(student));
-    const twoWords = truncateNameWords(fullName, 2);
-    const key = `${normalizeText(turma)}||${normalizeText(twoWords)}`;
-    const hasCollision = (mobileTwoWordByTurmaCounts.get(key) || 0) > 1;
-    const display = hasCollision ? truncateNameWords(fullName, 3) : twoWords;
-    return display || "-";
-  };
-
   const normalizeHorarioDigits = (value?: string) => {
     const digits = String(value || "").replace(/\D/g, "");
     if (digits.length === 3) return `0${digits}`;
@@ -341,6 +316,31 @@ export const Exclusions: React.FC = () => {
     if (fromClass) return fromClass;
 
     return resolveTurmaLabel(raw) || "-";
+  };
+
+  const mobileTwoWordByTurmaCounts = (() => {
+    const counts = new Map<string, number>();
+    if (!isCompactViewport) return counts;
+    students.forEach((student) => {
+      const turma = String(resolveStudentTurmaLabel(student));
+      const fullName = resolveStudentName(student);
+      const shortName = truncateNameWords(fullName, 2);
+      const key = `${normalizeText(turma)}||${normalizeText(shortName)}`;
+      if (!normalizeText(shortName)) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  })();
+
+  const getDisplayStudentName = (student: ExcludedStudent) => {
+    const fullName = resolveStudentName(student);
+    if (!isCompactViewport) return fullName || "-";
+    const turma = String(resolveStudentTurmaLabel(student));
+    const twoWords = truncateNameWords(fullName, 2);
+    const key = `${normalizeText(turma)}||${normalizeText(twoWords)}`;
+    const hasCollision = (mobileTwoWordByTurmaCounts.get(key) || 0) > 1;
+    const display = hasCollision ? truncateNameWords(fullName, 3) : twoWords;
+    return display || "-";
   };
 
   const handleRestoreClick = (student: ExcludedStudent) => {
