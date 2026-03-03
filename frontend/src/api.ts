@@ -152,6 +152,19 @@ const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
   return merged;
 };
 
+const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[]) => {
+  const remote = Array.isArray(remoteItems) ? remoteItems : [];
+  const local = Array.isArray(localItems) ? localItems : [];
+  if (local.length === 0) return;
+
+  const pending = local.filter((localItem) => !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem)));
+  if (pending.length === 0) return;
+
+  await Promise.allSettled(
+    pending.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord(item)))
+  );
+};
+
 
 // Attach token if present
 API.interceptors.request.use((config) => {
@@ -185,10 +198,17 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 // Exclusions
 export const getExcludedStudents = () =>
   API.get("/exclusions")
-    .then((response) => {
+    .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
       const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
+
+      if (localData.length > 0) {
+        try {
+          await syncExcludedStudentsToRemote(remoteItems, localData);
+        } catch {
+        }
+      }
 
       if (remoteItems.length > 0) {
         const data = mergeExcludedStudentsLocalWithRemote(remoteItems);

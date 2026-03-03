@@ -920,6 +920,9 @@ export const Students: React.FC = () => {
     }
     const exclusionPayload = {
       ...student,
+      turma: student.turmaLabel || student.turma || student.turmaCodigo || "",
+      turmaLabel: student.turmaLabel || student.turma || student.turmaCodigo || "",
+      turmaCodigo: student.turmaCodigo || "",
       dataExclusao: new Date().toLocaleDateString(),
       motivo_exclusao: reason,
     };

@@ -2142,6 +2142,8 @@ export const Attendance: React.FC = () => {
             id: `excl-${Date.now()}`,
             nome: student.aluno,
             turma: turmaKey,
+            turmaLabel: selectedClass.turmaLabel || selectedTurma || turmaKey,
+            turmaCodigo: selectedClass.turmaCodigo || "",
             horario: horarioKey,
             professor: professorKey,
             nivel: selectedClass.nivel || "",
