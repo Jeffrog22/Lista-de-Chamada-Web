@@ -175,12 +175,21 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   };
 
   return (
-    <div style={{ maxWidth: 520, margin: "50px auto", fontFamily: "sans-serif" }}>
-      <h2>Cadastro Inicial - Importacao de Dados</h2>
-      <p style={{ color: "#666", fontSize: 12, marginTop: 6 }}>
+    <div
+      style={{
+        width: "min(520px, calc(100% - 24px))",
+        margin: "20px auto",
+        padding: "16px",
+        borderRadius: 12,
+        background: "#fff",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <h2 style={{ fontSize: 22, lineHeight: 1.25 }}>Cadastro Inicial - Importacao de Dados</h2>
+      <p style={{ color: "#666", fontSize: 12, marginTop: 8, lineHeight: 1.4 }}>
         Backend import: {backendOnline ? "online" : "offline"} (porta 8001)
       </p>
-      <p style={{ color: "#666", fontSize: 12, marginTop: 4 }}>
+      <p style={{ color: "#666", fontSize: 12, marginTop: 4, lineHeight: 1.4, wordBreak: "break-word" }}>
         Atualizado em: {formatImportDate(importStatusInfo?.last_import_at)}
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
@@ -191,7 +200,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.name}
             onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
-            style={{ padding: 8, border: "1px solid #ccc", borderRadius: 4 }}
+            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
 
@@ -200,7 +209,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.unit}
             onChange={(e) => setProfile((prev) => ({ ...prev, unit: e.target.value }))}
-            style={{ padding: 8, border: "1px solid #ccc", borderRadius: 4 }}
+            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
 
@@ -210,7 +219,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             type="email"
             value={profile.email}
             onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))}
-            style={{ padding: 8, border: "1px solid #ccc", borderRadius: 4 }}
+            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
 
@@ -219,7 +228,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.whatsapp}
             onChange={(e) => setProfile((prev) => ({ ...prev, whatsapp: e.target.value }))}
-            style={{ padding: 8, border: "1px solid #ccc", borderRadius: 4 }}
+            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
 
@@ -229,6 +238,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             type="file"
             accept=".csv"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
+            style={{ width: "100%" }}
           />
         </label>
 
@@ -236,7 +246,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           type="submit"
           disabled={loading}
           style={{
-            padding: 10,
+            width: "100%",
+            padding: 12,
             backgroundColor: "#007bff",
             color: "white",
             border: "none",
