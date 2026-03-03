@@ -55,6 +55,14 @@ const readExcludedStudentsLocal = () => {
   }
 };
 
+const hasExcludedStudentsLocalState = () => {
+  try {
+    return localStorage.getItem(EXCLUDED_STUDENTS_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+};
+
 const writeExcludedStudentsLocal = (items: any[]) => {
   localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
 };
@@ -130,6 +138,12 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 export const getExcludedStudents = () =>
   API.get("/exclusions")
     .then((response) => {
+      const localStateExists = hasExcludedStudentsLocalState();
+      if (localStateExists) {
+        const localData = readExcludedStudentsLocal();
+        return { ...response, data: localData };
+      }
+
       const data = mergeExcludedStudentsLocalWithRemote(
         Array.isArray(response?.data) ? response.data : []
       );

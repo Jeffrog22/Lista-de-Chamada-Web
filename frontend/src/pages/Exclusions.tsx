@@ -145,6 +145,17 @@ export const Exclusions: React.FC = () => {
     return parts.slice(0, words).join(" ");
   };
 
+  const resolveStudentName = (student: ExcludedStudent) => {
+    return String(
+      student.nome ||
+      student.Nome ||
+      student.aluno ||
+      student.aluno_nome ||
+      student.alunoNome ||
+      ""
+    ).trim();
+  };
+
   const readExcludedStudentsLocal = () => {
     try {
       const raw = localStorage.getItem("excludedStudents");
@@ -243,7 +254,7 @@ export const Exclusions: React.FC = () => {
     if (!isCompactViewport) return counts;
     students.forEach((student) => {
       const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
-      const fullName = String(student.nome || student.Nome || "");
+      const fullName = resolveStudentName(student);
       const shortName = truncateNameWords(fullName, 2);
       const key = `${normalizeText(turma)}||${normalizeText(shortName)}`;
       if (!normalizeText(shortName)) return;
@@ -253,7 +264,7 @@ export const Exclusions: React.FC = () => {
   })();
 
   const getDisplayStudentName = (student: ExcludedStudent) => {
-    const fullName = String(student.nome || student.Nome || "");
+    const fullName = resolveStudentName(student);
     if (!isCompactViewport) return fullName || "-";
     const turma = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "");
     const twoWords = truncateNameWords(fullName, 2);
