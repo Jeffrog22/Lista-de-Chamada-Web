@@ -21,8 +21,12 @@ const exclusionMatches = (candidate: any, payload: any) => {
   const payloadId = String(payload?.id || "").trim();
   if (candidateId && payloadId && candidateId === payloadId) return true;
 
-  const candidateNome = normalizeText(candidate?.nome || candidate?.Nome);
-  const payloadNome = normalizeText(payload?.nome || payload?.Nome);
+  const candidateNome = normalizeText(
+    candidate?.nome || candidate?.Nome || candidate?.aluno || candidate?.aluno_nome || candidate?.alunoNome
+  );
+  const payloadNome = normalizeText(
+    payload?.nome || payload?.Nome || payload?.aluno || payload?.aluno_nome || payload?.alunoNome
+  );
   if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
 
   const candidateTurma = normalizeText(
@@ -138,16 +142,24 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 export const getExcludedStudents = () =>
   API.get("/exclusions")
     .then((response) => {
+      const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
-      if (localStateExists) {
-        const localData = readExcludedStudentsLocal();
+      const localData = localStateExists ? readExcludedStudentsLocal() : [];
+
+      if (remoteItems.length > 0) {
+        const data = mergeExcludedStudentsLocalWithRemote(remoteItems);
+        return { ...response, data };
+      }
+
+      if (localData.length > 0) {
         return { ...response, data: localData };
       }
 
-      const data = mergeExcludedStudentsLocalWithRemote(
-        Array.isArray(response?.data) ? response.data : []
-      );
-      return { ...response, data };
+      if (!localStateExists) {
+        writeExcludedStudentsLocal([]);
+      }
+
+      return { ...response, data: [] };
     })
     .catch(() => ({ data: readExcludedStudentsLocal() }));
 
