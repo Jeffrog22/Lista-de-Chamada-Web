@@ -2,28 +2,28 @@
 
 ## ?? Casos de Teste
 
-### 1?? Autenticação
+### 1?? Autenticaï¿½ï¿½o
 
-#### Teste 1.1: Login com Credenciais Válidas
+#### Teste 1.1: Login com Credenciais Vï¿½lidas
 ```
-Pré-requisito: Backend rodando
+Prï¿½-requisito: Backend rodando
 1. Acesse http://localhost:5173
-2. Insira username/password válidos
+2. Insira username/password vï¿½lidos
 3. Clique em Login
-? Esperado: Redireciona para Dashboard com sidebar visível
+? Esperado: Redireciona para Dashboard com sidebar visï¿½vel
 ```
 
-#### Teste 1.2: Login com Credenciais Inválidas
+#### Teste 1.2: Login com Credenciais Invï¿½lidas
 ```
 1. Acesse http://localhost:5173
-2. Insira username/password inválidos
+2. Insira username/password invï¿½lidos
 3. Clique em Login
 ? Esperado: Erro na tela ou alert
 ```
 
 #### Teste 1.3: Logout
 ```
-1. Após login, clique em Logout (top-right)
+1. Apï¿½s login, clique em Logout (top-right)
 2. Verifique localStorage
 ? Esperado: 
    - Redireciona para login
@@ -32,23 +32,23 @@ Pré-requisito: Backend rodando
 
 ---
 
-### 2?? Página de Chamada (Attendance)
+### 2?? Pï¿½gina de Chamada (Attendance)
 
-#### Teste 2.1: Carregar Presença
+#### Teste 2.1: Carregar Presenï¿½a
 ```
-1. Vá para aba "Chamada"
-2. Selecione: Turma, Horário, Professor, Mês, Ano
+1. Vï¿½ para aba "Chamada"
+2. Selecione: Turma, Horï¿½rio, Professor, Mï¿½s, Ano
 3. Clique em "Carregar"
 ? Esperado:
    - Tabela carrega com alunos
-   - Datas aparecem no cabeçalho
-   - Células clicáveis aparecem
+   - Datas aparecem no cabeï¿½alho
+   - Cï¿½lulas clicï¿½veis aparecem
 ```
 
-#### Teste 2.2: Alternar Status de Presença
+#### Teste 2.2: Alternar Status de Presenï¿½a
 ```
-1. Após carregar presença
-2. Clique em diferentes células
+1. Apï¿½s carregar presenï¿½a
+2. Clique em diferentes cï¿½lulas
 ? Esperado:
    - Clique 1: Presente (? verde)
    - Clique 2: Ausente (? vermelho)
@@ -67,24 +67,24 @@ Pré-requisito: Backend rodando
 
 #### Teste 2.4: Limpar Chamada
 ```
-1. Após alterações
+1. Apï¿½s alteraï¿½ï¿½es
 2. Clique em "??? Limpar Chamada"
 3. Confirme
 ? Esperado:
-   - Todas as células ficam vazias
+   - Todas as cï¿½lulas ficam vazias
 ```
 
 ---
 
-### 3?? Página de Alunos (Students)
+### 3?? Pï¿½gina de Alunos (Students)
 
 #### Teste 3.1: Listar Alunos
 ```
-1. Vá para aba "Alunos"
+1. Vï¿½ para aba "Alunos"
 2. Aguarde carregamento
 ? Esperado:
    - Lista de alunos aparece em tabela
-   - Campos visíveis: Nome, Aniversário, Turma, etc.
+   - Campos visï¿½veis: Nome, Aniversï¿½rio, Turma, etc.
 ```
 
 #### Teste 3.2: Buscar Aluno
@@ -99,7 +99,7 @@ Pré-requisito: Backend rodando
 #### Teste 3.3: Adicionar Aluno
 ```
 1. Clique em "? Adicionar Aluno"
-2. Preencha formulário (mín: Nome)
+2. Preencha formulï¿½rio (mï¿½n: Nome)
 3. Clique em "Salvar"
 ? Esperado:
    - Modal fecha
@@ -113,7 +113,7 @@ Pré-requisito: Backend rodando
 2. Altere dados
 3. Clique em "Salvar"
 ? Esperado:
-   - Alterações aplicadas
+   - Alteraï¿½ï¿½es aplicadas
    - Tabela atualiza
    - Alert de sucesso
 ```
@@ -123,21 +123,21 @@ Pré-requisito: Backend rodando
 1. Clique em "??? Deletar" em um aluno
 2. Confirme
 ? Esperado:
-   - Aluno move para exclusões
+   - Aluno move para exclusï¿½es
    - Desaparece da lista de alunos
    - Alert de sucesso
 ```
 
 ---
 
-### 4?? Página de Turmas (Classes)
+### 4?? Pï¿½gina de Turmas (Classes)
 
 #### Teste 4.1: Listar Turmas
 ```
-1. Vá para aba "Turmas"
+1. Vï¿½ para aba "Turmas"
 ? Esperado:
    - Lista de turmas em tabela
-   - Colunas: Turma, Horário, Professor, Nível, Data
+   - Colunas: Turma, Horï¿½rio, Professor, Nï¿½vel, Data
 ```
 
 #### Teste 4.2: Buscar Turma
@@ -151,7 +151,7 @@ Pré-requisito: Backend rodando
 #### Teste 4.3: Adicionar Turma
 ```
 1. Clique em "? Adicionar Turma"
-2. Preencha: Turma, Horário, Professor (obrigatórios)
+2. Preencha: Turma, Horï¿½rio, Professor (obrigatï¿½rios)
 3. Clique em "Salvar"
 ? Esperado:
    - Nova turma aparece na tabela
@@ -161,11 +161,11 @@ Pré-requisito: Backend rodando
 #### Teste 4.4: Editar Turma
 ```
 1. Clique em "?? Editar" em uma turma
-2. Altere dados (opcional: nível, atalho)
+2. Altere dados (opcional: nï¿½vel, atalho)
 3. Clique em "Salvar"
 ? Esperado:
    - Turma atualiza na tabela
-   - Confirmação visual
+   - Confirmaï¿½ï¿½o visual
 ```
 
 #### Teste 4.5: Deletar Turma
@@ -174,64 +174,64 @@ Pré-requisito: Backend rodando
 2. Confirme
 ? Esperado:
    - Turma desaparece da lista
-   - Confirmação visual
+   - Confirmaï¿½ï¿½o visual
 ```
 
 ---
 
-### 5?? Página de Relatórios (Reports)
+### 5?? Pï¿½gina de Relatï¿½rios (Reports)
 
-#### Teste 5.1: Selecionar e Adicionar Relatório
+#### Teste 5.1: Selecionar e Adicionar Relatï¿½rio
 ```
-1. Vá para aba "Relatórios"
-2. Selecione: Turma, Horário, Professor, Mês, Ano
-3. Clique em "? Adicionar ao Relatório"
+1. Vï¿½ para aba "Relatï¿½rios"
+2. Selecione: Turma, Horï¿½rio, Professor, Mï¿½s, Ano
+3. Clique em "? Adicionar ao Relatï¿½rio"
 ? Esperado:
-   - Relatório aparece no painel "Selecionados"
+   - Relatï¿½rio aparece no painel "Selecionados"
    - Contador atualiza
 ```
 
-#### Teste 5.2: Gerar Relatório Individual
+#### Teste 5.2: Gerar Relatï¿½rio Individual
 ```
-1. Após adicionar relatório
-2. Clique em "?? Baixar" em um relatório
+1. Apï¿½s adicionar relatï¿½rio
+2. Clique em "?? Baixar" em um relatï¿½rio
 ? Esperado:
-   - Download automático de arquivo .xlsx
+   - Download automï¿½tico de arquivo .xlsx
    - Nome: Relatorio_<turma>_<mes>_<ano>.xlsx
 ```
 
-#### Teste 5.3: Remover Relatório da Seleção
+#### Teste 5.3: Remover Relatï¿½rio da Seleï¿½ï¿½o
 ```
-1. Clique em "?" em um relatório
+1. Clique em "?" em um relatï¿½rio
 ? Esperado:
    - Desaparece do painel
    - Contador atualiza
 ```
 
-#### Teste 5.4: Gerar Relatório Consolidado
+#### Teste 5.4: Gerar Relatï¿½rio Consolidado
 ```
-1. Adicione múltiplos relatórios (2+)
+1. Adicione mï¿½ltiplos relatï¿½rios (2+)
 2. Clique em "?? Gerar Consolidado"
 ? Esperado:
-   - Download automático
+   - Download automï¿½tico
    - Nome: Relatorio_Consolidado.xlsx
-   - Múltiplas abas (uma por turma)
+   - Mï¿½ltiplas abas (uma por turma)
 ```
 
 ---
 
-### 6?? Página de Exclusões (Exclusions)
+### 6?? Pï¿½gina de Exclusï¿½es (Exclusions)
 
-#### Teste 6.1: Listar Alunos Excluídos
+#### Teste 6.1: Listar Alunos Excluï¿½dos
 ```
-1. Vá para aba "Exclusões"
+1. Vï¿½ para aba "Exclusï¿½es"
 ? Esperado:
-   - Lista de alunos excluídos
+   - Lista de alunos excluï¿½dos
    - Campos: Nome, Turma, Professor, Data
    - Contador no topo
 ```
 
-#### Teste 6.2: Buscar Aluno Excluído
+#### Teste 6.2: Buscar Aluno Excluï¿½do
 ```
 1. Digite nome no campo de busca
 ? Esperado:
@@ -244,29 +244,29 @@ Pré-requisito: Backend rodando
 2. Confirme
 ? Esperado:
    - Aluno volta para lista de alunos ativos
-   - Desaparece de exclusões
-   - Confirmação visual
+   - Desaparece de exclusï¿½es
+   - Confirmaï¿½ï¿½o visual
 ```
 
 ---
 
-### 7?? Navegação e Layout
+### 7?? Navegaï¿½ï¿½o e Layout
 
 #### Teste 7.1: Sidebar Navigation
 ```
 1. Clique em cada aba do sidebar
 ? Esperado:
    - Aba ativa fica destacada (fundo azul)
-   - Conteúdo muda dinamicamente
-   - Sem reload de página
+   - Conteï¿½do muda dinamicamente
+   - Sem reload de pï¿½gina
 ```
 
 #### Teste 7.2: Header
 ```
 1. Verifique header
 ? Esperado:
-   - Logo/título visível
-   - Botão logout funciona
+   - Logo/tï¿½tulo visï¿½vel
+   - Botï¿½o logout funciona
    - Responsivo em mobile
 ```
 
@@ -276,7 +276,7 @@ Pré-requisito: Backend rodando
 ? Esperado:
    - Layout 2 colunas (sidebar + content)
    - Sem scroll horizontal
-   - Tabelas visíveis
+   - Tabelas visï¿½veis
 ```
 
 #### Teste 7.4: Responsividade Tablet
@@ -284,7 +284,7 @@ Pré-requisito: Backend rodando
 1. Redimensione para 768px - 1023px
 ? Esperado:
    - Sidebar comprimida
-   - Conteúdo ajustado
+   - Conteï¿½do ajustado
    - UI funcional
 ```
 
@@ -292,29 +292,29 @@ Pré-requisito: Backend rodando
 ```
 1. Redimensione para < 768px
 ? Esperado:
-   - Sidebar horizontal (scrollável)
-   - Conteúdo full-width
-   - Botões acessíveis
+   - Sidebar horizontal (scrollï¿½vel)
+   - Conteï¿½do full-width
+   - Botï¿½es acessï¿½veis
 ```
 
 ---
 
 ### 8?? API Integration
 
-#### Teste 8.1: Requisições com Token
+#### Teste 8.1: Requisiï¿½ï¿½es com Token
 ```
-1. Faça login
+1. Faï¿½a login
 2. Abra DevTools > Network
 3. Navegue entre abas
 ? Esperado:
-   - Todas requisições têm header Authorization
-   - Token incluído em Bearer <token>
+   - Todas requisiï¿½ï¿½es tï¿½m header Authorization
+   - Token incluï¿½do em Bearer <token>
 ```
 
 #### Teste 8.2: Tratamento de Erro 401
 ```
 1. Limpe o token: localStorage.removeItem("access_token")
-2. Tente fazer requisição manualmente
+2. Tente fazer requisiï¿½ï¿½o manualmente
 ? Esperado:
    - Redireciona para login
    - Feedback claro
@@ -332,9 +332,9 @@ Pré-requisito: Backend rodando
 ```
 1. (Induzir erro no backend)
 ? Esperado:
-   - Mensagem de erro genérica
-   - Não trava aplicação
-   - Retry possível
+   - Mensagem de erro genï¿½rica
+   - Nï¿½o trava aplicaï¿½ï¿½o
+   - Retry possï¿½vel
 ```
 
 ---
@@ -344,7 +344,7 @@ Pré-requisito: Backend rodando
 #### Teste 9.1: Carregamento Inicial
 ```
 1. Acesse http://localhost:5173
-2. Medir tempo até interativo
+2. Medir tempo atï¿½ interativo
 ? Esperado: < 3 segundos
 ```
 
@@ -353,7 +353,7 @@ Pré-requisito: Backend rodando
 1. Adicione 1000+ registros
 2. Carregue a lista
 ? Esperado:
-   - Não trava
+   - Nï¿½o trava
    - Scroll funciona
 ```
 
@@ -369,27 +369,27 @@ Pré-requisito: Backend rodando
 
 ### ?? Casos de Erro
 
-#### Teste 10.1: Validação de Formulário
+#### Teste 10.1: Validaï¿½ï¿½o de Formulï¿½rio
 ```
 1. Tente salvar aluno sem nome
 ? Esperado:
-   - Erro de validação
+   - Erro de validaï¿½ï¿½o
    - Campo destacado
    - Mensagem clara
 ```
 
-#### Teste 10.2: Conexão com API Offline
+#### Teste 10.2: Conexï¿½o com API Offline
 ```
 1. Desligue internet
 2. Tente carregar dados
 ? Esperado:
-   - Erro de conexão claro
-   - Não trava UI
+   - Erro de conexï¿½o claro
+   - Nï¿½o trava UI
 ```
 
 #### Teste 10.3: Logout e Acesso Protegido
 ```
-1. Faça logout
+1. Faï¿½a logout
 2. Tente acessar URL protegida
 ? Esperado:
    - Redireciona para login
@@ -399,9 +399,9 @@ Pré-requisito: Backend rodando
 
 ## ?? Checklist de Testes
 
-### Autenticação
-- [ ] Login com credenciais válidas
-- [ ] Login com credenciais inválidas
+### Autenticaï¿½ï¿½o
+- [ ] Login com credenciais vï¿½lidas
+- [ ] Login com credenciais invï¿½lidas
 - [ ] Logout funciona
 - [ ] Token em localStorage
 - [ ] Acesso protegido
@@ -427,14 +427,14 @@ Pré-requisito: Backend rodando
 - [ ] Editar funciona
 - [ ] Deletar funciona
 
-### Relatórios
-- [ ] Seleção de filtros
-- [ ] Adicionar relatório
-- [ ] Remover relatório
+### Relatï¿½rios
+- [ ] Seleï¿½ï¿½o de filtros
+- [ ] Adicionar relatï¿½rio
+- [ ] Remover relatï¿½rio
 - [ ] Download individual
 - [ ] Download consolidado
 
-### Exclusões
+### Exclusï¿½es
 - [ ] Lista carrega
 - [ ] Busca funciona
 - [ ] Restaurar funciona
@@ -447,15 +447,72 @@ Pré-requisito: Backend rodando
 - [ ] Header/Footer
 
 ### API
-- [ ] Requisições com token
+- [ ] Requisiï¿½ï¿½es com token
 - [ ] Tratamento de erros
 - [ ] CORS funcionando
 - [ ] Endpoints corretos
 
 ### Performance
-- [ ] Carregamento rápido
-- [ ] Sem lag em interações
+- [ ] Carregamento rï¿½pido
+- [ ] Sem lag em interaï¿½ï¿½es
 - [ ] Listas grandes funcionam
+
+---
+
+## Testes focados - Vercel (Persistencia e Retroativo)
+
+### A) Exclusoes - Persistencia no vercel.app
+
+#### Cenï¿½rio A1: exclusï¿½o continua apï¿½s reload sem backend disponï¿½vel
+1. Acesse a aplicaï¿½ï¿½o publicada no `vercel.app`.
+2. Na tela de alunos, exclua 1 aluno com motivo.
+3. Abra a tela de exclusï¿½es e confirme que o aluno aparece.
+4. Recarregue a pï¿½gina (F5) e volte para exclusï¿½es.
+
+Esperado:
+- Aluno continua na lista de exclusï¿½es.
+- Nï¿½o ocorre "reset" para lista vazia apï¿½s reload.
+
+#### Cenï¿½rio A2: exclusï¿½o permanente persiste apï¿½s reload
+1. Na tela de exclusï¿½es, use "Excluir definitivamente" no aluno do cenï¿½rio A1.
+2. Recarregue a pï¿½gina (F5).
+
+Esperado:
+- Aluno removido continua removido.
+
+#### Cenï¿½rio A3: restauraï¿½ï¿½o persiste apï¿½s reload
+1. Exclua novamente um aluno qualquer.
+2. Na tela de exclusï¿½es, clique em "Restaurar".
+3. Recarregue a pï¿½gina (F5).
+
+Esperado:
+- Aluno restaurado nï¿½o volta a aparecer em exclusï¿½es.
+
+### B) Relatï¿½rios - Aulas registradas x previstas com registro retroativo
+
+#### Cenï¿½rio B1: registro retroativo entra no total de registradas
+1. Em Chamada, ative modo retroativo e selecione um mï¿½s anterior.
+2. Marque presenï¿½a/falta/justificada em um dia vï¿½lido desse mï¿½s e salve.
+3. Abra Relatï¿½rios no mesmo mï¿½s e turma/grupo correspondente.
+4. Observe o bloco "Aulas registradas x previstas".
+
+Esperado:
+- O dia lanï¿½ado retroativamente entra no total de "Registradas".
+- O valor aparece tanto por horï¿½rio quanto no total consolidado.
+
+#### Cenï¿½rio B2: nï¿½o contar registros fora do mï¿½s selecionado
+1. Mantendo o mesmo contexto, troque para outro mï¿½s sem esse lanï¿½amento.
+2. Reavalie o bloco "Aulas registradas x previstas".
+
+Esperado:
+- O registro retroativo do mï¿½s anterior nï¿½o ï¿½ contado no novo mï¿½s.
+
+Checklist rï¿½pido:
+- [ ] A1 passou
+- [ ] A2 passou
+- [ ] A3 passou
+- [ ] B1 passou
+- [ ] B2 passou
 
 ---
 
@@ -463,11 +520,11 @@ Pré-requisito: Backend rodando
 
 ### Template
 ```
-**Título**: [BUG] Descrição breve
+**Tï¿½tulo**: [BUG] Descriï¿½ï¿½o breve
 
 **Severidade**: ?? Critical / ?? High / ?? Medium / ?? Low
 
-**Componente**: Página ou Componente
+**Componente**: Pï¿½gina ou Componente
 
 **Passos para Reproduzir**:
 1. Passo 1
@@ -478,7 +535,7 @@ Pré-requisito: Backend rodando
 Descreva o que deveria acontecer
 
 **Comportamento Atual**:
-Descreva o que está acontecendo
+Descreva o que estï¿½ acontecendo
 
 **Environment**:
 - Browser: Chrome/Firefox/etc
@@ -491,19 +548,19 @@ Cole aqui se houver
 
 ---
 
-## ? Conclusão de Testes
+## ? Conclusï¿½o de Testes
 
 Quando todos os testes passarem:
 
 - [ ] Todos 10 grupos de testes executados
-- [ ] Nenhum bug crítico encontrado
-- [ ] Performance aceitável
+- [ ] Nenhum bug crï¿½tico encontrado
+- [ ] Performance aceitï¿½vel
 - [ ] Responsividade OK em todos devices
-- [ ] Documentação atualizada
-- [ ] Pronto para produção
+- [ ] Documentaï¿½ï¿½o atualizada
+- [ ] Pronto para produï¿½ï¿½o
 
 ---
 
 **Data**: 14 de Janeiro de 2026
-**Versão**: 1.0
+**Versï¿½o**: 1.0
 **Escopo**: Frontend Adaptado

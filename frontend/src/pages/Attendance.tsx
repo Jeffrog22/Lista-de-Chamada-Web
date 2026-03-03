@@ -1270,17 +1270,23 @@ export const Attendance: React.FC = () => {
   };
 
   const applyCalendarClosureJustification = async (date: string, reasonLabel: string) => {
-    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
-    setAttendance((prev) =>
-      prev.map((student) => ({
-        ...student,
-        attendance: { ...student.attendance, [date]: "Justificado" },
-        justifications: { ...(student.justifications || {}), [date]: reasonLabel },
-      }))
-    );
+    const changedEntries: Array<{ aluno_nome: string; data: string; motivo: string; turmaCodigo: string; turmaLabel: string; horario: string; professor: string }> = [];
+    const nextAttendance: AttendanceRecord[] = attendance.map((student) => {
+      const currentStatus = student.attendance?.[date] || "";
+      const currentReason = (student.justifications || {})[date] || "";
 
-    try {
-      const entries = attendance.map((student) => ({
+      const canAutoJustify = currentStatus === "" || currentStatus === "Justificado";
+      if (!canAutoJustify) {
+        return student;
+      }
+
+      const statusChanged = currentStatus !== "Justificado";
+      const reasonChanged = currentReason !== reasonLabel;
+      if (!statusChanged && !reasonChanged) {
+        return student;
+      }
+
+      changedEntries.push({
         aluno_nome: student.aluno,
         data: date,
         motivo: reasonLabel,
@@ -1288,8 +1294,22 @@ export const Attendance: React.FC = () => {
         turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
         horario: selectedClass.horario || selectedHorario || "",
         professor: selectedClass.professor || selectedProfessor || "",
-      }));
-      await saveJustificationLog(entries);
+      });
+
+      return {
+        ...student,
+        attendance: { ...student.attendance, [date]: "Justificado" as const },
+        justifications: { ...(student.justifications || {}), [date]: reasonLabel },
+      };
+    });
+
+    if (changedEntries.length === 0) return;
+
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setAttendance(nextAttendance);
+
+    try {
+      await saveJustificationLog(changedEntries);
     } catch {
       // ignore to avoid blocking UI
     }

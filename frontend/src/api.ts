@@ -4,6 +4,98 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
+const EXCLUDED_STUDENTS_STORAGE_KEY = "excludedStudents";
+
+const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
+
+const normalizeHorarioKey = (value: unknown) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 3) return `0${digits}`;
+  if (digits.length >= 4) return digits.slice(0, 4);
+  return digits;
+};
+
+const exclusionMatches = (candidate: any, payload: any) => {
+  const candidateId = String(candidate?.id || "").trim();
+  const payloadId = String(payload?.id || "").trim();
+  if (candidateId && payloadId && candidateId === payloadId) return true;
+
+  const candidateNome = normalizeText(candidate?.nome || candidate?.Nome);
+  const payloadNome = normalizeText(payload?.nome || payload?.Nome);
+  if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
+
+  const candidateTurma = normalizeText(
+    candidate?.turma || candidate?.Turma || candidate?.turmaLabel || candidate?.TurmaLabel || candidate?.turmaCodigo || candidate?.TurmaCodigo
+  );
+  const payloadTurma = normalizeText(
+    payload?.turma || payload?.Turma || payload?.turmaLabel || payload?.TurmaLabel || payload?.turmaCodigo || payload?.TurmaCodigo
+  );
+  const turmaMatches = !candidateTurma || !payloadTurma || candidateTurma === payloadTurma;
+
+  const candidateHorario = normalizeHorarioKey(candidate?.horario || candidate?.Horario);
+  const payloadHorario = normalizeHorarioKey(payload?.horario || payload?.Horario);
+  const horarioMatches = !candidateHorario || !payloadHorario || candidateHorario === payloadHorario;
+
+  const candidateProfessor = normalizeText(candidate?.professor || candidate?.Professor);
+  const payloadProfessor = normalizeText(payload?.professor || payload?.Professor);
+  const professorMatches = !candidateProfessor || !payloadProfessor || candidateProfessor === payloadProfessor;
+
+  return turmaMatches && horarioMatches && professorMatches;
+};
+
+const readExcludedStudentsLocal = () => {
+  try {
+    const raw = localStorage.getItem(EXCLUDED_STUDENTS_STORAGE_KEY);
+    if (!raw) return [] as any[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as any[];
+  }
+};
+
+const writeExcludedStudentsLocal = (items: any[]) => {
+  localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+};
+
+const upsertExcludedStudentLocal = (payload: any) => {
+  const items = readExcludedStudentsLocal();
+  const nextItems = [...items];
+  const idx = nextItems.findIndex((item) => exclusionMatches(item, payload));
+  if (idx >= 0) {
+    nextItems[idx] = { ...nextItems[idx], ...payload };
+  } else {
+    nextItems.push(payload);
+  }
+  writeExcludedStudentsLocal(nextItems);
+  return nextItems;
+};
+
+const removeExcludedStudentLocal = (payload: any) => {
+  const items = readExcludedStudentsLocal();
+  const nextItems = items.filter((item) => !exclusionMatches(item, payload));
+  writeExcludedStudentsLocal(nextItems);
+  return nextItems;
+};
+
+const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
+  const localItems = readExcludedStudentsLocal();
+  const merged = [...localItems];
+
+  (Array.isArray(remoteItems) ? remoteItems : []).forEach((remote) => {
+    const idx = merged.findIndex((item) => exclusionMatches(item, remote));
+    if (idx >= 0) {
+      merged[idx] = { ...remote, ...merged[idx] };
+    } else {
+      merged.push(remote);
+    }
+  });
+
+  writeExcludedStudentsLocal(merged);
+  return merged;
+};
+
 
 // Attach token if present
 API.interceptors.request.use((config) => {
@@ -35,10 +127,39 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
   API.delete(`/classes/${turma}/${horario}/${professor}`).catch(() => ({ data: { ok: true } }));
 
 // Exclusions
-export const getExcludedStudents = () => API.get("/exclusions").catch(() => ({ data: [] }));
-export const addExclusion = (data: any) => API.post("/exclusions", data);
-export const restoreStudent = (data: any) => API.post("/exclusions/restore", data).catch(() => ({ data: { ok: true } }));
-export const deleteExclusion = (data: any) => API.post("/exclusions/delete", data).catch(() => ({ data: { ok: true } }));
+export const getExcludedStudents = () =>
+  API.get("/exclusions")
+    .then((response) => {
+      const data = mergeExcludedStudentsLocalWithRemote(
+        Array.isArray(response?.data) ? response.data : []
+      );
+      return { ...response, data };
+    })
+    .catch(() => ({ data: readExcludedStudentsLocal() }));
+
+export const addExclusion = (data: any) =>
+  API.post("/exclusions", data)
+    .then((response) => {
+      upsertExcludedStudentLocal(data);
+      return response;
+    })
+    .catch(() => ({ data: { ok: true, fallback: true, items: upsertExcludedStudentLocal(data) } }));
+
+export const restoreStudent = (data: any) =>
+  API.post("/exclusions/restore", data)
+    .then((response) => {
+      removeExcludedStudentLocal(data);
+      return response;
+    })
+    .catch(() => ({ data: { ok: true, fallback: true, items: removeExcludedStudentLocal(data) } }));
+
+export const deleteExclusion = (data: any) =>
+  API.post("/exclusions/delete", data)
+    .then((response) => {
+      removeExcludedStudentLocal(data);
+      return response;
+    })
+    .catch(() => ({ data: { ok: true, fallback: true, items: removeExcludedStudentLocal(data) } }));
 
 // Reports
 export const getReports = (params?: Record<string, any>) => API.get("/reports", { params }).catch(() => ({ data: [] }));

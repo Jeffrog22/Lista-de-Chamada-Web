@@ -1519,6 +1519,11 @@ export const Reports: React.FC = () => {
     return plannedClassDays.filter((dateKey) => dateKey <= endKey);
   }, [plannedClassDays, selectedMonthLimits]);
 
+  const plannedClassDaysUntilCurrentSet = useMemo(
+    () => new Set(plannedClassDaysUntilCurrent),
+    [plannedClassDaysUntilCurrent]
+  );
+
   const plannedYearDateKeys = (() => {
     const year = Number(selectedYear);
     if (!Number.isFinite(year)) return [] as string[];
@@ -1596,7 +1601,10 @@ export const Reports: React.FC = () => {
           if (!parsed) return;
           const parsedKey = toDateKey(parsed);
           if (parsedKey > endKey) return;
-          if (!plannedClassDaysUntilCurrent.includes(parsedKey)) return;
+          const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
+          const isRetroactiveInSelectedMonth =
+            parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
+          if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
           if (!selectedWeekdays.includes(parsed.getDay())) return;
           recordedDays.add(parsedKey);
         });
@@ -1620,7 +1628,7 @@ export const Reports: React.FC = () => {
       totalPrevistas: byHorario.reduce((acc, item) => acc + item.previstas, 0),
       totalRegistradas: byHorario.reduce((acc, item) => acc + item.registradas, 0),
     };
-  }, [classesData, plannedClassDaysUntilCurrent, selectedMonthLimits, summaryProfessorToggle, summaryTurmaToggle]);
+  }, [classesData, plannedClassDaysUntilCurrent, plannedClassDaysUntilCurrentSet, selectedMonthLimits, summaryProfessorToggle, summaryTurmaToggle]);
 
   const classTotalsUntilCurrent = useMemo(() => {
     const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
@@ -1649,7 +1657,10 @@ export const Reports: React.FC = () => {
           if (!parsed) return;
           const parsedKey = toDateKey(parsed);
           if (parsedKey > endKey) return;
-          if (!plannedClassDaysUntilCurrent.includes(parsedKey)) return;
+          const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
+          const isRetroactiveInSelectedMonth =
+            parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
+          if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
           if (!weekdays.includes(parsed.getDay())) return;
           recordedDays.add(parsedKey);
         });
@@ -1660,7 +1671,7 @@ export const Reports: React.FC = () => {
     });
 
     return { previstas: previstasTotal, dadas: dadasTotal };
-  }, [classesData, plannedClassDaysUntilCurrent, selectedMonthLimits]);
+  }, [classesData, plannedClassDaysUntilCurrent, plannedClassDaysUntilCurrentSet, selectedMonthLimits]);
 
   const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
   const totalCancelamentosElegiveis = useMemo(() => {

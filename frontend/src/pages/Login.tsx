@@ -24,13 +24,36 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
 
+  const importTimestampStorageKey = "last_import_at";
+
+  const readLastImportAtFallback = () => {
+    try {
+      return localStorage.getItem(importTimestampStorageKey) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveLastImportAtFallback = (value?: string | null) => {
+    const resolved = String(value || "").trim() || new Date().toISOString();
+    try {
+      localStorage.setItem(importTimestampStorageKey, resolved);
+    } catch {
+      // ignore
+    }
+    return resolved;
+  };
+
   useEffect(() => {
     getBootstrap()
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
     getImportDataStatus()
       .then((res: ApiResponse) => setImportStatusInfo(res.data || null))
-      .catch(() => setImportStatusInfo(null));
+      .catch(() => {
+        const fallbackDate = readLastImportAtFallback();
+        setImportStatusInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
+      });
   }, []);
 
   const formatImportDate = (value?: string | null) => {
@@ -111,7 +134,9 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         setStatus("Enviando arquivo...");
         await importDataFile(file);
         const importStatus = await getImportDataStatus();
-        setImportStatusInfo(importStatus.data || null);
+        const backendStatus = importStatus.data || {};
+        const persistedDate = saveLastImportAtFallback(backendStatus.last_import_at);
+        setImportStatusInfo({ ...backendStatus, last_import_at: persistedDate });
       }
 
       setStatus("Carregando dados...");
@@ -137,7 +162,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         Backend import: {backendOnline ? "online" : "offline"} (porta 8001)
       </p>
       <p style={{ color: "#666", fontSize: 12, marginTop: 4 }}>
-        Último import: {importStatusInfo?.last_import_by || "-"} em {formatImportDate(importStatusInfo?.last_import_at)}
+        Atualizado em: {formatImportDate(importStatusInfo?.last_import_at)}
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
 

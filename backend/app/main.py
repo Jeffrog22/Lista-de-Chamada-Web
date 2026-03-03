@@ -402,6 +402,40 @@ def _format_temperature_output(value: Any, fallback: str = "28") -> str:
         pass
     return fallback
 
+
+def _normalize_date_key(value: Any) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, pd.Timestamp):
+        if pd.isna(value):
+            return ""
+        return value.date().isoformat()
+
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+
+    if isinstance(value, date):
+        return value.isoformat()
+
+    raw = str(value).strip()
+    if not raw:
+        return ""
+
+    raw_no_time = raw.replace("T", " ").split(" ")[0]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw_no_time):
+        return raw_no_time
+
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", raw_no_time):
+        dd, mm, yyyy = raw_no_time.split("/")
+        return f"{yyyy}-{mm}-{dd}"
+
+    parsed = pd.to_datetime(raw, errors="coerce", dayfirst=True)
+    if pd.notna(parsed):
+        return parsed.date().isoformat()
+
+    return raw_no_time
+
 def _load_pool_log(file_path: str) -> pd.DataFrame:
     if os.path.exists(file_path):
         df = pd.read_excel(file_path)
@@ -418,19 +452,19 @@ def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
     def _norm(value: str) -> str:
         return str(value or "").strip()
 
-    data_val = _norm(entry.data)
+    data_val = _normalize_date_key(entry.data)
     turma_codigo = _norm(entry.turmaCodigo)
     turma_label = _norm(entry.turmaLabel)
     horario = _format_horario(entry.horario)
     professor = _norm(entry.professor)
 
-    mask = df["Data"].astype(str).str.strip() == data_val
+    mask = df["Data"].apply(_normalize_date_key) == data_val
     if turma_codigo:
         mask = mask & (df["TurmaCodigo"].astype(str).str.strip() == turma_codigo)
     if turma_label:
         mask = mask & (df["TurmaLabel"].astype(str).str.strip() == turma_label)
     if horario:
-        mask = mask & (df["Horario"].astype(str).str.strip() == horario)
+        mask = mask & (df["Horario"].astype(str).map(_format_horario).str.strip() == horario)
     if professor:
         mask = mask & (df["Professor"].astype(str).str.strip() == professor)
     return mask
@@ -625,7 +659,7 @@ def append_pool_log(entry: PoolLogEntryModel):
         temp_externa_value = _coerce_numeric_value(entry.tempExterna)
         temp_piscina_value = _coerce_numeric_value(entry.tempPiscina)
         row = {
-            "Data": entry.data,
+            "Data": _normalize_date_key(entry.data),
             "TurmaCodigo": entry.turmaCodigo or "",
             "TurmaLabel": entry.turmaLabel or "",
             "Horario": _format_horario(entry.horario),
@@ -707,7 +741,7 @@ def get_pool_log(
 
         row = match.iloc[0].to_dict()
         return {
-            "data": str(row.get("Data", "")),
+            "data": _normalize_date_key(row.get("Data", "")),
             "turmaCodigo": str(row.get("TurmaCodigo", "")),
             "turmaLabel": str(row.get("TurmaLabel", "")),
             "horario": str(row.get("Horario", "")),

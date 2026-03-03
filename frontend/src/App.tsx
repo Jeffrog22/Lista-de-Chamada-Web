@@ -31,6 +31,26 @@ export default function App() {
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
 
+  const importTimestampStorageKey = "last_import_at";
+
+  const readLastImportAtFallback = () => {
+    try {
+      return localStorage.getItem(importTimestampStorageKey) || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveLastImportAtFallback = (value?: string | null) => {
+    const resolved = String(value || "").trim() || new Date().toISOString();
+    try {
+      localStorage.setItem(importTimestampStorageKey, resolved);
+    } catch {
+      // ignore
+    }
+    return resolved;
+  };
+
   useEffect(() => {
     // Atualizar token quando localStorage muda
     const stored = localStorage.getItem("access_token");
@@ -49,7 +69,10 @@ export default function App() {
     }
     getImportDataStatus()
       .then((res: ApiResponse) => setLastImportInfo(res.data || null))
-      .catch(() => setLastImportInfo(null));
+      .catch(() => {
+        const fallbackDate = readLastImportAtFallback();
+        setLastImportInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
+      });
   }, []);
 
   const formatImportDate = (value?: string | null) => {
@@ -162,7 +185,9 @@ export default function App() {
       const res = await getBootstrap();
       applyBootstrap(res.data);
       const statusRes = await getImportDataStatus();
-      setLastImportInfo(statusRes.data || null);
+      const backendStatus = statusRes.data || {};
+      const persistedDate = saveLastImportAtFallback(backendStatus.last_import_at);
+      setLastImportInfo({ ...backendStatus, last_import_at: persistedDate });
       setUpdateStatus("Base atualizada.");
       window.setTimeout(() => setUpdateStatus(null), 2000);
     } catch (err: any) {
@@ -221,7 +246,7 @@ export default function App() {
             <span className="user-info">{updateStatus}</span>
           )}
           <span className="user-info">
-            Último import: {lastImportInfo?.last_import_by || "-"} em {formatImportDate(lastImportInfo?.last_import_at)}
+            Atualizado em: {formatImportDate(lastImportInfo?.last_import_at)}
           </span>
           <input
             ref={fileInputRef}
