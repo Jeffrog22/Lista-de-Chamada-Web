@@ -51,6 +51,15 @@ export default function App() {
     return resolved;
   };
 
+  const resolveLastImportAt = (status?: any) => {
+    const backendValue = String(status?.last_import_at || "").trim();
+    if (backendValue) {
+      return saveLastImportAtFallback(backendValue);
+    }
+    const fallback = readLastImportAtFallback();
+    return fallback || "";
+  };
+
   useEffect(() => {
     // Atualizar token quando localStorage muda
     const stored = localStorage.getItem("access_token");
@@ -68,7 +77,11 @@ export default function App() {
       }
     }
     getImportDataStatus()
-      .then((res: ApiResponse) => setLastImportInfo(res.data || null))
+      .then((res: ApiResponse) => {
+        const backendStatus = res.data || {};
+        const resolvedDate = resolveLastImportAt(backendStatus);
+        setLastImportInfo({ ...backendStatus, last_import_at: resolvedDate || null });
+      })
       .catch(() => {
         const fallbackDate = readLastImportAtFallback();
         setLastImportInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
@@ -181,13 +194,19 @@ export default function App() {
     setUpdateStatus("Enviando arquivo...");
     try {
       await importDataFile(selected);
+      const optimisticDate = saveLastImportAtFallback();
+      setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
       setUpdateStatus("Carregando dados...");
       const res = await getBootstrap();
       applyBootstrap(res.data);
-      const statusRes = await getImportDataStatus();
-      const backendStatus = statusRes.data || {};
-      const persistedDate = saveLastImportAtFallback(backendStatus.last_import_at);
-      setLastImportInfo({ ...backendStatus, last_import_at: persistedDate });
+      try {
+        const statusRes = await getImportDataStatus();
+        const backendStatus = statusRes.data || {};
+        const persistedDate = resolveLastImportAt(backendStatus) || optimisticDate;
+        setLastImportInfo({ ...backendStatus, last_import_at: persistedDate });
+      } catch {
+        setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
+      }
       setUpdateStatus("Base atualizada.");
       window.setTimeout(() => setUpdateStatus(null), 2000);
     } catch (err: any) {

@@ -44,12 +44,25 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     return resolved;
   };
 
+  const resolveLastImportAt = (status?: any) => {
+    const backendValue = String(status?.last_import_at || "").trim();
+    if (backendValue) {
+      return saveLastImportAtFallback(backendValue);
+    }
+    const fallback = readLastImportAtFallback();
+    return fallback || "";
+  };
+
   useEffect(() => {
     getBootstrap()
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
     getImportDataStatus()
-      .then((res: ApiResponse) => setImportStatusInfo(res.data || null))
+      .then((res: ApiResponse) => {
+        const backendStatus = res.data || {};
+        const resolvedDate = resolveLastImportAt(backendStatus);
+        setImportStatusInfo({ ...backendStatus, last_import_at: resolvedDate || null });
+      })
       .catch(() => {
         const fallbackDate = readLastImportAtFallback();
         setImportStatusInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
@@ -133,10 +146,16 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       if (file) {
         setStatus("Enviando arquivo...");
         await importDataFile(file);
-        const importStatus = await getImportDataStatus();
-        const backendStatus = importStatus.data || {};
-        const persistedDate = saveLastImportAtFallback(backendStatus.last_import_at);
-        setImportStatusInfo({ ...backendStatus, last_import_at: persistedDate });
+        const optimisticDate = saveLastImportAtFallback();
+        setImportStatusInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
+        try {
+          const importStatus = await getImportDataStatus();
+          const backendStatus = importStatus.data || {};
+          const persistedDate = resolveLastImportAt(backendStatus) || optimisticDate;
+          setImportStatusInfo({ ...backendStatus, last_import_at: persistedDate });
+        } catch {
+          setImportStatusInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
+        }
       }
 
       setStatus("Carregando dados...");
