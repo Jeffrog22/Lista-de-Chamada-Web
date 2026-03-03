@@ -30,7 +30,11 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
-  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => window.innerWidth <= 768);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
+    const byWidth = window.innerWidth <= 768;
+    const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
+    return byWidth || byLandscapePhone;
+  });
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -120,13 +124,25 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 768px)");
-    const syncViewport = (matches: boolean) => setIsMobileViewport(matches);
-    syncViewport(mediaQuery.matches);
+    const compactQuery = window.matchMedia("(max-width: 768px)");
+    const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
 
-    const listener = (event: MediaQueryListEvent) => syncViewport(event.matches);
-    mediaQuery.addEventListener("change", listener);
-    return () => mediaQuery.removeEventListener("change", listener);
+    const syncViewport = () => {
+      setIsMobileViewport(compactQuery.matches || landscapePhoneQuery.matches);
+    };
+
+    syncViewport();
+
+    const onCompactChange = () => syncViewport();
+    const onLandscapeChange = () => syncViewport();
+
+    compactQuery.addEventListener("change", onCompactChange);
+    landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+
+    return () => {
+      compactQuery.removeEventListener("change", onCompactChange);
+      landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -279,7 +295,11 @@ export default function App() {
 
   // Renderizar apenas o header e welcome screen (sem componentes complexos)
   return (
-    <div className={`app-container ${isMobileViewport ? "mobile-compact" : ""}`}>
+    <div
+      className={`app-container ${isMobileViewport ? "mobile-compact" : ""} ${
+        isMobileViewport && currentView === "main" ? "mobile-main-menu" : ""
+      }`}
+    >
       {/* HEADER */}
       <header className="app-header">
         <div className="header-left">

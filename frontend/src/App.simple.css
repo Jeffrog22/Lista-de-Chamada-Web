@@ -521,3 +521,63 @@ body, html {
 .mobile-compact .content-area td {
   font-size: 90%;
 }
+
+.mobile-main-menu .main-layout {
+  display: block;
+}
+
+.mobile-main-menu .sidebar {
+  position: relative;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 60px);
+  margin-left: 0;
+  transform: none;
+  border-right: none;
+  box-shadow: none;
+  padding: 20px 14px;
+}
+
+.mobile-main-menu .content-area {
+  display: none;
+}
+
+@media (max-width: 1024px) and (max-height: 500px) {
+  .app-header {
+    padding: 8px 12px;
+  }
+
+  .header-left h1 {
+    font-size: 14px;
+  }
+
+  .user-info {
+    font-size: 10px;
+  }
+
+  .menu-button {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
+  .logout-button {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .neon-btn {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .neon-btn-secondary {
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+
+  .content-area {
+    font-size: 12px;
+  }
+}
