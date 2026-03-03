@@ -1703,6 +1703,104 @@ export const Attendance: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!attendance.length || !dateDates.length) return;
+
+    const holidayDates = dateDates.filter((date) => !!getHolidayBridgeEventForDate(date));
+    if (holidayDates.length === 0) return;
+
+    const reasonByDate = new Map<string, string>();
+    holidayDates.forEach((date) => {
+      const event = getHolidayBridgeEventForDate(date);
+      if (event) {
+        reasonByDate.set(date, buildHolidayBridgeReason(event));
+      }
+    });
+
+    const changedEntries: Array<{
+      aluno_nome: string;
+      data: string;
+      motivo: string;
+      turmaCodigo: string;
+      turmaLabel: string;
+      horario: string;
+      professor: string;
+    }> = [];
+
+    let hasChanges = false;
+
+    const nextAttendance = attendance.map((student) => {
+      let studentChanged = false;
+      const nextAttendanceMap = { ...student.attendance };
+      const nextJustifications = { ...(student.justifications || {}) };
+
+      holidayDates.forEach((date) => {
+        const reason = reasonByDate.get(date);
+        if (!reason) return;
+
+        const currentStatus = student.attendance?.[date] || "";
+        const currentReason = (student.justifications || {})[date] || "";
+
+        if (currentStatus === "Presente") return;
+        if (currentStatus === "Justificado") return;
+        if (currentStatus === "" && currentReason === reason) return;
+
+        nextAttendanceMap[date] = "Justificado";
+        nextJustifications[date] = reason;
+        studentChanged = true;
+        hasChanges = true;
+
+        changedEntries.push({
+          aluno_nome: student.aluno,
+          data: date,
+          motivo: reason,
+          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+          horario: selectedClass.horario || selectedHorario || "",
+          professor: selectedClass.professor || selectedProfessor || "",
+        });
+      });
+
+      if (!studentChanged) return student;
+      return {
+        ...student,
+        attendance: nextAttendanceMap,
+        justifications: nextJustifications,
+      };
+    });
+
+    if (!hasChanges) return;
+
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setAttendance(nextAttendance);
+
+    saveJustificationLog(changedEntries).catch(() => undefined);
+    saveAttendanceLog({
+      turmaCodigo: selectedClass.turmaCodigo || "",
+      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+      horario: selectedClass.horario || selectedHorario || "",
+      professor: selectedClass.professor || selectedProfessor || "",
+      mes: monthKey,
+      registros: nextAttendance.map((item) => ({
+        aluno_nome: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+      })),
+    }).catch(() => undefined);
+  }, [
+    attendance,
+    dateDates,
+    calendarEvents,
+    monthKey,
+    selectedClass.turmaCodigo,
+    selectedClass.turmaLabel,
+    selectedClass.horario,
+    selectedClass.professor,
+    selectedTurma,
+    selectedHorario,
+    selectedProfessor,
+  ]);
+
+  useEffect(() => {
     if (!showDateModal || !modalDate) return;
     if (climaPrefillApplied) return;
     const shouldApply =
