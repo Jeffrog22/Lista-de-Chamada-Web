@@ -16,6 +16,31 @@ const normalizeHorarioKey = (value: unknown) => {
   return digits;
 };
 
+const resolveExclusionName = (item: any) =>
+  String(item?.nome || item?.Nome || item?.aluno || item?.aluno_nome || item?.alunoNome || "").trim();
+
+const normalizeExcludedStudentRecord = (item: any) => {
+  const normalizedName = resolveExclusionName(item);
+  if (!normalizedName) return { ...item };
+
+  const next = { ...item };
+  if (!next.nome) next.nome = normalizedName;
+  if (!next.Nome) next.Nome = normalizedName;
+  return next;
+};
+
+const isValidExcludedStudentRecord = (item: any) => {
+  const name = normalizeText(resolveExclusionName(item));
+  if (name) return true;
+
+  const id = String(item?.id || "").trim();
+  const turma = normalizeText(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.turmaCodigo || item?.TurmaCodigo);
+  const horario = normalizeHorarioKey(item?.horario || item?.Horario);
+  const professor = normalizeText(item?.professor || item?.Professor);
+
+  return Boolean(id && turma && (horario || professor));
+};
+
 const exclusionMatches = (candidate: any, payload: any) => {
   const candidateId = String(candidate?.id || "").trim();
   const payloadId = String(payload?.id || "").trim();
@@ -71,36 +96,55 @@ const writeExcludedStudentsLocal = (items: any[]) => {
   localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
 };
 
+const cleanExcludedStudentsLocalCache = () => {
+  const localItems = readExcludedStudentsLocal();
+  const cleaned = localItems
+    .map(normalizeExcludedStudentRecord)
+    .filter(isValidExcludedStudentRecord);
+
+  if (cleaned.length !== localItems.length || cleaned.some((item, index) => JSON.stringify(item) !== JSON.stringify(localItems[index]))) {
+    writeExcludedStudentsLocal(cleaned);
+  }
+
+  return cleaned;
+};
+
 const upsertExcludedStudentLocal = (payload: any) => {
-  const items = readExcludedStudentsLocal();
+  const normalizedPayload = normalizeExcludedStudentRecord(payload);
+  const items = cleanExcludedStudentsLocalCache();
   const nextItems = [...items];
-  const idx = nextItems.findIndex((item) => exclusionMatches(item, payload));
+  const idx = nextItems.findIndex((item) => exclusionMatches(item, normalizedPayload));
   if (idx >= 0) {
-    nextItems[idx] = { ...nextItems[idx], ...payload };
+    nextItems[idx] = normalizeExcludedStudentRecord({ ...nextItems[idx], ...normalizedPayload });
   } else {
-    nextItems.push(payload);
+    if (isValidExcludedStudentRecord(normalizedPayload)) {
+      nextItems.push(normalizedPayload);
+    }
   }
   writeExcludedStudentsLocal(nextItems);
   return nextItems;
 };
 
 const removeExcludedStudentLocal = (payload: any) => {
-  const items = readExcludedStudentsLocal();
+  const items = cleanExcludedStudentsLocalCache();
   const nextItems = items.filter((item) => !exclusionMatches(item, payload));
   writeExcludedStudentsLocal(nextItems);
   return nextItems;
 };
 
 const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
-  const localItems = readExcludedStudentsLocal();
+  const localItems = cleanExcludedStudentsLocalCache();
   const merged = [...localItems];
 
   (Array.isArray(remoteItems) ? remoteItems : []).forEach((remote) => {
-    const idx = merged.findIndex((item) => exclusionMatches(item, remote));
+    const normalizedRemote = normalizeExcludedStudentRecord(remote);
+    if (!isValidExcludedStudentRecord(normalizedRemote)) return;
+
+    const idx = merged.findIndex((item) => exclusionMatches(item, normalizedRemote));
     if (idx >= 0) {
-      merged[idx] = { ...remote, ...merged[idx] };
+      merged[idx] = normalizeExcludedStudentRecord({ ...normalizedRemote, ...merged[idx] });
     } else {
-      merged.push(remote);
+      merged.push(normalizedRemote);
     }
   });
 
@@ -144,7 +188,7 @@ export const getExcludedStudents = () =>
     .then((response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
-      const localData = localStateExists ? readExcludedStudentsLocal() : [];
+      const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
 
       if (remoteItems.length > 0) {
         const data = mergeExcludedStudentsLocalWithRemote(remoteItems);
