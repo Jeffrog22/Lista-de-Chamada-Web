@@ -65,10 +65,26 @@ export const Students: React.FC = () => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
+  const nameParticles = new Set(["da", "de", "do", "das", "dos", "e"]);
+
   const truncateNameWords = (fullName: string, words: number) => {
     const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
     if (parts.length <= words) return parts.join(" ");
-    return parts.slice(0, words).join(" ");
+
+    const selected: string[] = [];
+    let meaningfulCount = 0;
+
+    for (const part of parts) {
+      const normalizedPart = normalizeText(part);
+      const isParticle = nameParticles.has(normalizedPart);
+      if (!isParticle) {
+        meaningfulCount += 1;
+      }
+      if (meaningfulCount > words) break;
+      selected.push(part);
+    }
+
+    return selected.join(" ") || parts.slice(0, words).join(" ");
   };
 
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {

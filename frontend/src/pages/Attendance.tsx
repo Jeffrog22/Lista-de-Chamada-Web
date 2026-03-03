@@ -196,10 +196,26 @@ export const Attendance: React.FC = () => {
       .replace(/[\u0300-\u036f]/g, "")
       .trim();
 
+  const nameParticles = new Set(["da", "de", "do", "das", "dos", "e"]);
+
   const truncateNameWords = (fullName: string, words: number) => {
     const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
     if (parts.length <= words) return parts.join(" ");
-    return parts.slice(0, words).join(" ");
+
+    const selected: string[] = [];
+    let meaningfulCount = 0;
+
+    for (const part of parts) {
+      const normalizedPart = normalizeText(part);
+      const isParticle = nameParticles.has(normalizedPart);
+      if (!isParticle) {
+        meaningfulCount += 1;
+      }
+      if (meaningfulCount > words) break;
+      selected.push(part);
+    }
+
+    return selected.join(" ") || parts.slice(0, words).join(" ");
   };
 
   const parseDiasSemana = (value: string | undefined): string[] => {
@@ -1298,15 +1314,36 @@ export const Attendance: React.FC = () => {
     return raw;
   };
 
+  const normalizeCalendarDateKey = (value?: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return raw.slice(0, 10);
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+      const [dd, mm, yyyy] = raw.split("/");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return raw.slice(0, 10);
+  };
+
   const getHolidayBridgeEventForDate = (date: string) => {
+    const dateKey = normalizeCalendarDateKey(date);
     return calendarEvents.find(
-      (event) => event.date === date && (event.type === "feriado" || event.type === "ponte")
+      (event) => {
+        const eventDate = normalizeCalendarDateKey(event.date);
+        const eventType = normalizeText(String(event.type || ""));
+        return eventDate === dateKey && (eventType === "feriado" || eventType === "ponte");
+      }
     );
   };
 
   const getAllDayMeetingEventForDate = (date: string) => {
+    const dateKey = normalizeCalendarDateKey(date);
     return calendarEvents.find(
-      (event) => event.date === date && event.type === "reuniao" && !!event.allDay
+      (event) =>
+        normalizeCalendarDateKey(event.date) === dateKey &&
+        normalizeText(String(event.type || "")) === "reuniao" &&
+        !!event.allDay
     );
   };
 
@@ -1314,8 +1351,12 @@ export const Attendance: React.FC = () => {
     const classStart = toMinutes(normalizeHorarioForMinutes(selectedClass.horario || selectedHorario));
     if (classStart === null) return null as AcademicCalendarEvent | null;
 
+    const dateKey = normalizeCalendarDateKey(date);
+
     const dayMeetings = calendarEvents.filter(
-      (event) => event.date === date && event.type === "reuniao"
+      (event) =>
+        normalizeCalendarDateKey(event.date) === dateKey &&
+        normalizeText(String(event.type || "")) === "reuniao"
     );
 
     return (
@@ -1346,7 +1387,7 @@ export const Attendance: React.FC = () => {
       const currentStatus = student.attendance?.[date] || "";
       const currentReason = (student.justifications || {})[date] || "";
 
-      const canAutoJustify = currentStatus === "" || currentStatus === "Justificado";
+      const canAutoJustify = currentStatus !== "Presente";
       if (!canAutoJustify) {
         return student;
       }
