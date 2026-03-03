@@ -180,12 +180,22 @@ export const Exclusions: React.FC = () => {
     const onCompactChange = () => syncViewport();
     const onLandscapeChange = () => syncViewport();
 
-    compactQuery.addEventListener("change", onCompactChange);
-    landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+    if (typeof compactQuery.addEventListener === "function") {
+      compactQuery.addEventListener("change", onCompactChange);
+      landscapePhoneQuery.addEventListener("change", onLandscapeChange);
+    } else {
+      compactQuery.addListener(onCompactChange);
+      landscapePhoneQuery.addListener(onLandscapeChange);
+    }
 
     return () => {
-      compactQuery.removeEventListener("change", onCompactChange);
-      landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+      if (typeof compactQuery.removeEventListener === "function") {
+        compactQuery.removeEventListener("change", onCompactChange);
+        landscapePhoneQuery.removeEventListener("change", onLandscapeChange);
+      } else {
+        compactQuery.removeListener(onCompactChange);
+        landscapePhoneQuery.removeListener(onLandscapeChange);
+      }
     };
   }, []);
 

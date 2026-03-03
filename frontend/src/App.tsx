@@ -199,7 +199,8 @@ export default function App() {
         nivel: cls?.nivel || "",
         idade: calculateAge(student.data_nascimento || ""),
         categoria: student.categoria || "",
-        turma: cls?.codigo || "",
+        turma: cls?.turma_label || cls?.codigo || "",
+        turmaCodigo: cls?.codigo || "",
         horario: cls?.horario || "",
         professor: cls?.professor || "",
         whatsapp: student.whatsapp || "",
@@ -212,7 +213,8 @@ export default function App() {
     });
 
     const mappedClasses = (data.classes || []).map((cls: any) => ({
-      Turma: cls.codigo,
+      Turma: cls.turma_label || cls.codigo,
+      TurmaCodigo: cls.codigo,
       Horario: cls.horario,
       Professor: cls.professor,
       Nivel: cls.nivel,
