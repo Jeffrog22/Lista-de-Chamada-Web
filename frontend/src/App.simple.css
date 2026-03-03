@@ -416,7 +416,7 @@ body, html {
   }
 
   .header-left h1 {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   .header-right {
@@ -427,7 +427,7 @@ body, html {
 
   .user-info {
     max-width: 100%;
-    font-size: 12px;
+    font-size: 10px;
   }
 
   .sidebar {
@@ -445,8 +445,18 @@ body, html {
   }
 
   .neon-btn {
-    padding: 12px 16px;
-    font-size: 14px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .neon-btn-secondary {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .logout-button {
+    padding: 6px 10px;
+    font-size: 11px;
   }
 }
 
@@ -462,7 +472,7 @@ body, html {
   }
 
   .header-left h1 {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .header-right .user-info:first-child {
@@ -470,12 +480,44 @@ body, html {
   }
 
   .logout-button {
-    padding: 6px 12px;
-    font-size: 12px;
+    padding: 5px 8px;
+    font-size: 10px;
   }
 
   .neon-btn {
-    padding: 10px 14px;
-    font-size: 13px;
+    padding: 8px 10px;
+    font-size: 11px;
   }
+
+  .neon-btn-secondary {
+    padding: 7px 8px;
+    font-size: 10px;
+  }
+
+  .menu-button {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+}
+
+.mobile-compact .content-area {
+  font-size: 12px;
+}
+
+.mobile-compact .content-area h1,
+.mobile-compact .content-area h2,
+.mobile-compact .content-area h3 {
+  font-size: 90%;
+}
+
+.mobile-compact .content-area button,
+.mobile-compact .content-area input,
+.mobile-compact .content-area select,
+.mobile-compact .content-area textarea,
+.mobile-compact .content-area label,
+.mobile-compact .content-area span,
+.mobile-compact .content-area th,
+.mobile-compact .content-area td {
+  font-size: 90%;
 }

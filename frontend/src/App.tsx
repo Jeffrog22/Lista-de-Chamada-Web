@@ -30,6 +30,22 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => window.innerWidth <= 768);
+
+  const formatDisplayName = (value: string) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    if (!isMobileViewport || tokens.length <= 3) return raw;
+
+    const particles = new Set(["da", "de", "do", "das", "dos", "e"]);
+    let endIndex = 3;
+    if (tokens[2] && particles.has(tokens[2].toLowerCase()) && tokens[3]) {
+      endIndex = 4;
+    }
+
+    return tokens.slice(0, endIndex).join(" ");
+  };
 
   const importTimestampStorageKey = "last_import_at";
 
@@ -102,6 +118,22 @@ export default function App() {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const syncViewport = (matches: boolean) => setIsMobileViewport(matches);
+    syncViewport(mediaQuery.matches);
+
+    const listener = (event: MediaQueryListEvent) => syncViewport(event.matches);
+    mediaQuery.addEventListener("change", listener);
+    return () => mediaQuery.removeEventListener("change", listener);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileViewport && currentView === "main") {
+      setSidebarOpen(true);
+    }
+  }, [isMobileViewport, currentView]);
 
   const onLogin = (t: string) => {
     console.log("Login realizado com token:", t);
@@ -247,7 +279,7 @@ export default function App() {
 
   // Renderizar apenas o header e welcome screen (sem componentes complexos)
   return (
-    <div className="app-container">
+    <div className={`app-container ${isMobileViewport ? "mobile-compact" : ""}`}>
       {/* HEADER */}
       <header className="app-header">
         <div className="header-left">
@@ -258,7 +290,7 @@ export default function App() {
         </div>
         <div className="header-right">
           <span className="user-info">
-            {teacherName ? `Conectado: ${teacherName}` : "Conectado"}
+            {teacherName ? `Conectado: ${formatDisplayName(teacherName)}` : "Conectado"}
             {teacherUnit ? ` - ${teacherUnit}` : ""}
           </span>
           {updateStatus && (
@@ -341,20 +373,22 @@ export default function App() {
         {/* CONTENT AREA */}
         <main className="content-area">
           {currentView === "main" ? (
-            <div className="welcome-screen">
-              {featureCards.map((card) => (
-                <button
-                  key={card.view}
-                  type="button"
-                  className="feature-card feature-card-button"
-                  onClick={() => showView(card.view)}
-                >
-                  <span className="feature-icon">{card.icon}</span>
-                  <h3>{card.title}</h3>
-                  <p>{card.description}</p>
-                </button>
-              ))}
-            </div>
+            isMobileViewport ? null : (
+              <div className="welcome-screen">
+                {featureCards.map((card) => (
+                  <button
+                    key={card.view}
+                    type="button"
+                    className="feature-card feature-card-button"
+                    onClick={() => showView(card.view)}
+                  >
+                    <span className="feature-icon">{card.icon}</span>
+                    <h3>{card.title}</h3>
+                    <p>{card.description}</p>
+                  </button>
+                ))}
+              </div>
+            )
           ) : currentView === "attendance" ? (
             <Attendance />
           ) : currentView === "students" ? (
