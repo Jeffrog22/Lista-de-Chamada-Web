@@ -170,6 +170,50 @@ const getFallbackSensationByTemp = (rawTemp: string) => {
   return "Frio";
 };
 
+const CPTEC_CONDITION_LABELS: Record<string, string> = {
+  ec: "Céu claro",
+  ci: "Chuvas isoladas",
+  c: "Chuva",
+  in: "Instável",
+  pp: "Pancadas de chuva",
+  cm: "Chuva pela manhã",
+  pt: "Pancadas à tarde",
+  pm: "Pancadas pela manhã",
+  np: "Nublado com pancadas",
+  pc: "Parcialmente nublado",
+  cv: "Chuvisco",
+  ch: "Chuvoso",
+  t: "Tempestade",
+  e: "Encoberto",
+  n: "Nublado",
+  nv: "Nevoeiro",
+  psc: "Possibilidade de chuva",
+  pct: "Possibilidade de pancadas à tarde",
+  ppm: "Possibilidade de pancadas pela manhã",
+};
+
+const normalizeWeatherConditionLabel = (condition?: string, conditionCode?: string) => {
+  const code = String(conditionCode || "").trim().toLowerCase();
+  if (code && CPTEC_CONDITION_LABELS[code]) {
+    return CPTEC_CONDITION_LABELS[code];
+  }
+
+  const raw = String(condition || "").trim();
+  if (!raw) return "";
+
+  const rawCode = raw.toLowerCase();
+  if (CPTEC_CONDITION_LABELS[rawCode]) {
+    return CPTEC_CONDITION_LABELS[rawCode];
+  }
+
+  const cleaned = raw.replace(/[_-]+/g, " ").trim();
+  if (cleaned.length <= 4 && /^[a-z0-9]+$/i.test(cleaned)) {
+    return "Condição climática";
+  }
+
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
 // Coordenadas fixas para API (simulação)
 // const LAT = "-23.049194";
 // const LON = "-47.007278";
@@ -1087,6 +1131,8 @@ export const Attendance: React.FC = () => {
   }));
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSyncedAttendanceSnapshotRef = useRef<string>("");
   const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
@@ -1533,6 +1579,7 @@ export const Attendance: React.FC = () => {
         (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
       );
       const inferredCondition = String(data.clima1 || "").trim();
+      const inferredConditionLabel = normalizeWeatherConditionLabel(inferredCondition, "");
       const normalizedTemp = normalizeNumberInput(data.tempExterna);
       const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
 
@@ -1546,7 +1593,7 @@ export const Attendance: React.FC = () => {
         cloro: cloroEnabled ? cloroValue : 1.5,
         cloroEnabled,
         selectedIcons: icons.length ? icons : [fallbackSensation],
-        weatherCondition: inferredCondition,
+        weatherCondition: inferredConditionLabel,
         weatherConditionCode: "",
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
         incidentNote: "",
@@ -1580,6 +1627,7 @@ export const Attendance: React.FC = () => {
             (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
           );
           const inferredCondition = String(data.clima1 || "").trim();
+          const inferredConditionLabel = normalizeWeatherConditionLabel(inferredCondition, "");
           const normalizedTemp = normalizeNumberInput(data.tempExterna);
           const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
 
@@ -1592,7 +1640,7 @@ export const Attendance: React.FC = () => {
             cloro: cloroEnabled ? cloroValue : 1.5,
             cloroEnabled,
             selectedIcons: icons.length ? icons : [fallbackSensation],
-            weatherCondition: inferredCondition,
+            weatherCondition: inferredConditionLabel,
             weatherConditionCode: "",
             incidentType: "",
             incidentNote: "",
@@ -1607,7 +1655,7 @@ export const Attendance: React.FC = () => {
             apiTemp: existingCache?.apiTemp,
             apiCondition: existingCache?.apiCondition,
             apiConditionCode: existingCache?.apiConditionCode,
-            weatherCondition: inferredCondition,
+            weatherCondition: inferredConditionLabel,
           });
 
           setClimaPrefillApplied(true);
@@ -1626,7 +1674,10 @@ export const Attendance: React.FC = () => {
         ...prev,
         tempExterna: normalizeNumberInput(climaCache.tempExterna),
         selectedIcons: normalizeSensationList(climaCache.selectedIcons || []),
-        weatherCondition: String(climaCache.weatherCondition || climaCache.apiCondition || ""),
+        weatherCondition: normalizeWeatherConditionLabel(
+          String(climaCache.weatherCondition || climaCache.apiCondition || ""),
+          String(climaCache.apiConditionCode || "")
+        ),
         weatherConditionCode: String(climaCache.apiConditionCode || ""),
       }));
       setClimaPrefillApplied(true);
@@ -1641,7 +1692,10 @@ export const Attendance: React.FC = () => {
         ...prev,
         tempExterna: normalizeNumberInput(fallbackCache.tempExterna),
         selectedIcons: normalizeSensationList(fallbackCache.selectedIcons || []),
-        weatherCondition: String(fallbackCache.weatherCondition || fallbackCache.apiCondition || ""),
+        weatherCondition: normalizeWeatherConditionLabel(
+          String(fallbackCache.weatherCondition || fallbackCache.apiCondition || ""),
+          String(fallbackCache.apiConditionCode || "")
+        ),
         weatherConditionCode: String(fallbackCache.apiConditionCode || ""),
       }));
       setClimaPrefillApplied(true);
@@ -1653,6 +1707,7 @@ export const Attendance: React.FC = () => {
     const apiTemp = String(apiData.temp || "");
     const apiCondition = String(apiData.condition || "");
     const apiConditionCode = String(apiData.conditionCode || "").toLowerCase();
+    const apiConditionLabel = normalizeWeatherConditionLabel(apiCondition, apiConditionCode);
 
     if (climaCache) {
       const hasApiSignature = Boolean(climaCache.apiTemp && climaCache.apiCondition && climaCache.apiConditionCode);
@@ -1669,12 +1724,12 @@ export const Attendance: React.FC = () => {
             apiTemp,
             apiCondition,
             apiConditionCode,
-            weatherCondition: apiCondition,
+            weatherCondition: apiConditionLabel,
           });
         }
         setPoolData(prev => ({
           ...prev,
-          weatherCondition: apiCondition,
+          weatherCondition: apiConditionLabel,
           weatherConditionCode: apiConditionCode,
         }));
         setShowDateModal(true);
@@ -1696,7 +1751,7 @@ export const Attendance: React.FC = () => {
       apiTemp,
       apiCondition,
       apiConditionCode,
-      weatherCondition: apiCondition,
+      weatherCondition: apiConditionLabel,
     });
     setClimaPrefillApplied(true);
     setShowDateModal(true);
@@ -1815,7 +1870,10 @@ export const Attendance: React.FC = () => {
         ...prev,
         tempExterna: normalizedTemp,
         selectedIcons: sensations.length ? sensations : [getFallbackSensationByTemp(normalizedTemp)],
-        weatherCondition: String(cache.weatherCondition || cache.apiCondition || ""),
+        weatherCondition: normalizeWeatherConditionLabel(
+          String(cache.weatherCondition || cache.apiCondition || ""),
+          String(cache.apiConditionCode || "")
+        ),
         weatherConditionCode: String(cache.apiConditionCode || ""),
       }));
     }
@@ -2221,6 +2279,67 @@ export const Attendance: React.FC = () => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;
     saveAttendanceStorage(attendance);
   }, [attendance, storageKey, hydratedStorageKey]);
+
+  useEffect(() => {
+    if (!storageKey || hydratedStorageKey !== storageKey) return;
+    if (!attendance.length) return;
+
+    const snapshot = JSON.stringify(
+      attendance.map((item) => ({
+        aluno: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+      }))
+    );
+
+    if (snapshot === lastSyncedAttendanceSnapshotRef.current) return;
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      saveAttendanceLog({
+        turmaCodigo: selectedClass.turmaCodigo || "",
+        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+        horario: selectedClass.horario || selectedHorario || "",
+        professor: selectedClass.professor || selectedProfessor || "",
+        mes: monthKey,
+        registros: attendance.map((item) => ({
+          aluno_nome: item.aluno,
+          attendance: item.attendance,
+          justifications: item.justifications || {},
+        })),
+      })
+        .then(() => {
+          lastSyncedAttendanceSnapshotRef.current = snapshot;
+        })
+        .catch(() => undefined);
+    }, 900);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [
+    attendance,
+    storageKey,
+    hydratedStorageKey,
+    selectedClass.turmaCodigo,
+    selectedClass.turmaLabel,
+    selectedClass.horario,
+    selectedClass.professor,
+    selectedTurma,
+    selectedHorario,
+    selectedProfessor,
+    monthKey,
+  ]);
+
+  useEffect(() => {
+    lastSyncedAttendanceSnapshotRef.current = "";
+  }, [storageKey]);
 
   // Ciclar entre os 4 estados
   const cycleStatus = (currentStatus: "Presente" | "Falta" | "Justificado" | "") => {
@@ -3156,7 +3275,6 @@ export const Attendance: React.FC = () => {
                 <div style={{ marginBottom: "12px", fontSize: "12px", color: "#555" }}>
                   <strong>Condição climática:</strong>{" "}
                   {poolData.weatherCondition || "Indisponível"}
-                  {poolData.weatherConditionCode ? ` (${poolData.weatherConditionCode})` : ""}
                 </div>
                 <div style={{ display: "flex", flexWrap: "nowrap", gap: "6px", marginBottom: "15px" }}>
                   {WEATHER_ICONS.sensations.map(icon => (

@@ -35,6 +35,8 @@ export default function App() {
     const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
     return byWidth || byLandscapePhone;
   });
+  const sidebarTouchStartX = useRef<number | null>(null);
+  const sidebarTouchCurrentX = useRef<number | null>(null);
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -269,6 +271,39 @@ export default function App() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleSidebarTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    if (!isMobileViewport || !sidebarOpen) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    sidebarTouchStartX.current = touch.clientX;
+    sidebarTouchCurrentX.current = touch.clientX;
+  };
+
+  const handleSidebarTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    if (!isMobileViewport || !sidebarOpen) return;
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    sidebarTouchCurrentX.current = touch.clientX;
+  };
+
+  const handleSidebarTouchEnd = () => {
+    if (!isMobileViewport || !sidebarOpen) return;
+
+    const startX = sidebarTouchStartX.current;
+    const endX = sidebarTouchCurrentX.current;
+
+    sidebarTouchStartX.current = null;
+    sidebarTouchCurrentX.current = null;
+
+    if (startX === null || endX === null) return;
+
+    const deltaX = endX - startX;
+    const swipeThreshold = 50;
+    if (deltaX <= -swipeThreshold) {
+      setSidebarOpen(false);
+    }
+  };
+
   const showView = (view: ViewType) => {
     setCurrentView(view);
     if (view === "main") {
@@ -340,7 +375,13 @@ export default function App() {
       {/* MAIN LAYOUT */}
       <div className="main-layout">
         {/* SIDEBAR */}
-        <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+        <aside
+          className={`sidebar ${sidebarOpen ? "open" : "closed"}`}
+          onTouchStart={handleSidebarTouchStart}
+          onTouchMove={handleSidebarTouchMove}
+          onTouchEnd={handleSidebarTouchEnd}
+          onTouchCancel={handleSidebarTouchEnd}
+        >
           {/* MENU PRINCIPAL - NEON TECH */}
           <nav className="primary-menu">
             <div className="menu-title">Menu Principal</div>
