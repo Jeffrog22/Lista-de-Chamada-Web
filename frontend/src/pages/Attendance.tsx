@@ -1131,8 +1131,6 @@ export const Attendance: React.FC = () => {
   }));
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
-  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSyncedAttendanceSnapshotRef = useRef<string>("");
   const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
@@ -2279,68 +2277,6 @@ export const Attendance: React.FC = () => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;
     saveAttendanceStorage(attendance);
   }, [attendance, storageKey, hydratedStorageKey]);
-
-  useEffect(() => {
-    if (!storageKey || hydratedStorageKey !== storageKey) return;
-    if (!attendance.length) return;
-
-    const snapshot = JSON.stringify(
-      attendance.map((item) => ({
-        aluno: item.aluno,
-        attendance: item.attendance,
-        justifications: item.justifications || {},
-      }))
-    );
-
-    if (snapshot === lastSyncedAttendanceSnapshotRef.current) return;
-
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-
-    autosaveTimerRef.current = setTimeout(() => {
-      saveAttendanceLog({
-        turmaCodigo: selectedClass.turmaCodigo || "",
-        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-        horario: selectedClass.horario || selectedHorario || "",
-        professor: selectedClass.professor || selectedProfessor || "",
-        mes: monthKey,
-        registros: attendance.map((item) => ({
-          aluno_nome: item.aluno,
-          attendance: item.attendance,
-          justifications: item.justifications || {},
-        })),
-      })
-        .then((response: any) => {
-          if (response?.data?.queued) return;
-          lastSyncedAttendanceSnapshotRef.current = snapshot;
-        })
-        .catch(() => undefined);
-    }, 900);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-    };
-  }, [
-    attendance,
-    storageKey,
-    hydratedStorageKey,
-    selectedClass.turmaCodigo,
-    selectedClass.turmaLabel,
-    selectedClass.horario,
-    selectedClass.professor,
-    selectedTurma,
-    selectedHorario,
-    selectedProfessor,
-    monthKey,
-  ]);
-
-  useEffect(() => {
-    lastSyncedAttendanceSnapshotRef.current = "";
-  }, [storageKey]);
 
   useEffect(() => {
     flushPendingAttendanceLogs().catch(() => undefined);
