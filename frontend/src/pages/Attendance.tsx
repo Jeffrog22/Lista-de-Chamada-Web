@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -2311,7 +2311,8 @@ export const Attendance: React.FC = () => {
           justifications: item.justifications || {},
         })),
       })
-        .then(() => {
+        .then((response: any) => {
+          if (response?.data?.queued) return;
           lastSyncedAttendanceSnapshotRef.current = snapshot;
         })
         .catch(() => undefined);
@@ -2340,6 +2341,17 @@ export const Attendance: React.FC = () => {
   useEffect(() => {
     lastSyncedAttendanceSnapshotRef.current = "";
   }, [storageKey]);
+
+  useEffect(() => {
+    flushPendingAttendanceLogs().catch(() => undefined);
+
+    const onOnline = () => {
+      flushPendingAttendanceLogs().catch(() => undefined);
+    };
+
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
 
   // Ciclar entre os 4 estados
   const cycleStatus = (currentStatus: "Presente" | "Falta" | "Justificado" | "") => {
@@ -2538,7 +2550,11 @@ export const Attendance: React.FC = () => {
     };
 
     saveAttendanceLog(payload)
-      .then((resp) => {
+      .then((resp: any) => {
+        if (resp?.data?.queued) {
+          alert("Sem conexão no momento. Chamada salva localmente e pendente de sincronização.");
+          return;
+        }
         const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
         alert(`Chamada salva com sucesso!${file}`);
       })

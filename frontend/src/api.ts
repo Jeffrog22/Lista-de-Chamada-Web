@@ -5,6 +5,7 @@ const API = axios.create({
 });
 
 const EXCLUDED_STUDENTS_STORAGE_KEY = "excludedStudents";
+const ATTENDANCE_LOG_QUEUE_KEY = "pendingAttendanceLogs";
 
 const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
 
@@ -165,6 +166,79 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
   );
 };
 
+const normalizeAttendanceLogField = (value: unknown) => String(value || "").trim().toLowerCase();
+
+const normalizeAttendanceLogHorario = (value: unknown) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 3) return `0${digits}`;
+  if (digits.length >= 4) return digits.slice(0, 4);
+  return digits;
+};
+
+const getAttendanceLogQueueKey = (payload: any) => {
+  const turma = normalizeAttendanceLogField(payload?.turmaCodigo || payload?.turmaLabel);
+  const horario = normalizeAttendanceLogHorario(payload?.horario);
+  const professor = normalizeAttendanceLogField(payload?.professor);
+  const mes = normalizeAttendanceLogField(payload?.mes);
+  return `${turma}||${horario}||${professor}||${mes}`;
+};
+
+const readPendingAttendanceLogs = () => {
+  try {
+    const raw = localStorage.getItem(ATTENDANCE_LOG_QUEUE_KEY);
+    if (!raw) return [] as any[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as any[];
+  }
+};
+
+const writePendingAttendanceLogs = (items: any[]) => {
+  localStorage.setItem(ATTENDANCE_LOG_QUEUE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+};
+
+const upsertPendingAttendanceLog = (payload: any) => {
+  const items = readPendingAttendanceLogs();
+  const key = getAttendanceLogQueueKey(payload);
+  const idx = items.findIndex((item) => getAttendanceLogQueueKey(item) === key);
+  if (idx >= 0) {
+    items[idx] = payload;
+  } else {
+    items.push(payload);
+  }
+  writePendingAttendanceLogs(items);
+  return items;
+};
+
+const removePendingAttendanceLog = (payload: any) => {
+  const key = getAttendanceLogQueueKey(payload);
+  const items = readPendingAttendanceLogs().filter((item) => getAttendanceLogQueueKey(item) !== key);
+  writePendingAttendanceLogs(items);
+  return items;
+};
+
+export const flushPendingAttendanceLogs = async () => {
+  const queue = readPendingAttendanceLogs();
+  if (queue.length === 0) return { flushed: 0, pending: 0 };
+
+  const remaining: any[] = [];
+  let flushed = 0;
+
+  for (const payload of queue) {
+    try {
+      await API.post("/attendance-log", payload);
+      flushed += 1;
+    } catch {
+      remaining.push(payload);
+    }
+  }
+
+  writePendingAttendanceLogs(remaining);
+  return { flushed, pending: remaining.length };
+};
+
 
 // Attach token if present
 API.interceptors.request.use((config) => {
@@ -252,7 +326,10 @@ export const deleteExclusion = (data: any) =>
     .catch(() => ({ data: { ok: true, fallback: true, items: removeExcludedStudentLocal(data) } }));
 
 // Reports
-export const getReports = (params?: Record<string, any>) => API.get("/reports", { params }).catch(() => ({ data: [] }));
+export const getReports = (params?: Record<string, any>) =>
+  flushPendingAttendanceLogs()
+    .catch(() => ({ flushed: 0, pending: readPendingAttendanceLogs().length }))
+    .then(() => API.get("/reports", { params }).catch(() => ({ data: [] })));
 export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
 export const getFilters = () => API.get("/filters").catch(() => ({ data: { turmas: [], horarios: [], professores: [], meses: [], anos: [] } }));
 export const generateExcelReport = (data: any) => API.post("/reports/excel", data).catch(() => ({ data: { ok: true } }));
@@ -285,7 +362,15 @@ export const getPoolLog = (date: string, params?: Record<string, string | undefi
 };
 
 export const saveAttendanceLog = (data: any) =>
-  API.post("/attendance-log", data);
+  API.post("/attendance-log", data)
+    .then((response) => {
+      removePendingAttendanceLog(data);
+      return response;
+    })
+    .catch(() => {
+      const queued = upsertPendingAttendanceLog(data);
+      return { data: { ok: true, fallback: true, queued: true, pending: queued.length } };
+    });
 
 export const saveJustificationLog = (data: any) =>
   API.post("/justifications-log", data);
