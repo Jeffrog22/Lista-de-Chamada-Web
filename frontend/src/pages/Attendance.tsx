@@ -874,6 +874,43 @@ export const Attendance: React.FC = () => {
     return byTurma || classOptions[0] || emptyClass;
   }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
 
+  const resolvePersistenceContext = useCallback(() => {
+    const exactClass = classOptions.find(
+      (opt) =>
+        isSameTurma(opt, selectedTurma) &&
+        horarioMatches(opt.horario, selectedHorario) &&
+        opt.professor === selectedProfessor
+    );
+
+    const turmaCodigo = String(exactClass?.turmaCodigo || "").trim();
+    const turmaLabel = String(exactClass?.turmaLabel || "").trim();
+    const horario = String(exactClass?.horario || "").trim();
+    const professor = String(exactClass?.professor || "").trim();
+
+    return {
+      turmaCodigo,
+      turmaLabel,
+      horario,
+      professor,
+      isValid: Boolean(exactClass && turmaLabel && horario && professor),
+    };
+  }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
+
+  const logPersistenceDebug = useCallback(
+    (action: string, payload: { turmaCodigo: string; turmaLabel: string; horario: string; professor: string; mes?: string }) => {
+      if (!import.meta.env.DEV) return;
+      console.info("[attendance:persistence]", {
+        action,
+        turmaCodigo: payload.turmaCodigo,
+        turmaLabel: payload.turmaLabel,
+        horario: payload.horario,
+        professor: payload.professor,
+        mes: payload.mes,
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     const turmaValue = selectedClass.turmaLabel || selectedTurma || selectedClass.turmaCodigo || "";
     const horarioValue = selectedClass.horario || selectedHorario || "";
@@ -1426,6 +1463,7 @@ export const Attendance: React.FC = () => {
   };
 
   const applyCalendarClosureJustification = async (date: string, reasonLabel: string) => {
+    const persistence = resolvePersistenceContext();
     const changedEntries: Array<{ aluno_nome: string; data: string; motivo: string; turmaCodigo: string; turmaLabel: string; horario: string; professor: string }> = [];
     const nextAttendance: AttendanceRecord[] = attendance.map((student) => {
       const currentStatus = student.attendance?.[date] || "";
@@ -1446,10 +1484,10 @@ export const Attendance: React.FC = () => {
         aluno_nome: student.aluno,
         data: date,
         motivo: reasonLabel,
-        turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
-        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-        horario: selectedClass.horario || selectedHorario || "",
-        professor: selectedClass.professor || selectedProfessor || "",
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
       });
 
       return {
@@ -1464,27 +1502,43 @@ export const Attendance: React.FC = () => {
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setAttendance(nextAttendance);
 
-    try {
-      await saveJustificationLog(changedEntries);
-    } catch {
-      // ignore to avoid blocking UI
-    }
+    if (persistence.isValid) {
+      try {
+        logPersistenceDebug("saveJustificationLog:auto_calendar_closure", {
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+        });
+        await saveJustificationLog(changedEntries);
+      } catch {
+        // ignore to avoid blocking UI
+      }
 
-    try {
-      await saveAttendanceLog({
-        turmaCodigo: selectedClass.turmaCodigo || "",
-        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-        horario: selectedClass.horario || selectedHorario || "",
-        professor: selectedClass.professor || selectedProfessor || "",
-        mes: monthKey,
-        registros: nextAttendance.map((item) => ({
-          aluno_nome: item.aluno,
-          attendance: item.attendance,
-          justifications: item.justifications || {},
-        })),
-      });
-    } catch {
-      // ignore to avoid blocking UI
+      try {
+        logPersistenceDebug("saveAttendanceLog:auto_calendar_closure", {
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+        });
+        await saveAttendanceLog({
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+          registros: nextAttendance.map((item) => ({
+            aluno_nome: item.aluno,
+            attendance: item.attendance,
+            justifications: item.justifications || {},
+          })),
+        });
+      } catch {
+        // ignore to avoid blocking UI
+      }
     }
   };
 
@@ -1757,6 +1811,7 @@ export const Attendance: React.FC = () => {
 
   useEffect(() => {
     if (!attendance.length || !dateDates.length) return;
+    const persistence = resolvePersistenceContext();
 
     const holidayDates = dateDates.filter((date) => !!getHolidayBridgeEventForDate(date));
     if (holidayDates.length === 0) return;
@@ -1806,10 +1861,10 @@ export const Attendance: React.FC = () => {
           aluno_nome: student.aluno,
           data: date,
           motivo: reason,
-          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
-          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-          horario: selectedClass.horario || selectedHorario || "",
-          professor: selectedClass.professor || selectedProfessor || "",
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
         });
       });
 
@@ -1826,31 +1881,41 @@ export const Attendance: React.FC = () => {
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setAttendance(nextAttendance);
 
-    saveJustificationLog(changedEntries).catch(() => undefined);
-    saveAttendanceLog({
-      turmaCodigo: selectedClass.turmaCodigo || "",
-      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-      horario: selectedClass.horario || selectedHorario || "",
-      professor: selectedClass.professor || selectedProfessor || "",
-      mes: monthKey,
-      registros: nextAttendance.map((item) => ({
-        aluno_nome: item.aluno,
-        attendance: item.attendance,
-        justifications: item.justifications || {},
-      })),
-    }).catch(() => undefined);
+    if (persistence.isValid) {
+      logPersistenceDebug("saveJustificationLog:auto_holiday_effect", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
+      saveJustificationLog(changedEntries).catch(() => undefined);
+      logPersistenceDebug("saveAttendanceLog:auto_holiday_effect", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
+      saveAttendanceLog({
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+        registros: nextAttendance.map((item) => ({
+          aluno_nome: item.aluno,
+          attendance: item.attendance,
+          justifications: item.justifications || {},
+        })),
+      }).catch(() => undefined);
+    }
   }, [
     attendance,
     dateDates,
     calendarEvents,
     monthKey,
-    selectedClass.turmaCodigo,
-    selectedClass.turmaLabel,
-    selectedClass.horario,
-    selectedClass.professor,
-    selectedTurma,
-    selectedHorario,
-    selectedProfessor,
+    resolvePersistenceContext,
   ]);
 
   useEffect(() => {
@@ -1899,6 +1964,12 @@ export const Attendance: React.FC = () => {
   };
 
   const handleSaveLog = async (logTypeOverride?: ModalLogType | React.MouseEvent<HTMLButtonElement>) => {
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) {
+      alert("Selecione turma, horário e professor válidos antes de salvar.");
+      return;
+    }
+
     const effectiveLogType = typeof logTypeOverride === "string" ? logTypeOverride : poolData.logType;
     const statusSugerido = getSuggestedStatus();
     const isOccurrence = effectiveLogType === "ocorrencia";
@@ -1936,11 +2007,18 @@ export const Attendance: React.FC = () => {
           aluno_nome: student.aluno,
           data: modalDate,
           motivo: reasonLabel,
-          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
-          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-          horario: selectedClass.horario || selectedHorario || "",
-          professor: selectedClass.professor || selectedProfessor || "",
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
         }));
+        logPersistenceDebug("saveJustificationLog:modal_mass_justification", {
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+        });
         await saveJustificationLog(entries);
       } catch {
         // ignore to avoid blocking UI
@@ -1950,10 +2028,10 @@ export const Attendance: React.FC = () => {
     // Construção do Objeto de Log (Persistência)
     const logEntry: PoolLogEntry = {
       data: modalDate,
-      turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
-      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-      horario: selectedClass.horario || selectedHorario || "",
-      professor: selectedClass.professor || selectedProfessor || "",
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
       clima1: String(poolData.weatherCondition || "").trim(),
       clima2: normalizeSensationList(poolData.selectedIcons).join(", "),
       statusAula: effectiveLogType === "aula" ? statusSugerido : "cancelada",
@@ -1977,6 +2055,12 @@ export const Attendance: React.FC = () => {
           weatherCondition: poolData.weatherCondition || existingCache?.weatherCondition,
         });
       }
+      logPersistenceDebug("savePoolLog:modal", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+      });
       const response = await savePoolLog(logEntry);
       const action = response?.data?.action ? ` (${response.data.action})` : "";
       const file = response?.data?.file ? `\nArquivo: ${response.data.file}` : "";
@@ -2456,27 +2540,46 @@ export const Attendance: React.FC = () => {
     setShowJustificationModal(false);
 
     const student = attendance.find((item) => item.id === justificationStudentId);
+    const persistence = resolvePersistenceContext();
     if (student) {
+      if (!persistence.isValid) {
+        alert("Selecione turma, horário e professor válidos antes de salvar.");
+        return;
+      }
+
+      logPersistenceDebug("saveJustificationLog:manual_single", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
       saveJustificationLog([
         {
           aluno_nome: student.aluno,
           data: targetDate,
           motivo: justificationReason,
-          turmaCodigo: selectedClass.turmaCodigo || selectedTurma || "",
-          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-          horario: selectedClass.horario || selectedHorario || "",
-          professor: selectedClass.professor || selectedProfessor || "",
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
         },
       ]).catch(() => undefined);
     }
   };
 
   const handleSave = () => {
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) {
+      alert("Selecione turma, horário e professor válidos antes de salvar a chamada.");
+      return;
+    }
+
     const payload = {
-      turmaCodigo: selectedClass.turmaCodigo || "",
-      turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
-      horario: selectedClass.horario || selectedHorario || "",
-      professor: selectedClass.professor || selectedProfessor || "",
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
       mes: monthKey,
       registros: attendance.map((item) => ({
         aluno_nome: item.aluno,
@@ -2484,6 +2587,14 @@ export const Attendance: React.FC = () => {
         justifications: item.justifications || {},
       })),
     };
+
+    logPersistenceDebug("saveAttendanceLog:manual", {
+      turmaCodigo: payload.turmaCodigo,
+      turmaLabel: payload.turmaLabel,
+      horario: payload.horario,
+      professor: payload.professor,
+      mes: payload.mes,
+    });
 
     saveAttendanceLog(payload)
       .then((resp: any) => {
