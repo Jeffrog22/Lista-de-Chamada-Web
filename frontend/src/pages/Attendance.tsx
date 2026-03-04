@@ -220,6 +220,12 @@ const normalizeWeatherConditionLabel = (condition?: string, conditionCode?: stri
 
 type AttendanceHistory = AttendanceRecord[];
 type ModalLogType = "aula" | "ocorrencia";
+type AttendanceDebugEvent = {
+  ts: string;
+  source: "ui" | "api";
+  action: string;
+  payload: Record<string, unknown>;
+};
 
 const DEFAULT_POOL_TEMP = "28";
 
@@ -229,6 +235,8 @@ export const Attendance: React.FC = () => {
   const transferHistoryStorageKey = "studentTransferHistory";
   const attendanceRetroModeStorageKey = "attendanceRetroModeEnabled";
   const attendanceReferenceMonthStorageKey = "attendanceReferenceMonth";
+  const attendanceDebugKey = "attendanceDebugPersistence";
+  const attendanceDebugEventsKey = "attendanceDebugEvents";
   const defaultClassOptions: ClassOption[] = [];
 
   const defaultStudentsPerClass: { [key: string]: string[] } = {};
@@ -896,9 +904,48 @@ export const Attendance: React.FC = () => {
     };
   }, [classOptions, selectedTurma, selectedHorario, selectedProfessor]);
 
+  const appendDebugEvent = useCallback(
+    (entry: AttendanceDebugEvent) => {
+      try {
+        const raw = localStorage.getItem(attendanceDebugEventsKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(parsed) ? parsed : [];
+        const next = [...list, entry].slice(-80);
+        localStorage.setItem(attendanceDebugEventsKey, JSON.stringify(next));
+        setDebugEvents(next.slice(-40));
+      } catch {
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("attendance-debug-event", { detail: entry }));
+      } catch {
+      }
+    },
+    [attendanceDebugEventsKey]
+  );
+
   const logPersistenceDebug = useCallback(
     (action: string, payload: { turmaCodigo: string; turmaLabel: string; horario: string; professor: string; mes?: string }) => {
-      if (!import.meta.env.DEV) return;
+      const debugEnabled = (() => {
+        if (import.meta.env.DEV) return true;
+        try {
+          return localStorage.getItem(attendanceDebugKey) === "1";
+        } catch {
+          return false;
+        }
+      })();
+      if (!debugEnabled) return;
+      const entry: AttendanceDebugEvent = {
+        ts: new Date().toISOString(),
+        source: "ui",
+        action,
+        payload: {
+          turmaCodigo: payload.turmaCodigo,
+          turmaLabel: payload.turmaLabel,
+          horario: payload.horario,
+          professor: payload.professor,
+          mes: payload.mes,
+        },
+      };
       console.info("[attendance:persistence]", {
         action,
         turmaCodigo: payload.turmaCodigo,
@@ -907,9 +954,61 @@ export const Attendance: React.FC = () => {
         professor: payload.professor,
         mes: payload.mes,
       });
+      appendDebugEvent(entry);
     },
-    []
+    [appendDebugEvent, attendanceDebugKey]
   );
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hash = String(window.location.hash || "");
+      const hashQueryPart = hash.includes("?") ? hash.split("?")[1] : "";
+      const hashParams = new URLSearchParams(hashQueryPart);
+      const debugParam = params.get("attendanceDebug") || hashParams.get("attendanceDebug");
+      if (debugParam === "1") {
+        localStorage.setItem(attendanceDebugKey, "1");
+        setShowDebugPanel(true);
+      }
+      if (debugParam === "0") {
+        localStorage.removeItem(attendanceDebugKey);
+        localStorage.removeItem(attendanceDebugEventsKey);
+        setShowDebugPanel(false);
+        setDebugEvents([]);
+      }
+    } catch {
+    }
+
+    const refreshDebugPanel = () => {
+      const enabled = import.meta.env.DEV || localStorage.getItem(attendanceDebugKey) === "1";
+      setShowDebugPanel(enabled);
+      try {
+        const raw = localStorage.getItem(attendanceDebugEventsKey);
+        const parsed = raw ? JSON.parse(raw) : [];
+        setDebugEvents(Array.isArray(parsed) ? parsed.slice(-40) : []);
+      } catch {
+        setDebugEvents([]);
+      }
+    };
+
+    const onDebugEvent = (event: Event) => {
+      const custom = event as CustomEvent<AttendanceDebugEvent>;
+      const entry = custom.detail;
+      if (!entry) return;
+      setDebugEvents((prev) => [...prev, entry].slice(-40));
+    };
+
+    window.addEventListener("storage", refreshDebugPanel);
+    window.addEventListener("focus", refreshDebugPanel);
+    window.addEventListener("attendance-debug-event", onDebugEvent as EventListener);
+    refreshDebugPanel();
+
+    return () => {
+      window.removeEventListener("storage", refreshDebugPanel);
+      window.removeEventListener("focus", refreshDebugPanel);
+      window.removeEventListener("attendance-debug-event", onDebugEvent as EventListener);
+    };
+  }, [attendanceDebugEventsKey, attendanceDebugKey]);
 
   useEffect(() => {
     const turmaValue = selectedClass.turmaLabel || selectedTurma || selectedClass.turmaCodigo || "";
@@ -1307,6 +1406,23 @@ export const Attendance: React.FC = () => {
   const [climaPrefillApplied, setClimaPrefillApplied] = useState(false);
   const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState<boolean>(() => {
+    if (import.meta.env.DEV) return true;
+    try {
+      return localStorage.getItem(attendanceDebugKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [debugEvents, setDebugEvents] = useState<AttendanceDebugEvent[]>(() => {
+    try {
+      const raw = localStorage.getItem(attendanceDebugEventsKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.slice(-40) : [];
+    } catch {
+      return [];
+    }
+  });
   
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
@@ -3575,6 +3691,71 @@ export const Attendance: React.FC = () => {
           </div>
             );
           })()}
+        </div>
+      )}
+
+      {showDebugPanel && (
+        <div
+          style={{
+            position: "fixed",
+            right: 12,
+            bottom: 12,
+            width: "min(94vw, 420px)",
+            maxHeight: "42vh",
+            background: "rgba(17,24,39,0.95)",
+            color: "#f9fafb",
+            borderRadius: 10,
+            padding: 10,
+            zIndex: 1600,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <strong style={{ fontSize: 12 }}>Debug Persistência</strong>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem(attendanceDebugEventsKey);
+                setDebugEvents([]);
+              }}
+              style={{
+                border: "1px solid #6b7280",
+                borderRadius: 6,
+                background: "transparent",
+                color: "#f9fafb",
+                fontSize: 11,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              Limpar
+            </button>
+          </div>
+
+          <div style={{ overflowY: "auto", fontSize: 11, lineHeight: 1.35 }}>
+            {debugEvents.length === 0 && <div style={{ opacity: 0.8 }}>Sem eventos ainda.</div>}
+            {debugEvents
+              .slice()
+              .reverse()
+              .map((entry, idx) => (
+                <div key={`${entry.ts}-${entry.action}-${idx}`} style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 6, marginTop: 6 }}>
+                  <div style={{ opacity: 0.8 }}>
+                    {new Date(entry.ts).toLocaleTimeString()} · {entry.source} · {entry.action}
+                  </div>
+                  <div style={{ opacity: 0.95 }}>
+                    {String(entry.payload?.turmaCodigo || entry.payload?.turmaLabel || "-")} | {String(entry.payload?.horario || "-")} | {String(entry.payload?.professor || "-")} | {String(entry.payload?.mes || "-")}
+                  </div>
+                  {entry.action.includes("queued") || entry.action.includes("flush") ? (
+                    <div style={{ opacity: 0.85 }}>
+                      pending: {String(entry.payload?.pending ?? "-")} · flushed: {String(entry.payload?.flushed ?? "-")}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+          </div>
         </div>
       )}
     </div>

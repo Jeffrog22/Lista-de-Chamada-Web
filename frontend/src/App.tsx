@@ -83,6 +83,30 @@ export default function App() {
   };
 
   useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const rawHash = String(window.location.hash || "");
+      const hashQuery = rawHash.includes("?") ? rawHash.split("?")[1] : "";
+      const hashParams = new URLSearchParams(hashQuery);
+      const debugParam = searchParams.get("attendanceDebug") || hashParams.get("attendanceDebug");
+
+      if (debugParam === "1") {
+        localStorage.setItem("attendanceDebugPersistence", "1");
+      }
+
+      if (debugParam === "0") {
+        localStorage.removeItem("attendanceDebugPersistence");
+        localStorage.removeItem("attendanceDebugEvents");
+      }
+
+      const hashPath = rawHash.replace(/^#/, "").split("?")[0].trim();
+      if (!hashPath && debugParam === "1") {
+        window.location.hash = "attendance";
+      }
+    } catch {
+      // ignore
+    }
+
     // Atualizar token quando localStorage muda
     const stored = localStorage.getItem("access_token");
     if (stored && !token) {

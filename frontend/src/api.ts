@@ -6,6 +6,40 @@ const API = axios.create({
 
 const EXCLUDED_STUDENTS_STORAGE_KEY = "excludedStudents";
 const ATTENDANCE_LOG_QUEUE_KEY = "pendingAttendanceLogs";
+const ATTENDANCE_DEBUG_KEY = "attendanceDebugPersistence";
+const ATTENDANCE_DEBUG_EVENTS_KEY = "attendanceDebugEvents";
+
+const isPersistenceDebugEnabled = () => {
+  if (import.meta.env.DEV) return true;
+  try {
+    return localStorage.getItem(ATTENDANCE_DEBUG_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+const logPersistenceDebug = (action: string, payload: Record<string, unknown>) => {
+  if (!isPersistenceDebugEnabled()) return;
+  const entry = {
+    ts: new Date().toISOString(),
+    source: "api",
+    action,
+    payload,
+  };
+  console.info("[attendance:persistence:api]", { action, ...payload });
+  try {
+    const raw = localStorage.getItem(ATTENDANCE_DEBUG_EVENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    const next = [...list, entry].slice(-80);
+    localStorage.setItem(ATTENDANCE_DEBUG_EVENTS_KEY, JSON.stringify(next));
+  } catch {
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("attendance-debug-event", { detail: entry }));
+  } catch {
+  }
+};
 
 const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
 
@@ -221,6 +255,7 @@ const removePendingAttendanceLog = (payload: any) => {
 
 export const flushPendingAttendanceLogs = async () => {
   const queue = readPendingAttendanceLogs();
+  logPersistenceDebug("flush:start", { queued: queue.length });
   if (queue.length === 0) return { flushed: 0, pending: 0 };
 
   const remaining: any[] = [];
@@ -230,12 +265,27 @@ export const flushPendingAttendanceLogs = async () => {
     try {
       await API.post("/attendance-log", payload);
       flushed += 1;
+      logPersistenceDebug("flush:item_ok", {
+        turmaCodigo: payload?.turmaCodigo || "",
+        turmaLabel: payload?.turmaLabel || "",
+        horario: payload?.horario || "",
+        professor: payload?.professor || "",
+        mes: payload?.mes || "",
+      });
     } catch {
       remaining.push(payload);
+      logPersistenceDebug("flush:item_fail", {
+        turmaCodigo: payload?.turmaCodigo || "",
+        turmaLabel: payload?.turmaLabel || "",
+        horario: payload?.horario || "",
+        professor: payload?.professor || "",
+        mes: payload?.mes || "",
+      });
     }
   }
 
   writePendingAttendanceLogs(remaining);
+  logPersistenceDebug("flush:end", { flushed, pending: remaining.length });
   return { flushed, pending: remaining.length };
 };
 
@@ -328,6 +378,13 @@ export const deleteExclusion = (data: any) =>
 // Reports
 export const getReports = (params?: Record<string, any>) =>
   flushPendingAttendanceLogs()
+    .then((flushInfo) => {
+      logPersistenceDebug("reports:after_flush", {
+        flushed: flushInfo?.flushed ?? 0,
+        pending: flushInfo?.pending ?? 0,
+      });
+      return flushInfo;
+    })
     .catch(() => ({ flushed: 0, pending: readPendingAttendanceLogs().length }))
     .then(() => API.get("/reports", { params }).catch(() => ({ data: [] })));
 export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
@@ -362,15 +419,41 @@ export const getPoolLog = (date: string, params?: Record<string, string | undefi
 };
 
 export const saveAttendanceLog = (data: any) =>
-  API.post("/attendance-log", data)
-    .then((response) => {
-      removePendingAttendanceLog(data);
-      return response;
-    })
-    .catch(() => {
-      const queued = upsertPendingAttendanceLog(data);
-      return { data: { ok: true, fallback: true, queued: true, pending: queued.length } };
+  (() => {
+    logPersistenceDebug("save:start", {
+      turmaCodigo: data?.turmaCodigo || "",
+      turmaLabel: data?.turmaLabel || "",
+      horario: data?.horario || "",
+      professor: data?.professor || "",
+      mes: data?.mes || "",
     });
+    return API.post("/attendance-log", data)
+      .then((response) => {
+        removePendingAttendanceLog(data);
+        logPersistenceDebug("save:ok", {
+          turmaCodigo: data?.turmaCodigo || "",
+          turmaLabel: data?.turmaLabel || "",
+          horario: data?.horario || "",
+          professor: data?.professor || "",
+          mes: data?.mes || "",
+          pending: readPendingAttendanceLogs().length,
+        });
+        return response;
+      })
+      .catch((error) => {
+        const queued = upsertPendingAttendanceLog(data);
+        logPersistenceDebug("save:queued", {
+          turmaCodigo: data?.turmaCodigo || "",
+          turmaLabel: data?.turmaLabel || "",
+          horario: data?.horario || "",
+          professor: data?.professor || "",
+          mes: data?.mes || "",
+          pending: queued.length,
+          error: error?.message || "request_failed",
+        });
+        return { data: { ok: true, fallback: true, queued: true, pending: queued.length } };
+      });
+  })();
 
 export const saveJustificationLog = (data: any) =>
   API.post("/justifications-log", data);
