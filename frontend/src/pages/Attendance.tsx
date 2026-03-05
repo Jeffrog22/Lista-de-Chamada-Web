@@ -1423,6 +1423,13 @@ export const Attendance: React.FC = () => {
       return [];
     }
   });
+  const [debugPanelCollapsed, setDebugPanelCollapsed] = useState<boolean>(() => {
+    try {
+      return window.innerWidth <= 768;
+    } catch {
+      return true;
+    }
+  });
   
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
@@ -2316,14 +2323,36 @@ export const Attendance: React.FC = () => {
           .map((value) => normalizeText(value || ""))
           .filter(Boolean);
         const horarioRef = selectedClass.horario || selectedHorario || "";
+        const horarioRefNorm = normalizeHorarioDigits(horarioRef);
         const professorRef = normalizeText(selectedClass.professor || selectedProfessor || "");
 
-        const matchedClass = reports.find((item) => {
-          const turmaMatches = turmaCandidates.includes(normalizeText(item.turma || ""));
-          const horarioMatches = (item.horario || "") === horarioRef;
-          const professorItem = normalizeText(item.professor || "");
-          const professorMatches = !professorRef || professorItem === professorRef;
-          return turmaMatches && horarioMatches && professorMatches;
+        const matchedClass = reports
+          .map((item) => {
+            const turmaMatches = turmaCandidates.includes(normalizeText(item.turma || ""));
+            if (!turmaMatches) return { item, score: -1 };
+
+            const itemHorarioRaw = String(item.horario || "").trim();
+            const itemHorarioNorm = normalizeHorarioDigits(itemHorarioRaw);
+            const professorItem = normalizeText(item.professor || "");
+
+            let score = 1;
+            if (horarioRef && itemHorarioRaw === horarioRef) score += 3;
+            else if (horarioRefNorm && itemHorarioNorm && itemHorarioNorm === horarioRefNorm) score += 2;
+
+            if (!professorRef) score += 1;
+            else if (professorItem === professorRef) score += 1;
+
+            return { item, score };
+          })
+          .filter((entry) => entry.score > 0)
+          .sort((a, b) => b.score - a.score)[0]?.item;
+
+        logPersistenceDebug("hydrate:report_match", {
+          turmaCodigo: selectedClass.turmaCodigo || "",
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+          horario: selectedClass.horario || selectedHorario || "",
+          professor: selectedClass.professor || selectedProfessor || "",
+          mes: monthKey,
         });
 
         (matchedClass?.alunos || []).forEach((student) => {
@@ -2451,12 +2480,16 @@ export const Attendance: React.FC = () => {
                 ...base,
                 ...(backend?.attendance || {}),
               };
-              const storedAttendance = stored?.attendance || {};
-              Object.entries(storedAttendance).forEach(([date, value]) => {
-                if (value && !merged[date]) {
-                  merged[date] = value;
-                }
-              });
+
+              if (!backend) {
+                const storedAttendance = stored?.attendance || {};
+                Object.entries(storedAttendance).forEach(([date, value]) => {
+                  if (value && !merged[date]) {
+                    merged[date] = value;
+                  }
+                });
+              }
+
               return merged;
             })(),
             justifications: stored?.justifications || {},
@@ -3700,8 +3733,8 @@ export const Attendance: React.FC = () => {
             position: "fixed",
             right: 12,
             bottom: 12,
-            width: "min(94vw, 420px)",
-            maxHeight: "42vh",
+            width: debugPanelCollapsed ? "auto" : "min(94vw, 420px)",
+            maxHeight: debugPanelCollapsed ? "none" : "42vh",
             background: "rgba(17,24,39,0.95)",
             color: "#f9fafb",
             borderRadius: 10,
@@ -3715,27 +3748,46 @@ export const Attendance: React.FC = () => {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <strong style={{ fontSize: 12 }}>Debug Persistência</strong>
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem(attendanceDebugEventsKey);
-                setDebugEvents([]);
-              }}
-              style={{
-                border: "1px solid #6b7280",
-                borderRadius: 6,
-                background: "transparent",
-                color: "#f9fafb",
-                fontSize: 11,
-                padding: "2px 8px",
-                cursor: "pointer",
-              }}
-            >
-              Limpar
-            </button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setDebugPanelCollapsed((prev) => !prev)}
+                style={{
+                  border: "1px solid #6b7280",
+                  borderRadius: 6,
+                  background: "transparent",
+                  color: "#f9fafb",
+                  fontSize: 11,
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                }}
+              >
+                {debugPanelCollapsed ? "Abrir" : "Recolher"}
+              </button>
+              {!debugPanelCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem(attendanceDebugEventsKey);
+                    setDebugEvents([]);
+                  }}
+                  style={{
+                    border: "1px solid #6b7280",
+                    borderRadius: 6,
+                    background: "transparent",
+                    color: "#f9fafb",
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
           </div>
 
-          <div style={{ overflowY: "auto", fontSize: 11, lineHeight: 1.35 }}>
+          {!debugPanelCollapsed && <div style={{ overflowY: "auto", fontSize: 11, lineHeight: 1.35 }}>
             {debugEvents.length === 0 && <div style={{ opacity: 0.8 }}>Sem eventos ainda.</div>}
             {debugEvents
               .slice()
@@ -3755,7 +3807,7 @@ export const Attendance: React.FC = () => {
                   ) : null}
                 </div>
               ))}
-          </div>
+          </div>}
         </div>
       )}
     </div>
