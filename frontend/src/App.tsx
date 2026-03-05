@@ -89,6 +89,12 @@ export default function App() {
       const hashQuery = rawHash.includes("?") ? rawHash.split("?")[1] : "";
       const hashParams = new URLSearchParams(hashQuery);
       const debugParam = searchParams.get("attendanceDebug") || hashParams.get("attendanceDebug");
+      const isProduction = !import.meta.env.DEV;
+
+      if (isProduction && debugParam !== "1") {
+        localStorage.removeItem("attendanceDebugPersistence");
+        localStorage.removeItem("attendanceDebugEvents");
+      }
 
       if (debugParam === "1") {
         localStorage.setItem("attendanceDebugPersistence", "1");
@@ -178,7 +184,6 @@ export default function App() {
   }, [isMobileViewport, currentView]);
 
   const onLogin = (t: string) => {
-    console.log("Login realizado com token:", t);
     localStorage.setItem("access_token", t);
     setToken(t);
     const profileStr = localStorage.getItem("teacherProfile");

@@ -199,7 +199,10 @@ const normalizeWeatherConditionLabel = (condition?: string, conditionCode?: stri
   }
 
   const raw = String(condition || "").trim();
-  if (!raw) return "";
+  if (!raw) {
+    if (code) return "Condição climática";
+    return "";
+  }
 
   const rawCode = raw.toLowerCase();
   if (CPTEC_CONDITION_LABELS[rawCode]) {
@@ -1917,7 +1920,7 @@ export const Attendance: React.FC = () => {
       ...prev,
       tempExterna: normalizeNumberInput(apiData.temp),
       selectedIcons: normalizeSensationList(autoIcons),
-      weatherCondition: apiCondition,
+      weatherCondition: apiConditionLabel,
       weatherConditionCode: apiConditionCode,
     }));
     setClimaCache(date, {
@@ -2187,7 +2190,6 @@ export const Attendance: React.FC = () => {
       const response = await savePoolLog(logEntry);
       const action = response?.data?.action ? ` (${response.data.action})` : "";
       const file = response?.data?.file ? `\nArquivo: ${response.data.file}` : "";
-      console.info("pool-log saved", response?.data);
       alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}${action}${file}`);
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
@@ -2544,7 +2546,6 @@ export const Attendance: React.FC = () => {
         if (item.id === id) {
           const currentStatus = item.attendance[date];
           const newStatus = cycleStatus(currentStatus);
-          console.log(`Clique: ID=${id} Data=${date} ${currentStatus}→${newStatus}`);
           
           return {
             ...item,
@@ -2559,7 +2560,6 @@ export const Attendance: React.FC = () => {
       return newAttendance;
     });
   };
-
   const handleUndo = () => {
     if (history.length > 0) {
       setAttendance(JSON.parse(JSON.stringify(history[0])));
@@ -3488,13 +3488,13 @@ export const Attendance: React.FC = () => {
                   <strong>Condição climática:</strong>{" "}
                   {poolData.weatherCondition || "Indisponível"}
                 </div>
-                <div style={{ display: "flex", flexWrap: "nowrap", gap: "6px", marginBottom: "15px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" }}>
                   {WEATHER_ICONS.sensations.map(icon => (
                     <button
                       key={icon}
                       onClick={() => toggleIcon(icon)}
                       style={{
-                        padding: "4px 8px",
+                        padding: "5px 10px",
                         borderRadius: "20px",
                         border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
                         background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
@@ -3502,8 +3502,8 @@ export const Attendance: React.FC = () => {
                         cursor: "pointer",
                         fontSize: "11px",
                         fontWeight: 600,
-                        flex: "1 1 0",
-                        minWidth: 0,
+                        flex: "0 0 auto",
+                        minWidth: icon === "Agradável" ? "84px" : "72px",
                         whiteSpace: "nowrap"
                       }}
                     >
