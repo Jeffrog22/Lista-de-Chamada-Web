@@ -2166,15 +2166,19 @@ export const Attendance: React.FC = () => {
       : "Condições Climáticas";
     
     // Lógica para aula justificada e ocorrência
+    const shouldTreatOccurrenceAsClass = isOccurrence && occurrenceImpact === "aula";
     const shouldTreatOccurrenceAsDay = isOccurrence && occurrenceImpact === "dia";
     const shouldMassJustify =
       (effectiveLogType === "aula" && statusSugerido === "justificada") ||
+      shouldTreatOccurrenceAsClass ||
       shouldTreatOccurrenceAsDay;
     const shouldAddJustificationNote = shouldMassJustify || isOccurrence;
+    let nextAttendanceSnapshot = attendance;
+
     if (shouldMassJustify || shouldAddJustificationNote) {
       // Aplicar justificativa em massa
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
-      setAttendance(prev => prev.map(student => {
+      nextAttendanceSnapshot = attendance.map((student) => {
         const nextJustifications = { ...(student.justifications || {}) };
         if (shouldMassJustify) {
           nextJustifications[modalDate] = reasonLabel;
@@ -2187,7 +2191,8 @@ export const Attendance: React.FC = () => {
           attendance: shouldMassJustify ? { ...student.attendance, [modalDate]: "Justificado" } : student.attendance,
           justifications: nextJustifications,
         };
-      }));
+      });
+      setAttendance(nextAttendanceSnapshot);
 
       try {
         const entries = attendance.map((student) => ({
@@ -2207,6 +2212,26 @@ export const Attendance: React.FC = () => {
           mes: monthKey,
         });
         await saveJustificationLog(entries);
+
+        logPersistenceDebug("saveAttendanceLog:modal_mass_justification", {
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+        });
+        await saveAttendanceLog({
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+          registros: nextAttendanceSnapshot.map((item) => ({
+            aluno_nome: item.aluno,
+            attendance: item.attendance,
+            justifications: item.justifications || {},
+          })),
+        });
       } catch {
         // ignore to avoid blocking UI
       }
