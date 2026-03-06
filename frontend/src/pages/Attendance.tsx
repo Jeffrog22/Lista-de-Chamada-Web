@@ -3143,7 +3143,7 @@ export const Attendance: React.FC = () => {
                       {afastamentoInfo && (
                         <span
                           title={afastamentoInfo.tooltip}
-                          style={{ color: "#d97706", fontWeight: 800, fontSize: "14px", lineHeight: 1 }}
+                          style={{ color: "#d97706", fontWeight: 700, fontSize: "10px", lineHeight: 1 }}
                         >
                           ⏳
                         </span>
