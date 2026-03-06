@@ -340,6 +340,9 @@ export default function App() {
     } else {
       window.location.hash = view;
     }
+    if (isMobileViewport) {
+      setSidebarOpen(false);
+    }
   };
 
   const featureCards: Array<{
