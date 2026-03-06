@@ -3069,7 +3069,39 @@ export const Attendance: React.FC = () => {
               fontWeight: 600,
             }}
           />
+          <div
+            title="Mês efetivo usado para salvar e buscar os registros"
+            style={{
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #ced4da",
+              background: "#ffffff",
+              color: "#2c3e50",
+              fontSize: "12px",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Mês do log: {currentMonthFormatted}
+          </div>
         </div>
+        {retroModeEnabled && referenceMonth !== currentMonthKey && (
+          <div
+            style={{
+              width: "100%",
+              marginTop: "4px",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #f4c57d",
+              background: "#fff6e6",
+              color: "#9a6700",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            Atenção: lançamento retroativo ativo ({currentMonthFormatted}).
+          </div>
+        )}
       </div>
 
       {/* TABELA DE CHAMADA - DATAS NO CABEÇALHO */}
