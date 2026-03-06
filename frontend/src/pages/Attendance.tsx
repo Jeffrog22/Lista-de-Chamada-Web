@@ -451,10 +451,18 @@ export const Attendance: React.FC = () => {
     if (days <= 1) return null;
 
     const dateLabel = startDate.split("-").reverse().join("/");
+    const rangeLabel = getMonthJustificationSummary(justifications).find((entry) => {
+      return extractJustificationDays(entry.reason) > 1;
+    })?.dayLabel;
+
+    const tooltip = rangeLabel
+      ? `${days} dias de afastamento (${rangeLabel}) a partir de ${dateLabel}`
+      : `${days} dias de afastamento a partir de ${dateLabel}`;
+
     return {
       days,
       startDate,
-      tooltip: `${days} dias de afastamento a partir de ${dateLabel}`,
+      tooltip,
     };
   };
 
