@@ -11,12 +11,14 @@ interface TeacherProfile {
 }
 
 export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
+  const teacherProfileStorageKey = "teacherProfile";
   const [profile, setProfile] = useState<TeacherProfile>({
     name: "",
     unit: "",
     email: "",
     whatsapp: "",
   });
+  const [rememberProfile, setRememberProfile] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,22 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   };
 
   useEffect(() => {
+    try {
+      const savedProfileRaw = localStorage.getItem(teacherProfileStorageKey);
+      if (savedProfileRaw) {
+        const parsed = JSON.parse(savedProfileRaw);
+        setProfile({
+          name: String(parsed?.name || ""),
+          unit: String(parsed?.unit || ""),
+          email: String(parsed?.email || ""),
+          whatsapp: String(parsed?.whatsapp || ""),
+        });
+        setRememberProfile(true);
+      }
+    } catch {
+      // ignore invalid local profile payload
+    }
+
     getBootstrap()
       .then(() => setBackendOnline(true))
       .catch(() => setBackendOnline(false));
@@ -68,6 +86,17 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         setImportStatusInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
       });
   }, []);
+
+  const handleRememberChange = (checked: boolean) => {
+    setRememberProfile(checked);
+    if (!checked) {
+      try {
+        localStorage.removeItem(teacherProfileStorageKey);
+      } catch {
+        // ignore storage errors
+      }
+    }
+  };
 
   const formatImportDate = (value?: string | null) => {
     if (!value) return "-";
@@ -164,7 +193,11 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       const res = await getBootstrap();
       applyBootstrap(res.data);
 
-      localStorage.setItem("teacherProfile", JSON.stringify(profile));
+      if (rememberProfile) {
+        localStorage.setItem(teacherProfileStorageKey, JSON.stringify(profile));
+      } else {
+        localStorage.removeItem(teacherProfileStorageKey);
+      }
       localStorage.setItem("access_token", "local-session");
       onLogin("local-session");
     } catch (err: any) {
@@ -242,6 +275,15 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             style={{ width: "100%" }}
           />
+        </label>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333" }}>
+          <input
+            type="checkbox"
+            checked={rememberProfile}
+            onChange={(e) => handleRememberChange(e.target.checked)}
+          />
+          <span>Lembrar meus dados neste dispositivo</span>
         </label>
 
         <button

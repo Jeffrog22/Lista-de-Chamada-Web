@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { addExclusion, createImportStudent, getBootstrap, updateImportStudent } from "../api";
 
@@ -66,26 +66,6 @@ export const Students: React.FC = () => {
       .trim();
 
   const nameParticles = new Set(["da", "de", "do", "das", "dos", "e"]);
-
-  const truncateNameWords = (fullName: string, words: number) => {
-    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
-    if (parts.length <= words) return parts.join(" ");
-
-    const selected: string[] = [];
-    let meaningfulCount = 0;
-
-    for (const part of parts) {
-      const normalizedPart = normalizeText(part);
-      const isParticle = nameParticles.has(normalizedPart);
-      if (!isParticle) {
-        meaningfulCount += 1;
-      }
-      if (meaningfulCount > words) break;
-      selected.push(part);
-    }
-
-    return selected.join(" ") || parts.slice(0, words).join(" ");
-  };
 
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
     const byWidth = window.innerWidth <= 768;
@@ -1044,32 +1024,32 @@ export const Students: React.FC = () => {
     return sortDir === "asc" ? result : -result;
   });
 
-  const mobileTwoWordByTurmaCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    if (!isCompactViewport) return counts;
+  const formatMobileStudentName = (fullName: string) => {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 2) return parts.join(" ");
 
-    sortedStudents.forEach((student) => {
-      const turmaKey = normalizeText(getTurmaDisplayLabel(student));
-      const twoWords = truncateNameWords(student.nome, 2);
-      const shortNameKey = normalizeText(twoWords);
-      const mapKey = `${turmaKey}||${shortNameKey}`;
-      counts.set(mapKey, (counts.get(mapKey) || 0) + 1);
-    });
+    const first = parts[0];
+    const middle: string[] = [];
+    const second = parts[1];
+    if (second) {
+      middle.push(second);
+      if (nameParticles.has(normalizeText(second)) && parts[2]) {
+        middle.push(parts[2]);
+      }
+    }
 
-    return counts;
-  }, [isCompactViewport, sortedStudents]);
+    const last = parts[parts.length - 1];
+    const picked = [first, ...middle];
+    const hasLast = picked.some((token) => normalizeText(token) === normalizeText(last));
+    if (!hasLast) picked.push(last);
+    return picked.join(" ");
+  };
 
   const getDisplayStudentName = (student: Student) => {
     const rawName = String(student?.nome || "");
     if (!isCompactViewport) return rawName;
 
-    const turmaKey = normalizeText(getTurmaDisplayLabel(student));
-    const twoWords = truncateNameWords(rawName, 2);
-    const shortNameKey = normalizeText(twoWords);
-    const mapKey = `${turmaKey}||${shortNameKey}`;
-    const hasCollision = (mobileTwoWordByTurmaCounts.get(mapKey) || 0) > 1;
-
-    return hasCollision ? truncateNameWords(rawName, 3) : twoWords;
+    return formatMobileStudentName(rawName);
   };
 
   const handleSort = (

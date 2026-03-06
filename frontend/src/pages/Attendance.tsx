@@ -254,26 +254,6 @@ export const Attendance: React.FC = () => {
 
   const nameParticles = new Set(["da", "de", "do", "das", "dos", "e"]);
 
-  const truncateNameWords = (fullName: string, words: number) => {
-    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
-    if (parts.length <= words) return parts.join(" ");
-
-    const selected: string[] = [];
-    let meaningfulCount = 0;
-
-    for (const part of parts) {
-      const normalizedPart = normalizeText(part);
-      const isParticle = nameParticles.has(normalizedPart);
-      if (!isParticle) {
-        meaningfulCount += 1;
-      }
-      if (meaningfulCount > words) break;
-      selected.push(part);
-    }
-
-    return selected.join(" ") || parts.slice(0, words).join(" ");
-  };
-
   const parseDiasSemana = (value: string | undefined): string[] => {
     if (!value) return [];
     return value
@@ -408,6 +388,74 @@ export const Attendance: React.FC = () => {
       .filter(([key]) => key.startsWith(`${monthKey}-`))
       .map(([key, reason]) => ({ day: key.split("-")[2] || "", reason }))
       .sort((a, b) => Number(a.day) - Number(b.day));
+  };
+
+  const getMonthJustificationSummary = (justifications?: Record<string, string>) => {
+    const entries = getMonthJustificationEntries(justifications)
+      .map((entry) => ({ ...entry, dayNum: Number(entry.day) }))
+      .filter((entry) => Number.isFinite(entry.dayNum))
+      .sort((a, b) => a.dayNum - b.dayNum);
+
+    if (entries.length === 0) return [] as { dayLabel: string; reason: string }[];
+
+    const groups: Array<{ start: number; end: number; reason: string }> = [];
+
+    entries.forEach((entry) => {
+      const last = groups[groups.length - 1];
+      if (!last) {
+        groups.push({ start: entry.dayNum, end: entry.dayNum, reason: entry.reason });
+        return;
+      }
+
+      const sameReason = String(last.reason || "") === String(entry.reason || "");
+      const isConsecutive = entry.dayNum === last.end + 1;
+      if (sameReason && isConsecutive) {
+        last.end = entry.dayNum;
+        return;
+      }
+
+      groups.push({ start: entry.dayNum, end: entry.dayNum, reason: entry.reason });
+    });
+
+    return groups.map((group) => {
+      const start = String(group.start).padStart(2, "0");
+      const end = String(group.end).padStart(2, "0");
+      return {
+        dayLabel: group.start === group.end ? start : `${start}-${end}`,
+        reason: group.reason,
+      };
+    });
+  };
+
+  const extractJustificationDays = (reason?: string) => {
+    const raw = String(reason || "").trim();
+    if (!raw) return 0;
+    const match = raw.match(/(\d{1,3})\s*dias?/i);
+    if (!match) return 0;
+    const days = Number(match[1]);
+    if (!Number.isFinite(days) || days <= 0) return 0;
+    return Math.min(days, 120);
+  };
+
+  const getAfastamentoInfo = (justifications?: Record<string, string>) => {
+    if (!justifications || !monthKey) return null as { days: number; startDate: string; tooltip: string } | null;
+
+    const datedEntries = Object.entries(justifications)
+      .filter(([date, reason]) => date.startsWith(`${monthKey}-`) && extractJustificationDays(reason) > 1)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    if (datedEntries.length === 0) return null;
+
+    const [startDate, reason] = datedEntries[0];
+    const days = extractJustificationDays(reason);
+    if (days <= 1) return null;
+
+    const dateLabel = startDate.split("-").reverse().join("/");
+    return {
+      days,
+      startDate,
+      tooltip: `${days} dias de afastamento a partir de ${dateLabel}`,
+    };
   };
 
   const isDiasSemanaLabel = (label: string) => {
@@ -1309,26 +1357,30 @@ export const Attendance: React.FC = () => {
     };
   }, []);
 
-  const mobileTwoWordNameCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    if (!isCompactViewport) return counts;
+  const formatMobileStudentName = (fullName: string) => {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 2) return parts.join(" ");
 
-    sortedAttendance.forEach((item) => {
-      const shortName = truncateNameWords(item.aluno, 2);
-      const key = normalizeText(shortName);
-      if (!key) return;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
+    const first = parts[0];
+    const middle: string[] = [];
+    const second = parts[1];
+    if (second) {
+      middle.push(second);
+      if (nameParticles.has(normalizeText(second)) && parts[2]) {
+        middle.push(parts[2]);
+      }
+    }
 
-    return counts;
-  }, [isCompactViewport, sortedAttendance]);
+    const last = parts[parts.length - 1];
+    const picked = [first, ...middle];
+    const hasLast = picked.some((token) => normalizeText(token) === normalizeText(last));
+    if (!hasLast) picked.push(last);
+    return picked.join(" ");
+  };
 
   const getDisplayStudentName = (fullName: string) => {
     if (!isCompactViewport) return fullName;
-    const twoWords = truncateNameWords(fullName, 2);
-    const key = normalizeText(twoWords);
-    const hasCollision = (mobileTwoWordNameCounts.get(key) || 0) > 1;
-    return hasCollision ? truncateNameWords(fullName, 3) : twoWords;
+    return formatMobileStudentName(fullName);
   };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
 
@@ -2701,14 +2753,36 @@ export const Attendance: React.FC = () => {
       return;
     }
 
+    const requestedDays = extractJustificationDays(justificationReason);
+    const candidateDates = [...dateDates]
+      .filter((date) => date >= targetDate)
+      .sort((a, b) => a.localeCompare(b));
+
+    const datesToApply = (requestedDays > 1 ? candidateDates.slice(0, requestedDays) : [targetDate]).filter((date) => {
+      if (!targetStudent) return true;
+      return !getTransferLockForDate(targetStudent.aluno, date);
+    });
+
+    if (datesToApply.length === 0) {
+      alert("Nenhuma data elegível para aplicar a justificativa.");
+      return;
+    }
+
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setAttendance((prev) =>
       prev.map((item) => {
         if (item.id === justificationStudentId) {
+          const nextAttendance = { ...item.attendance };
+          const nextJustifications = { ...(item.justifications || {}) };
+          datesToApply.forEach((date) => {
+            nextAttendance[date] = "Justificado";
+            nextJustifications[date] = justificationReason;
+          });
+
           return {
             ...item,
-            attendance: { ...item.attendance, [targetDate]: "Justificado" },
-            justifications: { ...(item.justifications || {}), [targetDate]: justificationReason },
+            attendance: nextAttendance,
+            justifications: nextJustifications,
           };
         }
         return item;
@@ -2733,15 +2807,15 @@ export const Attendance: React.FC = () => {
         mes: monthKey,
       });
       saveJustificationLog([
-        {
+        ...datesToApply.map((date) => ({
           aluno_nome: student.aluno,
-          data: targetDate,
+          data: date,
           motivo: justificationReason,
           turmaCodigo: persistence.turmaCodigo,
           turmaLabel: persistence.turmaLabel,
           horario: persistence.horario,
           professor: persistence.professor,
-        },
+        })),
       ]).catch(() => undefined);
     }
   };
@@ -3038,6 +3112,7 @@ export const Attendance: React.FC = () => {
                   hasAnyMonthJustification(item.justifications);
                 const showDelete = absences >= 3;
                 const renewalAlert = getRenewalAlertInfo(item.aluno);
+                const afastamentoInfo = getAfastamentoInfo(item.justifications);
                 const renewalDismissKey = buildRenewalDismissKey(item.aluno);
                 const dismissedSeverity = dismissedRenewalAlerts[renewalDismissKey];
                 const showRenewalAlert = !!renewalAlert && dismissedSeverity !== renewalAlert.severity;
@@ -3063,6 +3138,14 @@ export const Attendance: React.FC = () => {
                           style={{ color: renewalAlert.color, fontWeight: 800, fontSize: "15px", lineHeight: 1 }}
                         >
                           ✱
+                        </span>
+                      )}
+                      {afastamentoInfo && (
+                        <span
+                          title={afastamentoInfo.tooltip}
+                          style={{ color: "#d97706", fontWeight: 800, fontSize: "14px", lineHeight: 1 }}
+                        >
+                          ⏳
                         </span>
                       )}
                       <span style={{ borderBottom: "1px dashed #ccc" }}>{getDisplayStudentName(item.aluno)}</span>
@@ -3369,15 +3452,15 @@ export const Attendance: React.FC = () => {
 
             {(() => {
               const student = attendance.find((item) => item.id === justificationStudentId);
-              const entries = getMonthJustificationEntries(student?.justifications);
+              const entries = getMonthJustificationSummary(student?.justifications);
               if (entries.length === 0) return null;
               return (
                 <div style={{ marginBottom: "15px", background: "#f8f9fa", border: "1px solid #eee", borderRadius: "8px", padding: "10px" }}>
                   <div style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "6px" }}>Justificativas do mês</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "#666" }}>
                     {entries.map((entry, idx) => (
-                      <div key={`${entry.day}-${idx}`} style={{ display: "flex", gap: "6px" }}>
-                        <span style={{ minWidth: "28px", fontWeight: 700 }}>{entry.day}</span>
+                      <div key={`${entry.dayLabel}-${idx}`} style={{ display: "flex", gap: "6px" }}>
+                        <span style={{ minWidth: "44px", fontWeight: 700 }}>{entry.dayLabel}</span>
                         <span>{entry.reason}</span>
                       </div>
                     ))}
