@@ -54,13 +54,17 @@ const normalizeHorarioKey = (value: unknown) => {
 const resolveExclusionName = (item: any) =>
   String(item?.nome || item?.Nome || item?.aluno || item?.aluno_nome || item?.alunoNome || "").trim();
 
+const isPendingExcludedSync = (item: any) => Boolean(item?._pendingSync);
+
 const normalizeExcludedStudentRecord = (item: any) => {
   const normalizedName = resolveExclusionName(item);
-  if (!normalizedName) return { ...item };
+  const pendingSync = isPendingExcludedSync(item);
+  if (!normalizedName) return { ...item, _pendingSync: pendingSync };
 
   const next = { ...item };
   if (!next.nome) next.nome = normalizedName;
   if (!next.Nome) next.Nome = normalizedName;
+  next._pendingSync = pendingSync;
   return next;
 };
 
@@ -144,13 +148,21 @@ const cleanExcludedStudentsLocalCache = () => {
   return cleaned;
 };
 
-const upsertExcludedStudentLocal = (payload: any) => {
-  const normalizedPayload = normalizeExcludedStudentRecord(payload);
+const upsertExcludedStudentLocal = (payload: any, pendingSync?: boolean) => {
+  const normalizedPayload = normalizeExcludedStudentRecord(
+    pendingSync === undefined ? payload : { ...payload, _pendingSync: pendingSync }
+  );
   const items = cleanExcludedStudentsLocalCache();
   const nextItems = [...items];
   const idx = nextItems.findIndex((item) => exclusionMatches(item, normalizedPayload));
   if (idx >= 0) {
-    nextItems[idx] = normalizeExcludedStudentRecord({ ...nextItems[idx], ...normalizedPayload });
+    const currentPending = isPendingExcludedSync(nextItems[idx]);
+    const resolvedPending = pendingSync === undefined ? currentPending : pendingSync;
+    nextItems[idx] = normalizeExcludedStudentRecord({
+      ...nextItems[idx],
+      ...normalizedPayload,
+      _pendingSync: resolvedPending,
+    });
   } else {
     if (isValidExcludedStudentRecord(normalizedPayload)) {
       nextItems.push(normalizedPayload);
@@ -169,19 +181,20 @@ const removeExcludedStudentLocal = (payload: any) => {
 
 const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
   const localItems = cleanExcludedStudentsLocalCache();
-  const merged = [...localItems];
+  const merged = (Array.isArray(remoteItems) ? remoteItems : [])
+    .map((remote) => normalizeExcludedStudentRecord({ ...remote, _pendingSync: false }))
+    .filter(isValidExcludedStudentRecord);
 
-  (Array.isArray(remoteItems) ? remoteItems : []).forEach((remote) => {
-    const normalizedRemote = normalizeExcludedStudentRecord(remote);
-    if (!isValidExcludedStudentRecord(normalizedRemote)) return;
-
-    const idx = merged.findIndex((item) => exclusionMatches(item, normalizedRemote));
-    if (idx >= 0) {
-      merged[idx] = normalizeExcludedStudentRecord({ ...normalizedRemote, ...merged[idx] });
-    } else {
-      merged.push(normalizedRemote);
-    }
-  });
+  localItems
+    .filter(isPendingExcludedSync)
+    .forEach((localPending) => {
+      const idx = merged.findIndex((item) => exclusionMatches(item, localPending));
+      if (idx >= 0) {
+        merged[idx] = normalizeExcludedStudentRecord({ ...merged[idx], _pendingSync: true });
+      } else if (isValidExcludedStudentRecord(localPending)) {
+        merged.push(normalizeExcludedStudentRecord({ ...localPending, _pendingSync: true }));
+      }
+    });
 
   writeExcludedStudentsLocal(merged);
   return merged;
@@ -190,14 +203,29 @@ const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
 const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[]) => {
   const remote = Array.isArray(remoteItems) ? remoteItems : [];
   const local = Array.isArray(localItems) ? localItems : [];
-  if (local.length === 0) return;
+  if (local.length === 0) return { synced: 0, items: local };
 
-  const pending = local.filter((localItem) => !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem)));
-  if (pending.length === 0) return;
-
-  await Promise.allSettled(
-    pending.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord(item)))
+  const pending = local.filter(
+    (localItem) => isPendingExcludedSync(localItem) && !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem))
   );
+  if (pending.length === 0) return { synced: 0, items: local };
+
+  const results = await Promise.allSettled(
+    pending.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord({ ...item, _pendingSync: false })))
+  );
+
+  const succeeded = pending.filter((_, index) => results[index]?.status === "fulfilled");
+  if (succeeded.length === 0) return { synced: 0, items: local };
+
+  const nextItems = local.map((item) => {
+    if (succeeded.some((okItem) => exclusionMatches(okItem, item))) {
+      return normalizeExcludedStudentRecord({ ...item, _pendingSync: false });
+    }
+    return item;
+  });
+
+  writeExcludedStudentsLocal(nextItems);
+  return { synced: succeeded.length, items: nextItems };
 };
 
 const normalizeAttendanceLogField = (value: unknown) => String(value || "").trim().toLowerCase();
@@ -327,16 +355,14 @@ export const getExcludedStudents = () =>
       const localStateExists = hasExcludedStudentsLocalState();
       const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
 
-      if (localData.length > 0) {
-        try {
-          await syncExcludedStudentsToRemote(remoteItems, localData);
-        } catch {
-        }
-      }
-
       if (remoteItems.length > 0) {
-        const data = mergeExcludedStudentsLocalWithRemote(remoteItems);
-        return { ...response, data };
+        const merged = mergeExcludedStudentsLocalWithRemote(remoteItems);
+        try {
+          const syncResult = await syncExcludedStudentsToRemote(remoteItems, merged);
+          return { ...response, data: syncResult.items };
+        } catch {
+          return { ...response, data: merged };
+        }
       }
 
       if (localData.length > 0) {
@@ -354,10 +380,10 @@ export const getExcludedStudents = () =>
 export const addExclusion = (data: any) =>
   API.post("/exclusions", data)
     .then((response) => {
-      upsertExcludedStudentLocal(data);
+      upsertExcludedStudentLocal(data, false);
       return response;
     })
-    .catch(() => ({ data: { ok: true, fallback: true, items: upsertExcludedStudentLocal(data) } }));
+    .catch(() => ({ data: { ok: true, fallback: true, items: upsertExcludedStudentLocal(data, true) } }));
 
 export const restoreStudent = (data: any) =>
   API.post("/exclusions/restore", data)
