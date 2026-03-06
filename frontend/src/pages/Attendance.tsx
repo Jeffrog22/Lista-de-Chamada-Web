@@ -2584,6 +2584,18 @@ export const Attendance: React.FC = () => {
     }
   };
 
+  const handlePreviousHorario = () => {
+    if (horarioOptions.length <= 1) return;
+    const currentIndex = horarioOptions.findIndex((item) => item === selectedHorario);
+    const previousIndex = currentIndex >= 0
+      ? (currentIndex - 1 + horarioOptions.length) % horarioOptions.length
+      : 0;
+    const previousHorario = horarioOptions[previousIndex];
+    if (previousHorario) {
+      setSelectedHorario(previousHorario);
+    }
+  };
+
   const handleClearAll = () => {
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
 
@@ -3222,6 +3234,24 @@ export const Attendance: React.FC = () => {
       {/* BOTÕES AÇÃO */}
       <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>
         <button
+          onClick={handlePreviousHorario}
+          disabled={horarioOptions.length <= 1}
+          style={{
+            background: horarioOptions.length <= 1 ? "#ccc" : "#0284c7",
+            color: "white",
+            border: "none",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            cursor: horarioOptions.length <= 1 ? "not-allowed" : "pointer",
+            fontWeight: 600,
+            fontSize: "13px",
+            transition: "all 0.2s ease",
+            opacity: horarioOptions.length <= 1 ? 0.6 : 1,
+          }}
+        >
+          ⏮ Anterior
+        </button>
+        <button
           onClick={handleNextHorario}
           disabled={horarioOptions.length <= 1}
           style={{
@@ -3492,7 +3522,7 @@ export const Attendance: React.FC = () => {
           {(() => {
             const modalLogTypeLabel = getModalLogTypeLabel();
             return (
-          <div style={{ background: "white", padding: "25px", borderRadius: "16px", width: "450px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
+          <div style={{ background: "white", padding: "25px", borderRadius: "16px", width: "min(520px, 96vw)", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 30px rgba(0,0,0,0.3)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
               <h3 style={{ margin: 0, color: "#2c3e50" }}>
                 {modalDate.split("-").reverse().join("/")}
@@ -3523,22 +3553,22 @@ export const Attendance: React.FC = () => {
                   <strong>Condição climática:</strong>{" "}
                   {poolData.weatherCondition || "Indisponível"}
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "15px" }}>
+                <div style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "6px", marginBottom: "15px", WebkitOverflowScrolling: "touch" }}>
                   {WEATHER_ICONS.sensations.map(icon => (
                     <button
                       key={icon}
                       onClick={() => toggleIcon(icon)}
                       style={{
-                        padding: "5px 10px",
+                        padding: "4px 9px",
                         borderRadius: "20px",
                         border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
                         background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
                         color: poolData.selectedIcons.includes(icon) ? "#667eea" : "#666",
                         cursor: "pointer",
-                        fontSize: "10px",
+                        fontSize: "9px",
                         fontWeight: 600,
                         flex: "0 0 auto",
-                        minWidth: icon === "Agradável" ? "84px" : "72px",
+                        minWidth: icon === "Agradável" ? "76px" : "64px",
                         whiteSpace: "nowrap"
                       }}
                     >
