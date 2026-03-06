@@ -1392,6 +1392,13 @@ export const Attendance: React.FC = () => {
     return formatMobileStudentName(fullName);
   };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
+  const [hydrationReadInfo, setHydrationReadInfo] = useState<{
+    ref: string;
+    snapshot: string;
+    hasLog: boolean;
+    studentCount: number;
+    updatedAt: string;
+  } | null>(null);
   const lastHydrationReadAlertRef = useRef<string>("");
 
   const getTransferLockForDate = useCallback(
@@ -2501,6 +2508,19 @@ export const Attendance: React.FC = () => {
         });
 
         const matchedCount = Array.isArray(matchedClass?.alunos) ? matchedClass!.alunos.length : 0;
+        const sourceRef = `${monthKey} | ${selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || ""} | ${selectedClass.horario || selectedHorario || ""} | ${selectedClass.professor || selectedProfessor || ""}`;
+        const snapshotRef = matchedClass
+          ? `${matchedClass.turma || ""} | ${matchedClass.horario || ""} | ${matchedClass.professor || ""}`
+          : "(sem correspondencia)";
+
+        setHydrationReadInfo({
+          ref: sourceRef,
+          snapshot: snapshotRef,
+          hasLog: Boolean(matchedClass?.hasLog),
+          studentCount: matchedCount,
+          updatedAt: new Date().toLocaleTimeString("pt-BR"),
+        });
+
         const readAlertKey = [
           monthKey,
           selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || "",
@@ -2524,10 +2544,6 @@ export const Attendance: React.FC = () => {
 
         if (hydrationReadDebugEnabled && lastHydrationReadAlertRef.current !== readAlertKey) {
           lastHydrationReadAlertRef.current = readAlertKey;
-          const sourceRef = `${monthKey} | ${selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || ""} | ${selectedClass.horario || selectedHorario || ""} | ${selectedClass.professor || selectedProfessor || ""}`;
-          const snapshotRef = matchedClass
-            ? `${matchedClass.turma || ""} | ${matchedClass.horario || ""} | ${matchedClass.professor || ""}`
-            : "(sem correspondencia)";
           alert(
             `Leitura (/reports)\nRef seleção: ${sourceRef}\nSnapshot: ${snapshotRef}\nhasLog: ${matchedClass?.hasLog ? "sim" : "não"}\nQtd alunos snapshot: ${matchedCount}`
           );
@@ -2633,6 +2649,15 @@ export const Attendance: React.FC = () => {
         // mantém hidratação local quando backend de relatórios indisponível
         if (isMounted) {
           setTransferLocksByName({});
+          setHydrationReadInfo((prev) =>
+            prev || {
+              ref: `${monthKey} | ${selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || ""} | ${selectedClass.horario || selectedHorario || ""} | ${selectedClass.professor || selectedProfessor || ""}`,
+              snapshot: "(falha ao ler /reports)",
+              hasLog: false,
+              studentCount: 0,
+              updatedAt: new Date().toLocaleTimeString("pt-BR"),
+            }
+          );
         }
       }
 
@@ -3197,6 +3222,27 @@ export const Attendance: React.FC = () => {
             }}
           >
             Atenção: lançamento retroativo ativo ({currentMonthFormatted}).
+          </div>
+        )}
+        {hydrationReadInfo && (
+          <div
+            style={{
+              width: "100%",
+              marginTop: "4px",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #d0d7de",
+              background: "#ffffff",
+              color: "#334155",
+              fontSize: "11px",
+              lineHeight: 1.45,
+            }}
+          >
+            <strong>Leitura Sync:</strong> {hydrationReadInfo.updatedAt} | hasLog: {hydrationReadInfo.hasLog ? "sim" : "não"} | alunos: {hydrationReadInfo.studentCount}
+            <br />
+            <strong>Ref seleção:</strong> {hydrationReadInfo.ref}
+            <br />
+            <strong>Snapshot:</strong> {hydrationReadInfo.snapshot}
           </div>
         )}
       </div>
