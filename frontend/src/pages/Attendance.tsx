@@ -655,7 +655,8 @@ export const Attendance: React.FC = () => {
   const [selectedProfessor, setSelectedProfessor] = useState<string>(
     storedSelection?.professor || classOptions[0]?.professor || ""
   );
-  const todayDateKey = new Date().toISOString().split("T")[0];
+  const nowLocal = new Date();
+  const todayDateKey = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, "0")}-${String(nowLocal.getDate()).padStart(2, "0")}`;
   const currentMonthKey = todayDateKey.slice(0, 7);
   const [retroModeEnabled, setRetroModeEnabled] = useState<boolean>(() => {
     try {
