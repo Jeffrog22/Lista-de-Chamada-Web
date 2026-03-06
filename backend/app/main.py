@@ -766,6 +766,10 @@ def append_attendance_log(payload: AttendanceLogPayload):
     try:
         file_path = os.path.join(DATA_DIR, "baseChamada.json")
         item = payload.dict()
+        item["horario"] = _normalize_horario_key(item.get("horario") or "")
+        item["turmaCodigo"] = str(item.get("turmaCodigo") or "").strip()
+        item["turmaLabel"] = str(item.get("turmaLabel") or "").strip()
+        item["professor"] = str(item.get("professor") or "").strip()
         item["saved_at"] = pd.Timestamp.utcnow().isoformat()
         _append_json_list(file_path, [item])
         return {"ok": True, "file": file_path}
@@ -780,6 +784,10 @@ def append_justifications_log(entries: List[JustificationLogEntry]):
         file_path = os.path.join(DATA_DIR, "baseJustificativas.json")
         items = [entry.dict() for entry in entries]
         for item in items:
+            item["horario"] = _normalize_horario_key(item.get("horario") or "")
+            item["turmaCodigo"] = str(item.get("turmaCodigo") or "").strip()
+            item["turmaLabel"] = str(item.get("turmaLabel") or "").strip()
+            item["professor"] = str(item.get("professor") or "").strip()
             item["saved_at"] = pd.Timestamp.utcnow().isoformat()
         _append_json_list(file_path, items)
         return {"ok": True, "file": file_path, "count": len(items)}
@@ -908,6 +916,19 @@ def _normalize_horario_key(value: Optional[str]) -> str:
     if len(digits) >= 4:
         return digits[:4]
     return digits
+
+
+def _saved_at_sort_key(value: Any) -> int:
+    raw = str(value or "").strip()
+    if not raw:
+        return -1
+    try:
+        parsed = pd.to_datetime(raw, errors="coerce", utc=True, dayfirst=True)
+        if pd.isna(parsed):
+            return -1
+        return int(parsed.value)
+    except Exception:
+        return -1
 
 def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> bool:
     cls_codigo = _normalize_text(cls.codigo or "")
@@ -1414,7 +1435,7 @@ def _build_import_student_details_map(
 def _attendance_log_lookup_keys(item: Dict[str, Any]) -> List[str]:
     turma_codigo = str(item.get("turmaCodigo") or "").strip()
     turma_label = str(item.get("turmaLabel") or "").strip()
-    horario = str(item.get("horario") or "").strip()
+    horario = _normalize_horario_key(item.get("horario") or "")
     professor = str(item.get("professor") or "").strip()
 
     def _horario_variants(value: str) -> List[str]:
@@ -1476,12 +1497,12 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
         keys = _attendance_log_lookup_keys(item)
         if not keys:
             continue
-        saved_at = str(item.get("saved_at") or "")
+        saved_at = _saved_at_sort_key(item.get("saved_at"))
         for key in keys:
             if key not in latest:
                 latest[key] = item
                 continue
-            existing_saved = str(latest[key].get("saved_at") or "")
+            existing_saved = _saved_at_sort_key(latest[key].get("saved_at"))
             if saved_at > existing_saved:
                 latest[key] = item
     return latest
@@ -1890,7 +1911,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
     # load all attendance log entries (sorted to let the newest snapshot win)
     items = _load_json_list(os.path.join(DATA_DIR, "baseChamada.json"))
-    items = sorted(items, key=lambda item: str((item or {}).get("saved_at") or ""))
+    items = sorted(items, key=lambda item: _saved_at_sort_key((item or {}).get("saved_at")))
 
     today = datetime.utcnow().date()
 

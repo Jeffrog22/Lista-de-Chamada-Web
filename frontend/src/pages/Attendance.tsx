@@ -2195,47 +2195,44 @@ export const Attendance: React.FC = () => {
       });
       setAttendance(nextAttendanceSnapshot);
 
-      try {
-        const entries = attendance.map((student) => ({
-          aluno_nome: student.aluno,
-          data: modalDate,
-          motivo: reasonLabel,
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
-        }));
-        logPersistenceDebug("saveJustificationLog:modal_mass_justification", {
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
-          mes: monthKey,
-        });
-        await saveJustificationLog(entries);
+      const entries = attendance.map((student) => ({
+        aluno_nome: student.aluno,
+        data: modalDate,
+        motivo: reasonLabel,
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+      }));
 
-        logPersistenceDebug("saveAttendanceLog:modal_mass_justification", {
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
-          mes: monthKey,
-        });
-        await saveAttendanceLog({
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
-          mes: monthKey,
-          registros: nextAttendanceSnapshot.map((item) => ({
-            aluno_nome: item.aluno,
-            attendance: item.attendance,
-            justifications: item.justifications || {},
-          })),
-        });
-      } catch {
-        // ignore to avoid blocking UI
-      }
+      logPersistenceDebug("saveJustificationLog:modal_mass_justification", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
+      await saveJustificationLog(entries).catch(() => undefined);
+
+      logPersistenceDebug("saveAttendanceLog:modal_mass_justification", {
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
+      await saveAttendanceLog({
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+        registros: nextAttendanceSnapshot.map((item) => ({
+          aluno_nome: item.aluno,
+          attendance: item.attendance,
+          justifications: item.justifications || {},
+        })),
+      }).catch(() => undefined);
     }
 
     // Construção do Objeto de Log (Persistência)
