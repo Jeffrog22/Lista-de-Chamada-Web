@@ -2152,6 +2152,13 @@ export const Attendance: React.FC = () => {
   };
 
   const handleSaveLog = async (logTypeOverride?: ModalLogType | React.MouseEvent<HTMLButtonElement>) => {
+    if (monthKey !== currentMonthKey) {
+      const proceed = window.confirm(
+        `Você está salvando no mês ${currentMonthFormatted} (retroativo). Deseja continuar?`
+      );
+      if (!proceed) return;
+    }
+
     const persistence = resolvePersistenceContext();
     if (!persistence.isValid) {
       alert("Selecione turma, horário e professor válidos antes de salvar.");
@@ -2274,7 +2281,8 @@ export const Attendance: React.FC = () => {
       const response = await savePoolLog(logEntry);
       const action = response?.data?.action ? ` (${response.data.action})` : "";
       const file = response?.data?.file ? `\nArquivo: ${response.data.file}` : "";
-      alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}${action}${file}`);
+      const reference = `\nRef: ${monthKey} | ${persistence.turmaCodigo || persistence.turmaLabel} | ${persistence.horario} | ${persistence.professor}`;
+      alert(`Dados salvos! Status da aula: ${logEntry.statusAula.toUpperCase()}${action}${reference}${file}`);
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
       console.error("pool-log save error", error);
@@ -2396,6 +2404,53 @@ export const Attendance: React.FC = () => {
 
       const newDates = generateDates(selectedClass.diasSemana, monthKey).map((d) => d.split(" ")[0]);
       const storedRecords = loadAttendanceStorage();
+      const excludedList = (() => {
+        try {
+          const raw = localStorage.getItem("excludedStudents");
+          const parsed = raw ? JSON.parse(raw) : [];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [] as any[];
+        }
+      })();
+
+      const selectedTurmaNorm = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
+      const selectedTurmaCodigoNorm = normalizeText(selectedClass.turmaCodigo || "");
+      const selectedHorarioNorm = normalizeHorarioDigits(selectedClass.horario || selectedHorario || "");
+      const selectedProfessorNorm = normalizeText(selectedClass.professor || selectedProfessor || "");
+
+      const exclusionMatchesSelectedClass = (exclusion: any) => {
+        const exclusionTurmaNorm = normalizeText(
+          exclusion?.turmaLabel || exclusion?.TurmaLabel || exclusion?.turma || exclusion?.Turma || ""
+        );
+        const exclusionTurmaCodigoNorm = normalizeText(exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
+        const exclusionHorarioNorm = normalizeHorarioDigits(exclusion?.horario || exclusion?.Horario || "");
+        const exclusionProfessorNorm = normalizeText(exclusion?.professor || exclusion?.Professor || "");
+
+        const hasTurmaInfo = Boolean(exclusionTurmaNorm || exclusionTurmaCodigoNorm);
+        const hasHorarioInfo = Boolean(exclusionHorarioNorm);
+        const hasProfessorInfo = Boolean(exclusionProfessorNorm);
+
+        const turmaMatches =
+          !hasTurmaInfo ||
+          exclusionTurmaNorm === selectedTurmaNorm ||
+          exclusionTurmaNorm === selectedTurmaCodigoNorm ||
+          exclusionTurmaCodigoNorm === selectedTurmaNorm ||
+          exclusionTurmaCodigoNorm === selectedTurmaCodigoNorm;
+        const horarioMatches = !hasHorarioInfo || !selectedHorarioNorm || exclusionHorarioNorm === selectedHorarioNorm;
+        const professorMatches =
+          !hasProfessorInfo || !selectedProfessorNorm || exclusionProfessorNorm === selectedProfessorNorm;
+
+        return turmaMatches && horarioMatches && professorMatches;
+      };
+
+      const excludedNamesForSelectedClass = new Set(
+        excludedList
+          .filter((exclusion) => exclusionMatchesSelectedClass(exclusion))
+          .map((exclusion) => normalizeText(exclusion?.nome || exclusion?.Nome || ""))
+          .filter(Boolean)
+      );
+
       const storedHasAnyMark = (storedRecords || []).some((item) =>
         Object.values(item?.attendance || {}).some((value) => Boolean(value))
       );
@@ -2449,6 +2504,7 @@ export const Attendance: React.FC = () => {
           (matchedClass?.alunos || []).forEach((student) => {
             const studentKey = normalizeText(student.nome || "");
             if (!studentKey) return;
+            if (excludedNamesForSelectedClass.has(studentKey)) return;
             const attendanceMap = (student.historico || {}) as Record<string, string>;
             const mappedAttendance = Object.entries(attendanceMap).reduce(
               (acc, [dayKey, status]) => {
@@ -2552,7 +2608,9 @@ export const Attendance: React.FC = () => {
       setHistory([]);
 
       setAttendance(
-        (studentsPerClass[turmaLookup] || []).map((aluno, idx) => {
+        (studentsPerClass[turmaLookup] || [])
+          .filter((aluno) => !excludedNamesForSelectedClass.has(normalizeText(aluno || "")))
+          .map((aluno, idx) => {
           const base = newDates.reduce(
             (acc, date) => {
               acc[date] = "";
@@ -2586,7 +2644,7 @@ export const Attendance: React.FC = () => {
             })(),
             justifications: stored?.justifications || {},
           };
-        })
+          })
       );
       setHydratedStorageKey(storageKey);
     };
@@ -2852,6 +2910,13 @@ export const Attendance: React.FC = () => {
   };
 
   const handleSave = () => {
+    if (monthKey !== currentMonthKey) {
+      const proceed = window.confirm(
+        `Você está salvando no mês ${currentMonthFormatted} (retroativo). Deseja continuar?`
+      );
+      if (!proceed) return;
+    }
+
     const persistence = resolvePersistenceContext();
     if (!persistence.isValid) {
       alert("Selecione turma, horário e professor válidos antes de salvar a chamada.");
@@ -2881,12 +2946,13 @@ export const Attendance: React.FC = () => {
 
     saveAttendanceLog(payload)
       .then((resp: any) => {
+        const reference = `\nRef: ${payload.mes} | ${payload.turmaCodigo || payload.turmaLabel} | ${payload.horario} | ${payload.professor}`;
         if (resp?.data?.queued) {
-          alert("Sem conexão no momento. Chamada salva localmente e pendente de sincronização.");
+          alert(`Sem conexão no momento. Chamada salva localmente e pendente de sincronização.${reference}`);
           return;
         }
         const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
-        alert(`Chamada salva com sucesso!${file}`);
+        alert(`Chamada salva com sucesso!${reference}${file}`);
       })
       .catch(() => {
         alert("Erro ao salvar chamada. Tente novamente.");
