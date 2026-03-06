@@ -1392,6 +1392,7 @@ export const Attendance: React.FC = () => {
     return formatMobileStudentName(fullName);
   };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
+  const lastHydrationReadAlertRef = useRef<string>("");
 
   const getTransferLockForDate = useCallback(
     (studentName: string, dateKey: string): TransferLockInfo | null => {
@@ -2498,6 +2499,39 @@ export const Attendance: React.FC = () => {
           professor: selectedClass.professor || selectedProfessor || "",
           mes: monthKey,
         });
+
+        const matchedCount = Array.isArray(matchedClass?.alunos) ? matchedClass!.alunos.length : 0;
+        const readAlertKey = [
+          monthKey,
+          selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || "",
+          selectedClass.horario || selectedHorario || "",
+          selectedClass.professor || selectedProfessor || "",
+          matchedClass?.turma || "",
+          matchedClass?.horario || "",
+          matchedClass?.professor || "",
+          matchedClass?.hasLog ? "1" : "0",
+          String(matchedCount),
+        ].join("|");
+
+        const hydrationReadDebugEnabled = (() => {
+          if (import.meta.env.DEV) return true;
+          try {
+            return localStorage.getItem(attendanceDebugKey) === "1";
+          } catch {
+            return false;
+          }
+        })();
+
+        if (hydrationReadDebugEnabled && lastHydrationReadAlertRef.current !== readAlertKey) {
+          lastHydrationReadAlertRef.current = readAlertKey;
+          const sourceRef = `${monthKey} | ${selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || ""} | ${selectedClass.horario || selectedHorario || ""} | ${selectedClass.professor || selectedProfessor || ""}`;
+          const snapshotRef = matchedClass
+            ? `${matchedClass.turma || ""} | ${matchedClass.horario || ""} | ${matchedClass.professor || ""}`
+            : "(sem correspondencia)";
+          alert(
+            `Leitura (/reports)\nRef seleção: ${sourceRef}\nSnapshot: ${snapshotRef}\nhasLog: ${matchedClass?.hasLog ? "sim" : "não"}\nQtd alunos snapshot: ${matchedCount}`
+          );
+        }
 
         const canTrustBackendSnapshot = Boolean(matchedClass?.hasLog) || !storedHasAnyMark;
         if (canTrustBackendSnapshot) {
