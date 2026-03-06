@@ -42,6 +42,7 @@ interface ReportClassLite {
   turma: string;
   horario: string;
   professor: string;
+  hasLog?: boolean;
   alunos: ReportStudentLite[];
 }
 
@@ -2312,6 +2313,9 @@ export const Attendance: React.FC = () => {
 
       const newDates = generateDates(selectedClass.diasSemana, monthKey).map((d) => d.split(" ")[0]);
       const storedRecords = loadAttendanceStorage();
+      const storedHasAnyMark = (storedRecords || []).some((item) =>
+        Object.values(item?.attendance || {}).some((value) => Boolean(value))
+      );
       const storedByName = new Map(
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
       );
@@ -2357,23 +2361,26 @@ export const Attendance: React.FC = () => {
           mes: monthKey,
         });
 
-        (matchedClass?.alunos || []).forEach((student) => {
-          const studentKey = normalizeText(student.nome || "");
-          if (!studentKey) return;
-          const attendanceMap = (student.historico || {}) as Record<string, string>;
-          const mappedAttendance = Object.entries(attendanceMap).reduce(
-            (acc, [dayKey, status]) => {
-              const day = String(dayKey || "").padStart(2, "0");
-              const dateKey = `${monthKey}-${day}`;
-              if (newDates.includes(dateKey)) {
-                acc[dateKey] = mapAttendanceValue(String(status || ""));
-              }
-              return acc;
-            },
-            {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
-          );
-          backendByName.set(studentKey, { attendance: mappedAttendance });
-        });
+        const canTrustBackendSnapshot = Boolean(matchedClass?.hasLog) || !storedHasAnyMark;
+        if (canTrustBackendSnapshot) {
+          (matchedClass?.alunos || []).forEach((student) => {
+            const studentKey = normalizeText(student.nome || "");
+            if (!studentKey) return;
+            const attendanceMap = (student.historico || {}) as Record<string, string>;
+            const mappedAttendance = Object.entries(attendanceMap).reduce(
+              (acc, [dayKey, status]) => {
+                const day = String(dayKey || "").padStart(2, "0");
+                const dateKey = `${monthKey}-${day}`;
+                if (newDates.includes(dateKey)) {
+                  acc[dateKey] = mapAttendanceValue(String(status || ""));
+                }
+                return acc;
+              },
+              {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
+            );
+            backendByName.set(studentKey, { attendance: mappedAttendance });
+          });
+        }
 
         const statsResponse = await getStatistics();
         const statsRows = Array.isArray(statsResponse?.data) ? (statsResponse.data as StudentStatisticsLite[]) : [];

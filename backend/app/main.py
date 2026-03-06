@@ -139,6 +139,7 @@ class ReportClass(BaseModel):
     horario: str
     professor: str
     nivel: str
+    hasLog: bool = False
     alunos: List[ReportStudent]
 
 class ReportsFilterOut(BaseModel):
@@ -1787,6 +1788,7 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                 horario=cls.horario or "",
                 professor=cls.professor or "",
                 nivel=cls.nivel or "",
+                hasLog=bool(log_entry),
                 alunos=class_students,
             )
         )
