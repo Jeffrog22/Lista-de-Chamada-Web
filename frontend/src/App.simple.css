@@ -99,6 +99,18 @@ body, html {
   text-overflow: ellipsis;
 }
 
+.app-version-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  white-space: nowrap;
+}
+
 .logout-button {
   background: rgba(245, 87, 108, 0.9);
   border: none;

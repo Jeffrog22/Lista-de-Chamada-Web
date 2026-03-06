@@ -9,6 +9,8 @@ import { Login } from "./pages/Login";
 import { getBootstrap, getImportDataStatus, importDataFile } from "./api";
 import "./App.simple.css";
 
+declare const __APP_VERSION__: string;
+
 type ApiResponse<T = any> = { data: T };
 
 type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | "reports" | "vacancies";
@@ -22,6 +24,7 @@ const getViewFromHash = (hash: string): ViewType => {
 };
 
 export default function App() {
+  const appVersion = (typeof __APP_VERSION__ === "string" && __APP_VERSION__.trim()) ? __APP_VERSION__.trim() : "v.local";
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
   const [currentView, setCurrentView] = useState<ViewType>(getViewFromHash(window.location.hash));
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -378,6 +381,7 @@ export default function App() {
           <h1>📋 {teacherUnit ? teacherUnit : "Protótipo"}</h1>
         </div>
         <div className="header-right">
+          <span className="app-version-tag" title="Versão da aplicação">{appVersion}</span>
           <span className="user-info">
             {teacherName ? `Conectado: ${formatDisplayName(teacherName)}` : "Conectado"}
             {teacherUnit ? ` - ${teacherUnit}` : ""}
