@@ -1170,7 +1170,7 @@ export const Students: React.FC = () => {
               </th>
               <th
                 onClick={() => handleSort("idade")}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer", width: "80px", whiteSpace: "nowrap" }}
+                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", width: "56px", whiteSpace: "nowrap" }}
               >
                 Idade{getSortIndicator("idade")}
               </th>
@@ -1182,7 +1182,7 @@ export const Students: React.FC = () => {
               </th>
               <th
                 onClick={() => handleSort("turma")}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer" }}
+                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", whiteSpace: "nowrap", width: "118px" }}
               >
                 Turma{getSortIndicator("turma")}
               </th>
@@ -1190,7 +1190,7 @@ export const Students: React.FC = () => {
                 onClick={() => {
                   handleSort("horario");
                 }}
-                style={{ padding: "12px", textAlign: "center", cursor: "pointer", position: "relative", width: "90px", whiteSpace: "nowrap" }}
+                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", position: "relative", width: "70px", whiteSpace: "nowrap" }}
               >
                 Horário{getSortIndicator("horario")}
               </th>
@@ -1262,23 +1262,46 @@ export const Students: React.FC = () => {
             {sortedStudents.map((student, idx) => (
               <tr key={student.id} style={{ borderBottom: "1px solid #eee", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
                 <td 
-                  style={{ padding: "12px", fontWeight: 500, cursor: "pointer", color: "#2c3e50" }}
+                  style={{ padding: "10px 8px", fontWeight: 500, cursor: "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
                   onClick={() => handleEditClick(student)}
                   title="Clique para editar"
                 >
-                  <span style={{ borderBottom: "1px dashed #ccc" }}>{getDisplayStudentName(student)}</span>
+                  <span
+                    style={{
+                      borderBottom: "1px dashed #ccc",
+                      display: "inline-block",
+                      maxWidth: isCompactViewport ? "150px" : "280px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      verticalAlign: "bottom",
+                    }}
+                  >
+                    {getDisplayStudentName(student)}
+                  </span>
                 </td>
                 <td style={{ padding: "12px" }}>{student.nivel}</td>
-                <td style={{ padding: "12px", textAlign: "center" }}>{student.idade}</td>
+                <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{student.idade}</td>
                 <td style={{ padding: "12px" }}>{student.categoria}</td>
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "4px 8px", borderRadius: "4px", fontWeight: "bold", fontSize: "12px" }}>
+                <td style={{ padding: "10px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
+                  <span
+                    style={{
+                      background: "#eef2ff",
+                      color: "#4f46e5",
+                      padding: "3px 6px",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                      fontSize: "11px",
+                      whiteSpace: "nowrap",
+                      display: "inline-block",
+                    }}
+                  >
                     {getTurmaDisplayLabel(student)}
                   </span>
                 </td>
-                <td style={{ padding: "12px", textAlign: "center" }}>{formatHorario(student.horario)}</td>
+                <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
-                <td style={{ padding: "12px", textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
+                <td style={{ padding: "10px 8px", textAlign: "center", display: "flex", gap: "6px", justifyContent: "center" }}>
                   <button
                     onClick={() => handleGoToAttendance(student)}
                     title="Ir para chamada"
@@ -1286,13 +1309,15 @@ export const Students: React.FC = () => {
                       background: "#28a745",
                       color: "white",
                       border: "none",
-                      padding: "6px 12px",
+                      padding: "4px 8px",
                       borderRadius: "6px",
                       cursor: "pointer",
-                      fontSize: "12px"
+                      fontSize: "11px",
+                      lineHeight: 1.1,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    📅 Chamada
+                    {isCompactViewport ? "📅" : "📅 Chamada"}
                   </button>
                   <button
                     onClick={() => handleDelete(student)}
@@ -1301,10 +1326,11 @@ export const Students: React.FC = () => {
                       background: "#dc3545",
                       color: "white",
                       border: "none",
-                      padding: "6px 12px",
+                      padding: "4px 8px",
                       borderRadius: "6px",
                       cursor: "pointer",
-                      fontSize: "12px"
+                      fontSize: "11px",
+                      lineHeight: 1.1,
                     }}
                   >
                     🗑️
