@@ -205,16 +205,18 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
   const local = Array.isArray(localItems) ? localItems : [];
   if (local.length === 0) return { synced: 0, items: local };
 
-  const pending = local.filter(
-    (localItem) => isPendingExcludedSync(localItem) && !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem))
-  );
-  if (pending.length === 0) return { synced: 0, items: local };
+  const candidates = remote.length === 0
+    ? local.filter((localItem) => !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem)))
+    : local.filter(
+        (localItem) => isPendingExcludedSync(localItem) && !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem))
+      );
+  if (candidates.length === 0) return { synced: 0, items: local };
 
   const results = await Promise.allSettled(
-    pending.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord({ ...item, _pendingSync: false })))
+    candidates.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord({ ...item, _pendingSync: false })))
   );
 
-  const succeeded = pending.filter((_, index) => results[index]?.status === "fulfilled");
+  const succeeded = candidates.filter((_, index) => results[index]?.status === "fulfilled");
   if (succeeded.length === 0) return { synced: 0, items: local };
 
   const nextItems = local.map((item) => {
@@ -355,18 +357,15 @@ export const getExcludedStudents = () =>
       const localStateExists = hasExcludedStudentsLocalState();
       const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
 
-      if (remoteItems.length > 0) {
-        const merged = mergeExcludedStudentsLocalWithRemote(remoteItems);
+      const baseline = remoteItems.length > 0 ? mergeExcludedStudentsLocalWithRemote(remoteItems) : localData;
+
+      if (baseline.length > 0) {
         try {
-          const syncResult = await syncExcludedStudentsToRemote(remoteItems, merged);
+          const syncResult = await syncExcludedStudentsToRemote(remoteItems, baseline);
           return { ...response, data: syncResult.items };
         } catch {
-          return { ...response, data: merged };
+          return { ...response, data: baseline };
         }
-      }
-
-      if (localData.length > 0) {
-        return { ...response, data: localData };
       }
 
       if (!localStateExists) {

@@ -1392,6 +1392,7 @@ export const Attendance: React.FC = () => {
     return formatMobileStudentName(fullName);
   };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
+  const hydrationRequestIdRef = useRef(0);
   const [hydrationReadInfo, setHydrationReadInfo] = useState<{
     ref: string;
     snapshot: string;
@@ -2404,9 +2405,10 @@ export const Attendance: React.FC = () => {
     let isMounted = true;
 
     const hydrateAttendance = async () => {
+      const requestId = ++hydrationRequestIdRef.current;
       const turmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
       if (!turmaLookup || !storageKey) {
-        if (isMounted) setHydratedStorageKey("");
+        if (isMounted && requestId === hydrationRequestIdRef.current) setHydratedStorageKey("");
         return;
       }
 
@@ -2642,12 +2644,12 @@ export const Attendance: React.FC = () => {
           }
         });
 
-        if (isMounted) {
+        if (isMounted && requestId === hydrationRequestIdRef.current) {
           setTransferLocksByName(transferLocks);
         }
       } catch {
         // mantém hidratação local quando backend de relatórios indisponível
-        if (isMounted) {
+        if (isMounted && requestId === hydrationRequestIdRef.current) {
           setTransferLocksByName({});
           setHydrationReadInfo((prev) =>
             prev || {
@@ -2661,7 +2663,7 @@ export const Attendance: React.FC = () => {
         }
       }
 
-      if (!isMounted) return;
+      if (!isMounted || requestId !== hydrationRequestIdRef.current) return;
 
       // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
       setHistory([]);
