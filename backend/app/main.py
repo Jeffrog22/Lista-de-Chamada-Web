@@ -770,6 +770,39 @@ def append_attendance_log(payload: AttendanceLogPayload):
         item["turmaCodigo"] = str(item.get("turmaCodigo") or "").strip()
         item["turmaLabel"] = str(item.get("turmaLabel") or "").strip()
         item["professor"] = str(item.get("professor") or "").strip()
+
+        # Defensive merge: if a client sends a partial roster snapshot,
+        # preserve existing students from the latest log for this class/month.
+        latest_logs = _load_latest_attendance_logs(str(item.get("mes") or "").strip() or None)
+        latest_same_class: Optional[Dict[str, Any]] = None
+        for key in _attendance_log_lookup_keys(item):
+            candidate = latest_logs.get(key)
+            if candidate:
+                latest_same_class = candidate
+                break
+
+        incoming_registros = item.get("registros") or []
+        if latest_same_class and isinstance(latest_same_class.get("registros"), list):
+            existing_registros = latest_same_class.get("registros") or []
+
+            def _student_key(value: Any) -> str:
+                if not isinstance(value, dict):
+                    return ""
+                return _normalize_text(str(value.get("aluno_nome") or "").strip())
+
+            merged: Dict[str, Dict[str, Any]] = {}
+            for record in existing_registros:
+                key = _student_key(record)
+                if key:
+                    merged[key] = dict(record)
+
+            for record in incoming_registros:
+                key = _student_key(record)
+                if key:
+                    merged[key] = dict(record)
+
+            item["registros"] = list(merged.values())
+
         item["saved_at"] = pd.Timestamp.utcnow().isoformat()
         _append_json_list(file_path, [item])
         return {"ok": True, "file": file_path}
