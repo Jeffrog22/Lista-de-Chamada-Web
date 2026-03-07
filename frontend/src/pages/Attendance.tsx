@@ -1594,9 +1594,9 @@ export const Attendance: React.FC = () => {
   const fetchWeatherData = async (date: string) => {
     try {
       const response = await getWeather(date);
-      return response.data as { temp: string; condition: string; conditionCode?: string };
+      return response.data as { temp: string; condition: string; conditionCode?: string; source?: string };
     } catch (error) {
-      return { temp: "26", condition: "Parcialmente Nublado", conditionCode: "" };
+      return { temp: "", condition: "", conditionCode: "", source: "error" };
     }
   };
 
@@ -2013,9 +2013,36 @@ export const Attendance: React.FC = () => {
       setShowDateModal(true);
     }
 
-    // Para data retroativa, nao usar API de clima atual.
-    // Mantemos apenas log/cache da propria data para evitar prefill com "clima de hoje".
+    // Para data retroativa, usa API apenas se vier de snapshot historico do proprio dia.
     if (isRetroDate) {
+      const retroApi = await fetchWeatherData(date);
+      const retroSource = String(retroApi?.source || "").toLowerCase();
+      if (retroSource === "snapshot") {
+        const retroTemp = normalizeNumberInput(String(retroApi.temp || ""));
+        const retroConditionCode = String(retroApi.conditionCode || "").toLowerCase();
+        const retroConditionLabel = normalizeWeatherConditionLabel(
+          String(retroApi.condition || ""),
+          retroConditionCode
+        );
+        const retroIcons = buildSensationFromApi({ temp: retroTemp || "26" });
+
+        setPoolData(prev => ({
+          ...prev,
+          tempExterna: retroTemp,
+          selectedIcons: normalizeSensationList(retroIcons),
+          weatherCondition: retroConditionLabel,
+          weatherConditionCode: retroConditionCode,
+        }));
+
+        setClimaCache(date, {
+          tempExterna: retroTemp,
+          selectedIcons: normalizeSensationList(retroIcons),
+          apiTemp: String(retroApi.temp || ""),
+          apiCondition: String(retroApi.condition || ""),
+          apiConditionCode: retroConditionCode,
+          weatherCondition: retroConditionLabel,
+        });
+      }
       setShowDateModal(true);
       return;
     }

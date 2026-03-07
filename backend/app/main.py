@@ -250,6 +250,55 @@ def _save_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
+
+def _weather_snapshots_file() -> str:
+    return os.path.join(DATA_DIR, "weatherSnapshots.json")
+
+
+def _load_weather_snapshots() -> Dict[str, Dict[str, Any]]:
+    file_path = _weather_snapshots_file()
+    if not os.path.exists(file_path):
+        return {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            return {}
+        return payload
+    except Exception:
+        return {}
+
+
+def _save_weather_snapshots(payload: Dict[str, Dict[str, Any]]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    file_path = _weather_snapshots_file()
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def _build_weather_snapshot(date_key: str, temp: str, condition: str, condition_code: str) -> Dict[str, Any]:
+    return {
+        "date": date_key,
+        "temp": str(temp or "").strip(),
+        "condition": str(condition or "").strip(),
+        "conditionCode": str(condition_code or "").strip().lower(),
+        "saved_at": datetime.utcnow().isoformat(),
+    }
+
+
+def _compute_weather_temp(minima_txt: str, maxima_txt: str, fallback: str = "26") -> str:
+    temp = fallback
+    try:
+        if minima_txt and maxima_txt:
+            temp = str(round((float(minima_txt) + float(maxima_txt)) / 2))
+        elif maxima_txt:
+            temp = str(round(float(maxima_txt)))
+        elif minima_txt:
+            temp = str(round(float(minima_txt)))
+    except Exception:
+        temp = fallback
+    return temp
+
 def _academic_calendar_file() -> str:
     return os.path.join(DATA_DIR, "academicCalendar.json")
 
@@ -608,46 +657,79 @@ def get_weather(date: str):
         "ppm": "Possibilidade de Pancadas de Chuva pela Manhã",
     }
 
+    snapshots = _load_weather_snapshots()
+    requested_date = str(date or "").strip()
+    snapshot = snapshots.get(requested_date)
+    if isinstance(snapshot, dict):
+        return {
+            "temp": str(snapshot.get("temp") or ""),
+            "condition": str(snapshot.get("condition") or ""),
+            "conditionCode": str(snapshot.get("conditionCode") or ""),
+            "source": "snapshot",
+        }
+
     try:
         resp = requests.get(cptec_url, timeout=10)
         resp.raise_for_status()
         root = ET.fromstring(resp.content)
         previsoes = root.findall(".//previsao")
         if not previsoes:
-            return {"temp": "26", "condition": "Parcialmente Nublado", "conditionCode": ""}
+            return {"temp": "", "condition": "", "conditionCode": "", "source": "unavailable"}
 
-        target = None
+        changed = False
         for item in previsoes:
             dia = (item.findtext("dia") or "").strip()
-            if dia == date:
-                target = item
-                break
-        if target is None:
-            target = previsoes[0]
+            if not dia:
+                continue
+            minima_txt = (item.findtext("minima") or "").strip()
+            maxima_txt = (item.findtext("maxima") or "").strip()
+            tempo_code = (item.findtext("tempo") or "").strip().lower()
+            condition = tempo_map.get(tempo_code, "Parcialmente Nublado")
+            temp = _compute_weather_temp(minima_txt, maxima_txt, "26")
 
-        minima_txt = (target.findtext("minima") or "").strip()
-        maxima_txt = (target.findtext("maxima") or "").strip()
-        tempo_code = (target.findtext("tempo") or "").strip().lower()
+            next_snapshot = _build_weather_snapshot(dia, temp, condition, tempo_code)
+            prev_snapshot = snapshots.get(dia)
+            if not isinstance(prev_snapshot, dict) or any(
+                str(prev_snapshot.get(field) or "") != str(next_snapshot.get(field) or "")
+                for field in ["temp", "condition", "conditionCode"]
+            ):
+                snapshots[dia] = next_snapshot
+                changed = True
 
-        temp = "26"
+        if changed:
+            _save_weather_snapshots(snapshots)
+
+        refreshed = snapshots.get(requested_date)
+        if isinstance(refreshed, dict):
+            return {
+                "temp": str(refreshed.get("temp") or ""),
+                "condition": str(refreshed.get("condition") or ""),
+                "conditionCode": str(refreshed.get("conditionCode") or ""),
+                "source": "snapshot",
+            }
+
+        # Para datas passadas sem snapshot salvo, evita devolver previsao do dia atual.
         try:
-            if minima_txt and maxima_txt:
-                temp = str(round((float(minima_txt) + float(maxima_txt)) / 2))
-            elif maxima_txt:
-                temp = str(round(float(maxima_txt)))
-            elif minima_txt:
-                temp = str(round(float(minima_txt)))
+            today_iso = datetime.utcnow().date().isoformat()
+            if requested_date and requested_date < today_iso:
+                return {"temp": "", "condition": "", "conditionCode": "", "source": "unavailable"}
         except Exception:
-            temp = "26"
+            pass
 
+        first = previsoes[0]
+        minima_txt = (first.findtext("minima") or "").strip()
+        maxima_txt = (first.findtext("maxima") or "").strip()
+        tempo_code = (first.findtext("tempo") or "").strip().lower()
         condition = tempo_map.get(tempo_code, "Parcialmente Nublado")
+        temp = _compute_weather_temp(minima_txt, maxima_txt, "26")
         return {
             "temp": str(temp),
             "condition": condition,
             "conditionCode": tempo_code,
+            "source": "cptec-fallback",
         }
     except Exception:
-        return {"temp": "26", "condition": "Parcialmente Nublado", "conditionCode": ""}
+        return {"temp": "", "condition": "", "conditionCode": "", "source": "unavailable"}
 
 @app.post("/pool-log")
 def append_pool_log(entry: PoolLogEntryModel):
