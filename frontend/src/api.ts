@@ -59,16 +59,24 @@ const isPendingExcludedSync = (item: any) => Boolean(item?._pendingSync);
 const normalizeExcludedStudentRecord = (item: any) => {
   const normalizedName = resolveExclusionName(item);
   const pendingSync = isPendingExcludedSync(item);
+  const normalizedUid = String(item?.student_uid || item?.studentUid || "").trim();
   if (!normalizedName) return { ...item, _pendingSync: pendingSync };
 
   const next = { ...item };
   if (!next.nome) next.nome = normalizedName;
   if (!next.Nome) next.Nome = normalizedName;
+  if (normalizedUid) {
+    next.student_uid = normalizedUid;
+    next.studentUid = normalizedUid;
+  }
   next._pendingSync = pendingSync;
   return next;
 };
 
 const isValidExcludedStudentRecord = (item: any) => {
+  const uid = String(item?.student_uid || item?.studentUid || "").trim();
+  if (uid) return true;
+
   const name = normalizeText(resolveExclusionName(item));
   if (name) return true;
 
@@ -81,6 +89,10 @@ const isValidExcludedStudentRecord = (item: any) => {
 };
 
 const exclusionMatches = (candidate: any, payload: any) => {
+  const candidateUid = String(candidate?.student_uid || candidate?.studentUid || "").trim();
+  const payloadUid = String(payload?.student_uid || payload?.studentUid || "").trim();
+  if (candidateUid && payloadUid && candidateUid === payloadUid) return true;
+
   const candidateId = String(candidate?.id || "").trim();
   const payloadId = String(payload?.id || "").trim();
   if (candidateId && payloadId && candidateId === payloadId) return true;

@@ -591,6 +591,12 @@ export const Attendance: React.FC = () => {
       const excludedRaw = localStorage.getItem("excludedStudents");
       const excluded = excludedRaw ? (JSON.parse(excludedRaw) as any[]) : [];
       const isExcludedStudent = (student: any, exclusion: any) => {
+        const studentUid = String(student?.studentUid || student?.student_uid || "").trim();
+        const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
+        if (studentUid && exclusionUid && studentUid === exclusionUid) {
+          return true;
+        }
+
         const studentId = String(student?.id || "").trim();
         const exclusionId = String(exclusion?.id || "").trim();
         if (studentId && exclusionId && studentId === exclusionId) {
@@ -2929,6 +2935,7 @@ export const Attendance: React.FC = () => {
         const payload = {
           ...(full || {
             id: `excl-${Date.now()}`,
+            studentUid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
             nome: student.aluno,
             turma: turmaKey,
             turmaLabel: selectedClass.turmaLabel || selectedTurma || turmaKey,
@@ -2944,7 +2951,8 @@ export const Attendance: React.FC = () => {
             parQ: "",
             atestado: false,
           }),
-          dataExclusao: new Date().toLocaleDateString(),
+          student_uid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
+          dataExclusao: new Date().toLocaleDateString("pt-BR"),
           motivo_exclusao: "Falta",
         };
 
@@ -2952,7 +2960,12 @@ export const Attendance: React.FC = () => {
           alert("Falha ao enviar exclusão ao backend. Tente novamente.");
         });
 
-        const exists = excludedStudents.some((s: any) => s.id === payload.id);
+        const payloadUid = String(payload.student_uid || payload.studentUid || "").trim();
+        const exists = excludedStudents.some((s: any) => {
+          const sUid = String(s?.student_uid || s?.studentUid || "").trim();
+          if (payloadUid && sUid && payloadUid === sUid) return true;
+          return s.id === payload.id;
+        });
         if (!exists) {
           excludedStudents.push(payload);
           localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));

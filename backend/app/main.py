@@ -113,6 +113,7 @@ class JustificationLogEntry(BaseModel):
 
 class ExclusionEntry(BaseModel):
     id: Optional[str] = None
+    student_uid: Optional[str] = None
     nome: Optional[str] = None
     turma: Optional[str] = None
     turmaCodigo: Optional[str] = None
@@ -581,6 +582,7 @@ class ImportClassOut(BaseModel):
 
 class ImportStudentOut(BaseModel):
     id: int
+    student_uid: str = ""
     class_id: int
     nome: str
     whatsapp: str
@@ -598,6 +600,7 @@ class BootstrapOut(BaseModel):
 
 class ImportStudentUpsertPayload(BaseModel):
     nome: str
+    student_uid: Optional[str] = ""
     turma: str
     horario: str
     professor: str
@@ -920,6 +923,10 @@ def _transfer_overrides_file() -> str:
     return os.path.join(DATA_DIR, "studentTransferOverrides.json")
 
 
+def _student_uid_registry_file() -> str:
+    return os.path.join(DATA_DIR, "studentUids.json")
+
+
 def _normalize_whatsapp_digits(value: Optional[str]) -> str:
     return re.sub(r"\D", "", str(value or ""))
 
@@ -929,6 +936,75 @@ def _student_identity_key(nome: Optional[str], data_nascimento: Optional[str], w
     birth_key = str(data_nascimento or "").strip()
     phone_key = _normalize_whatsapp_digits(whatsapp)
     return "|".join([name_key, birth_key, phone_key])
+
+
+def _student_uid_identity_key(nome: Optional[str], data_nascimento: Optional[str], whatsapp: Optional[str]) -> str:
+    name_key = _normalize_text(nome)
+    birth_key = str(data_nascimento or "").strip()
+    phone_key = _normalize_whatsapp_digits(whatsapp)
+    if not name_key:
+        return ""
+    if not birth_key and not phone_key:
+        return ""
+    return "|".join([name_key, birth_key, phone_key])
+
+
+def _load_student_uid_registry() -> Dict[str, str]:
+    path = _student_uid_registry_file()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if isinstance(payload, dict):
+            return {str(k): str(v) for k, v in payload.items() if str(k).strip() and str(v).strip()}
+    except Exception:
+        pass
+    return {}
+
+
+def _save_student_uid_registry(registry: Dict[str, str]) -> None:
+    os.makedirs(DATA_DIR, exist_ok=True)
+    path = _student_uid_registry_file()
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(registry, handle, ensure_ascii=False, indent=2)
+
+
+def _ensure_student_uid_for_student(
+    student: models.ImportStudent,
+    registry: Optional[Dict[str, str]] = None,
+    preferred_uid: Optional[str] = None,
+) -> tuple[str, bool]:
+    data = registry if registry is not None else _load_student_uid_registry()
+    changed = False
+
+    identity_key = _student_uid_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+    registry_identity_key = f"identity:{identity_key}" if identity_key else ""
+    registry_legacy_key = f"legacy:{int(student.id or 0)}" if student.id else ""
+    preferred = str(preferred_uid or "").strip()
+
+    uid = ""
+    if preferred:
+        uid = preferred
+    elif registry_legacy_key and data.get(registry_legacy_key):
+        uid = str(data.get(registry_legacy_key) or "")
+    elif registry_identity_key and data.get(registry_identity_key):
+        uid = str(data.get(registry_identity_key) or "")
+
+    if not uid:
+        uid = str(uuid.uuid4())
+
+    if registry_legacy_key and data.get(registry_legacy_key) != uid:
+        data[registry_legacy_key] = uid
+        changed = True
+    if registry_identity_key and data.get(registry_identity_key) != uid:
+        data[registry_identity_key] = uid
+        changed = True
+
+    if registry is None and changed:
+        _save_student_uid_registry(data)
+
+    return uid, changed
 
 
 def _load_transfer_overrides() -> List[Dict[str, Any]]:
@@ -979,6 +1055,10 @@ def _find_class_from_transfer_override(session: Session, override: Dict[str, Any
     return _find_import_class_by_triple(session, turma_ref, horario_ref, professor_ref)
 
 
+def _has_strong_student_identity(student: models.ImportStudent) -> bool:
+    return bool(str(student.data_nascimento or "").strip() or _normalize_whatsapp_digits(student.whatsapp))
+
+
 def _dedupe_import_students(session: Session) -> int:
     students = session.exec(select(models.ImportStudent)).all()
     seen: Dict[tuple[int, str, str], int] = {}
@@ -1000,6 +1080,36 @@ def _dedupe_import_students(session: Session) -> int:
                 removed += 1
             seen[key] = int(student.id or 0)
         else:
+            session.delete(student)
+            removed += 1
+
+    return removed
+
+
+def _dedupe_import_students_global(session: Session) -> int:
+    students = session.exec(select(models.ImportStudent)).all()
+    candidates: Dict[str, List[models.ImportStudent]] = {}
+    for student in students:
+        if not _has_strong_student_identity(student):
+            continue
+        identity = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+        if not identity:
+            continue
+        candidates.setdefault(identity, []).append(student)
+
+    if not candidates:
+        return 0
+
+    removed = 0
+    for grouped_students in candidates.values():
+        if len(grouped_students) <= 1:
+            continue
+
+        # Keep the oldest id as canonical and delete duplicated entries across classes.
+        keep = min(grouped_students, key=lambda s: int(s.id or 0))
+        for student in grouped_students:
+            if student.id == keep.id:
+                continue
             session.delete(student)
             removed += 1
 
@@ -1041,6 +1151,7 @@ def _apply_transfer_overrides(session: Session) -> int:
                 moved += 1
 
     moved += _dedupe_import_students(session)
+    moved += _dedupe_import_students_global(session)
     return moved
 
 
@@ -1162,6 +1273,10 @@ def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str, str]:
     return (nome, turma_key, horario, professor)
 
 def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
+    item_uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
+    payload_uid = str(payload.student_uid or "").strip()
+    if item_uid and payload_uid and item_uid == payload_uid:
+        return True
     if payload.id and str(item.get("id")) == str(payload.id):
         return True
     return _exclusion_key(item) == _exclusion_key(payload.dict())
@@ -2440,9 +2555,20 @@ def _find_import_class_by_triple(
             return cls
     return None
 
-def _import_student_out(student: models.ImportStudent) -> ImportStudentOut:
+def _import_student_out(
+    student: models.ImportStudent,
+    uid_registry: Optional[Dict[str, str]] = None,
+    preferred_uid: Optional[str] = None,
+) -> ImportStudentOut:
+    student_uid, _ = _ensure_student_uid_for_student(
+        student,
+        registry=uid_registry,
+        preferred_uid=preferred_uid,
+    )
+
     return ImportStudentOut(
         id=student.id or 0,
+        student_uid=student_uid,
         class_id=student.class_id,
         nome=student.nome,
         whatsapp=student.whatsapp or "",
@@ -2573,6 +2699,8 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
             student.atestado = parse_bool(row.get("atestado") or "")
 
         _apply_transfer_overrides(session)
+        _dedupe_import_students(session)
+        _dedupe_import_students_global(session)
         session.commit()
         _save_import_status(
             {
@@ -2594,6 +2722,13 @@ def get_import_data_status() -> ImportStatusOut:
 
 @app.get("/api/bootstrap", response_model=BootstrapOut)
 def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_session)) -> BootstrapOut:
+    removed = _dedupe_import_students(session) + _dedupe_import_students_global(session)
+    if removed > 0:
+        session.commit()
+
+    uid_registry = _load_student_uid_registry()
+    uid_registry_changed = False
+
     units_stmt = select(models.ImportUnit).order_by(models.ImportUnit.name)
     units = session.exec(units_stmt).all()
 
@@ -2608,6 +2743,13 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
     if class_ids:
         students_stmt = students_stmt.where(models.ImportStudent.class_id.in_(class_ids))
     students = session.exec(students_stmt).all()
+
+    for student in students:
+        _, changed = _ensure_student_uid_for_student(student, registry=uid_registry)
+        uid_registry_changed = uid_registry_changed or changed
+
+    if uid_registry_changed:
+        _save_student_uid_registry(uid_registry)
 
     return BootstrapOut(
         units=[ImportUnitOut(id=u.id, name=u.name) for u in units],
@@ -2627,18 +2769,7 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
             for c in classes
         ],
         students=[
-            ImportStudentOut(
-                id=s.id,
-                class_id=s.class_id,
-                nome=s.nome,
-                whatsapp=s.whatsapp,
-                data_nascimento=s.data_nascimento,
-                data_atestado=s.data_atestado,
-                categoria=s.categoria,
-                genero=s.genero,
-                parq=s.parq,
-                atestado=bool(s.atestado),
-            )
+            _import_student_out(s, uid_registry=uid_registry)
             for s in students
         ],
     )
@@ -2675,7 +2806,7 @@ def create_import_student(payload: ImportStudentUpsertPayload, session: Session 
 
     session.commit()
     session.refresh(student)
-    return _import_student_out(student)
+    return _import_student_out(student, preferred_uid=payload.student_uid)
 
 @app.put("/api/import-students/{student_id}", response_model=ImportStudentOut)
 def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, session: Session = Depends(get_session)) -> ImportStudentOut:
@@ -2718,9 +2849,11 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
         _upsert_transfer_override_for_student(target_student, target_class)
 
     session.add(target_student)
+    _dedupe_import_students(session)
+    _dedupe_import_students_global(session)
     session.commit()
     session.refresh(target_student)
-    return _import_student_out(target_student)
+    return _import_student_out(target_student, preferred_uid=payload.student_uid)
 
 # Users endpoints (bootstrap)
 @app.post("/users/register")

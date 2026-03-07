@@ -4,6 +4,7 @@ import { addExclusion, createImportStudent, getBootstrap, getExcludedStudents, u
 
 interface Student {
   id: string;
+  studentUid?: string;
   nome: string;
   nivel: string;
   idade: number;
@@ -112,7 +113,21 @@ export const Students: React.FC = () => {
     return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
   };
 
+  const buildStudentClassKey = (student: Partial<Student>) => {
+    const uidKey = String(student.studentUid || "").trim();
+    if (uidKey) return `uid|${uidKey}`;
+
+    const nameKey = normalizeText(student.nome || "");
+    const turmaKey = normalizeText(student.turmaLabel || student.turma || student.turmaCodigo || "");
+    const professorKey = normalizeText(student.professor || "");
+    const horarioKey = normalizeHorarioKey(student.horario || "");
+    return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|`;
+  };
+
   const buildExclusionKey = (entry: any) => {
+    const uidKey = String(entry?.student_uid || entry?.studentUid || "").trim();
+    if (uidKey) return `uid|${uidKey}`;
+
     const nameKey = normalizeText(entry?.nome || entry?.Nome || "");
     const turmaKey = normalizeText(
       entry?.turmaLabel || entry?.TurmaLabel || entry?.turma || entry?.Turma || entry?.turmaCodigo || entry?.TurmaCodigo || ""
@@ -356,6 +371,7 @@ export const Students: React.FC = () => {
           const cls = classById.get(student.class_id);
           return {
             id: String(student.id),
+            studentUid: String((student as any).student_uid || ""),
             nome: student.nome,
             nivel: cls?.nivel || "",
             idade: calculateAge(student.data_nascimento || ""),
@@ -772,6 +788,7 @@ export const Students: React.FC = () => {
     try {
       const payload = {
         nome: student.nome,
+        student_uid: student.studentUid || "",
         turma: student.turmaLabel || student.turma || "",
         horario: student.horario || "",
         professor: student.professor || "",
@@ -835,8 +852,10 @@ export const Students: React.FC = () => {
     const turmaCodigo = getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor);
     const turmaLabel = getTurmaLabelFromClasses(formData.turma, formData.horario, formData.professor);
     const studentId = editingId || `local-${Date.now()}`;
+    const previousStudent = editingId ? students.find((s) => s.id === editingId) : null;
     const studentData: Student = {
       id: studentId,
+      studentUid: previousStudent?.studentUid || "",
       nome: formData.nome,
       dataNascimento: formData.dataNascimento,
       genero: formData.genero,
@@ -854,7 +873,6 @@ export const Students: React.FC = () => {
       idade: age,
     };
 
-    const previousStudent = editingId ? students.find((s) => s.id === editingId) : null;
     if (previousStudent) {
       const changedNivel = normalizeText(previousStudent.nivel || "") !== normalizeText(studentData.nivel || "");
       const changedClass =
@@ -960,10 +978,11 @@ export const Students: React.FC = () => {
     }
     const exclusionPayload = {
       ...student,
+      student_uid: student.studentUid || "",
       turma: student.turmaLabel || student.turma || student.turmaCodigo || "",
       turmaLabel: student.turmaLabel || student.turma || student.turmaCodigo || "",
       turmaCodigo: student.turmaCodigo || "",
-      dataExclusao: new Date().toLocaleDateString(),
+      dataExclusao: new Date().toLocaleDateString("pt-BR"),
       motivo_exclusao: reason,
     };
 
@@ -972,9 +991,16 @@ export const Students: React.FC = () => {
     });
 
     const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
-    excludedStudents.push(exclusionPayload);
-    localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
-    setExcludedRecords(excludedStudents);
+    const nextExcluded = Array.isArray(excludedStudents) ? [...excludedStudents] : [];
+    const nextKey = buildExclusionKey(exclusionPayload);
+    const existingIndex = nextExcluded.findIndex((item: any) => buildExclusionKey(item) === nextKey);
+    if (existingIndex >= 0) {
+      nextExcluded[existingIndex] = { ...nextExcluded[existingIndex], ...exclusionPayload };
+    } else {
+      nextExcluded.push(exclusionPayload);
+    }
+    localStorage.setItem("excludedStudents", JSON.stringify(nextExcluded));
+    setExcludedRecords(nextExcluded);
 
     // simply remove student from state; persistence effect will clear storage
     setStudents((prev) => prev.filter((s) => s.id !== student.id));
@@ -1036,7 +1062,7 @@ export const Students: React.FC = () => {
       !filters.professor || s.professor === filters.professor;
     const matchesCategoria =
       !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
-    const matchesExcluded = !excludedKeySet.has(buildStudentKey(s));
+    const matchesExcluded = !excludedKeySet.has(buildStudentClassKey(s));
     return (
       matchesSearch &&
       matchesNivel &&

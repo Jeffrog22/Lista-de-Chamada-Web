@@ -229,6 +229,7 @@ export default function App() {
       const cls = classById.get(student.class_id);
       return {
         id: String(student.id),
+        studentUid: String(student.student_uid || ""),
         nome: student.nome,
         nivel: cls?.nivel || "",
         idade: calculateAge(student.data_nascimento || ""),
