@@ -134,9 +134,26 @@ const WEATHER_ICONS = {
 };
 
 const JUSTIFIED_CPTEC_CODES = new Set([
-  "ci", "c", "in", "pp", "cm", "pt", "pm", "np", "pc", "cv", "ch", "t", "e", "n", "nv",
-  "psc", "pcm", "pct", "npt", "ncm", "npm", "npp", "ct", "ppt", "ppm",
+  // Chuva/instabilidade
+  "ci", "c", "in", "pp", "cm", "cn", "pt", "pm", "np", "pc", "cv", "ch", "t",
+  // Condicoes com baixa visibilidade/risco
+  "e", "n", "nv", "g", "ne",
+  // Possibilidades e combinacoes com chuva
+  "psc", "pcm", "pct", "pcn", "npt", "npn", "ncn", "nct", "ncm", "npm", "npp",
+  "ct", "pnt", "ppn", "ppt", "ppm",
 ]);
+
+const WEATHER_JUSTIFICATION_KEYWORDS = [
+  "chuva",
+  "chuvisco",
+  "tempestade",
+  "instavel",
+  "nevoeiro",
+  "encoberto",
+  "geada",
+  "neve",
+  "pancadas",
+];
 
 const normalizeSensation = (value: string) => {
   const raw = String(value || "").trim().toLowerCase();
@@ -172,26 +189,53 @@ const getFallbackSensationByTemp = (rawTemp: string) => {
 };
 
 const CPTEC_CONDITION_LABELS: Record<string, string> = {
-  ec: "Céu claro",
+  ec: "Encoberto com chuvas isoladas",
   ci: "Chuvas isoladas",
   c: "Chuva",
   in: "Instável",
-  pp: "Pancadas de chuva",
+  pp: "Possibilidade de pancadas de chuva",
   cm: "Chuva pela manhã",
+  cn: "Chuva à noite",
   pt: "Pancadas à tarde",
   pm: "Pancadas pela manhã",
   np: "Nublado com pancadas",
-  pc: "Parcialmente nublado",
+  pc: "Pancadas de chuva",
+  pn: "Parcialmente nublado",
   cv: "Chuvisco",
   ch: "Chuvoso",
   t: "Tempestade",
+  ps: "Predomínio de sol",
+  cl: "Céu claro",
   e: "Encoberto",
   n: "Nublado",
   nv: "Nevoeiro",
+  g: "Geada",
+  ne: "Neve",
+  pnt: "Pancadas à noite",
   psc: "Possibilidade de chuva",
+  pcm: "Possibilidade de chuva pela manhã",
   pct: "Possibilidade de pancadas à tarde",
+  pcn: "Possibilidade de chuva à noite",
+  npt: "Nublado com pancadas à tarde",
+  npn: "Nublado com pancadas à noite",
+  ncn: "Nublado com possibilidade de chuva à noite",
+  nct: "Nublado com possibilidade de chuva à tarde",
+  ncm: "Nublado com possibilidade de chuva pela manhã",
+  npm: "Nublado com pancadas pela manhã",
+  npp: "Nublado com possibilidade de chuva",
+  vn: "Variação de nebulosidade",
+  ct: "Chuva à tarde",
+  ppn: "Possibilidade de pancadas de chuva à noite",
+  ppt: "Possibilidade de pancadas de chuva à tarde",
   ppm: "Possibilidade de pancadas pela manhã",
 };
+
+const normalizeWeatherText = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
 const normalizeWeatherConditionLabel = (condition?: string, conditionCode?: string) => {
   const code = String(conditionCode || "").trim().toLowerCase();
@@ -216,6 +260,23 @@ const normalizeWeatherConditionLabel = (condition?: string, conditionCode?: stri
   }
 
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
+const shouldJustifyByWeather = (conditionCode?: string, conditionLabel?: string, sensations?: string[]) => {
+  const code = String(conditionCode || "").trim().toLowerCase();
+  if (JUSTIFIED_CPTEC_CODES.has(code)) return true;
+
+  const normalizedLabel = normalizeWeatherText(String(conditionLabel || ""));
+  if (normalizedLabel) {
+    if (WEATHER_JUSTIFICATION_KEYWORDS.some((keyword) => normalizedLabel.includes(keyword))) {
+      return true;
+    }
+  }
+
+  const normalizedSensations = normalizeSensationList(sensations || []);
+  if (normalizedSensations.includes("Frio") || normalizedSensations.includes("Vento")) return true;
+
+  return false;
 };
 
 // Coordenadas fixas para API (simulação)
@@ -1934,8 +1995,9 @@ export const Attendance: React.FC = () => {
       return;
     }
 
+    const isRetroDate = date < todayDateKey;
     const fallbackDate = localStorage.getItem(lastClimaCacheDateKey);
-    const fallbackCache = fallbackDate && fallbackDate !== date ? getClimaCache(fallbackDate) : null;
+    const fallbackCache = !isRetroDate && fallbackDate && fallbackDate !== date ? getClimaCache(fallbackDate) : null;
     if (fallbackCache) {
       setPoolData(prev => ({
         ...prev,
@@ -1949,6 +2011,13 @@ export const Attendance: React.FC = () => {
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
+    }
+
+    // Para data retroativa, nao usar API de clima atual.
+    // Mantemos apenas log/cache da propria data para evitar prefill com "clima de hoje".
+    if (isRetroDate) {
+      setShowDateModal(true);
+      return;
     }
 
     // Pré-carregar dados da API
@@ -2152,10 +2221,9 @@ export const Attendance: React.FC = () => {
   // Matriz de Decisão
   const getSuggestedStatus = (): "normal" | "justificada" => {
     const { selectedIcons, weatherConditionCode } = poolData;
-    const i = selectedIcons;
-
-    if (JUSTIFIED_CPTEC_CODES.has(String(weatherConditionCode || "").toLowerCase())) return "justificada";
-    if (i.includes("Frio") || i.includes("Vento")) return "justificada";
+    if (shouldJustifyByWeather(weatherConditionCode, poolData.weatherCondition, selectedIcons)) {
+      return "justificada";
+    }
 
     return "normal";
   };
