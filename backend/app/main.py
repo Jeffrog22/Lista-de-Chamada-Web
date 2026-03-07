@@ -395,8 +395,11 @@ def _coerce_numeric_value(value: Optional[str]) -> str | float:
 def _format_temperature_output(value: Any, fallback: str = "28") -> str:
     if value is None:
         return fallback
+    raw = str(value).strip().replace(",", ".")
+    if not raw:
+        return fallback
     try:
-        num = float(value)
+        num = float(raw)
         if math.isfinite(num):
             return str(num)
     except Exception:
@@ -931,11 +934,22 @@ def _load_allowed_schedule_days(today: date) -> Dict[str, set[str]]:
 
     return allowed
 
-def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str]:
+def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str, str]:
     nome = _normalize_text(item.get("nome") or item.get("Nome"))
-    turma = _normalize_text(item.get("turma") or item.get("Turma"))
-    horario = _normalize_text(item.get("horario") or "")
-    return (nome, turma, horario)
+
+    turma_codigo = _normalize_text(item.get("turmaCodigo") or item.get("TurmaCodigo") or "")
+    turma_label = _normalize_text(
+        item.get("turmaLabel")
+        or item.get("TurmaLabel")
+        or item.get("turma")
+        or item.get("Turma")
+        or ""
+    )
+    turma_key = turma_codigo or turma_label
+
+    horario = _normalize_horario_key(item.get("horario") or item.get("Horario") or "")
+    professor = _normalize_text(item.get("professor") or item.get("Professor") or "")
+    return (nome, turma_key, horario, professor)
 
 def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
     if payload.id and str(item.get("id")) == str(payload.id):
