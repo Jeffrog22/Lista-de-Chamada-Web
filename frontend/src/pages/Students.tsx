@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, createImportStudent, getBootstrap, updateImportStudent } from "../api";
+import { addExclusion, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
 
 interface Student {
   id: string;
@@ -104,12 +104,22 @@ export const Students: React.FC = () => {
 
   const buildStudentKey = (student: Partial<Student>) => {
     const nameKey = normalizeText(student.nome || "");
-    const turmaKey = normalizeText(student.turma || "");
+    const turmaKey = normalizeText(student.turmaLabel || student.turma || student.turmaCodigo || "");
     const professorKey = normalizeText(student.professor || "");
     const horarioKey = normalizeHorarioKey(student.horario || "");
     const birthKey = (student.dataNascimento || "").trim();
     const whatsappKey = (student.whatsapp || "").replace(/\D/g, "");
     return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
+  };
+
+  const buildExclusionKey = (entry: any) => {
+    const nameKey = normalizeText(entry?.nome || entry?.Nome || "");
+    const turmaKey = normalizeText(
+      entry?.turmaLabel || entry?.TurmaLabel || entry?.turma || entry?.Turma || entry?.turmaCodigo || entry?.TurmaCodigo || ""
+    );
+    const professorKey = normalizeText(entry?.professor || entry?.Professor || "");
+    const horarioKey = normalizeHorarioKey(entry?.horario || entry?.Horario || "");
+    return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|`;
   };
 
   const transferHistoryStorageKey = "studentTransferHistory";
@@ -187,6 +197,15 @@ export const Students: React.FC = () => {
     return Array.from(seen.values());
   };
   const [students, setStudents] = useState<Student[]>([]);
+  const [excludedRecords, setExcludedRecords] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem("excludedStudents");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [loading, setLoading] = useState(false);
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
@@ -265,19 +284,37 @@ export const Students: React.FC = () => {
   }, [students]);
 
   useEffect(() => {
-    // filter out any students that were marked as excluded; simple in-memory
-    try {
-      const raw = localStorage.getItem("excludedStudents");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const removed = new Set(parsed.map((s: Partial<Student>) => buildStudentKey(s)));
-          setStudents((prev) => prev.filter((s) => !removed.has(buildStudentKey(s))));
+    let isMounted = true;
+    getExcludedStudents()
+      .then((response) => {
+        if (!isMounted) return;
+        const remote = Array.isArray(response?.data) ? response.data : [];
+        if (remote.length > 0) {
+          setExcludedRecords(remote);
+          localStorage.setItem("excludedStudents", JSON.stringify(remote));
+          return;
         }
-      }
-    } catch {
-      // ignore malformed storage
-    }
+        try {
+          const raw = localStorage.getItem("excludedStudents");
+          const parsed = raw ? JSON.parse(raw) : [];
+          setExcludedRecords(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setExcludedRecords([]);
+        }
+      })
+      .catch(() => {
+        try {
+          const raw = localStorage.getItem("excludedStudents");
+          const parsed = raw ? JSON.parse(raw) : [];
+          setExcludedRecords(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setExcludedRecords([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -930,6 +967,7 @@ export const Students: React.FC = () => {
     const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
     excludedStudents.push(exclusionPayload);
     localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
+    setExcludedRecords(excludedStudents);
 
     // simply remove student from state; persistence effect will clear storage
     setStudents((prev) => prev.filter((s) => s.id !== student.id));
@@ -964,6 +1002,14 @@ export const Students: React.FC = () => {
   ).sort((a, b) => a.localeCompare(b));
   const nivelOptions = [...nivelOrder, ...nivelExtras];
 
+  const excludedKeySet = React.useMemo(() => {
+    return new Set(
+      excludedRecords
+        .map((item) => buildExclusionKey(item))
+        .filter((key) => key && !key.startsWith("|"))
+    );
+  }, [excludedRecords]);
+
   const filteredStudents = students.filter((s) => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch =
@@ -983,13 +1029,15 @@ export const Students: React.FC = () => {
       !filters.professor || s.professor === filters.professor;
     const matchesCategoria =
       !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
+    const matchesExcluded = !excludedKeySet.has(buildStudentKey(s));
     return (
       matchesSearch &&
       matchesNivel &&
       matchesTurma &&
       matchesHorario &&
       matchesProfessor &&
-      matchesCategoria
+      matchesCategoria &&
+      matchesExcluded
     );
   });
 
