@@ -768,7 +768,7 @@ export const Students: React.FC = () => {
     setShowModal(true);
   };
 
-  const persistStudent = async (student: Student, isNew: boolean) => {
+  const persistStudent = async (student: Student, isNew: boolean): Promise<boolean> => {
     try {
       const payload = {
         nome: student.nome,
@@ -791,12 +791,14 @@ export const Students: React.FC = () => {
           await updateImportStudent(student.id, payload);
         }
       }
+      return true;
     } catch (error) {
       console.error("Falha ao persistir aluno no backend", error);
+      return false;
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.nome || !formData.turma) {
       alert("Preencha os campos obrigatórios (Nome, Turma)");
       return;
@@ -887,16 +889,21 @@ export const Students: React.FC = () => {
       return dedupeStudents(updated);
     });
 
+    let persisted = true;
     if (!editingId) {
-      persistStudent(studentData, true).catch(() => undefined);
+      persisted = await persistStudent(studentData, true);
     } else if (!studentId.startsWith("local-")) {
-      persistStudent(studentData, false).catch(() => undefined);
+      persisted = await persistStudent(studentData, false);
     }
 
-    if (editingId) {
-      alert("Aluno atualizado com sucesso!");
+    if (persisted) {
+      if (editingId) {
+        alert("Aluno atualizado com sucesso!");
+      } else {
+        alert("Aluno adicionado com sucesso!");
+      }
     } else {
-      alert("Aluno adicionado com sucesso!");
+      alert("Alteracao aplicada localmente, mas houve falha ao persistir no backend. Verifique a conexao e tente Atualizar Base.");
     }
 
     // Salvar dados persistentes (sticky)

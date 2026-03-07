@@ -834,6 +834,134 @@ def _normalize_text(value: Optional[str]) -> str:
     return str(value or "").strip().lower()
 
 
+def _transfer_overrides_file() -> str:
+    return os.path.join(DATA_DIR, "studentTransferOverrides.json")
+
+
+def _normalize_whatsapp_digits(value: Optional[str]) -> str:
+    return re.sub(r"\D", "", str(value or ""))
+
+
+def _student_identity_key(nome: Optional[str], data_nascimento: Optional[str], whatsapp: Optional[str]) -> str:
+    name_key = _normalize_text(nome)
+    birth_key = str(data_nascimento or "").strip()
+    phone_key = _normalize_whatsapp_digits(whatsapp)
+    return "|".join([name_key, birth_key, phone_key])
+
+
+def _load_transfer_overrides() -> List[Dict[str, Any]]:
+    return _load_json_list(_transfer_overrides_file())
+
+
+def _save_transfer_overrides(items: List[Dict[str, Any]]) -> None:
+    _save_json_list(_transfer_overrides_file(), items)
+
+
+def _upsert_transfer_override_for_student(student: models.ImportStudent, target_class: models.ImportClass) -> None:
+    identity_key = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+    if not identity_key:
+        return
+
+    items = _load_transfer_overrides()
+    payload = {
+        "key": identity_key,
+        "nome": student.nome,
+        "data_nascimento": student.data_nascimento or "",
+        "whatsapp": student.whatsapp or "",
+        "turmaCodigo": target_class.codigo or "",
+        "turmaLabel": target_class.turma_label or target_class.codigo or "",
+        "horario": target_class.horario or "",
+        "professor": target_class.professor or "",
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+    updated = False
+    for idx, item in enumerate(items):
+        if str(item.get("key") or "").strip() == identity_key:
+            items[idx] = {**item, **payload}
+            updated = True
+            break
+
+    if not updated:
+        items.append(payload)
+
+    _save_transfer_overrides(items)
+
+
+def _find_class_from_transfer_override(session: Session, override: Dict[str, Any]) -> Optional[models.ImportClass]:
+    turma_ref = str(override.get("turmaCodigo") or override.get("turmaLabel") or "").strip()
+    horario_ref = str(override.get("horario") or "").strip()
+    professor_ref = str(override.get("professor") or "").strip()
+    if not turma_ref or not horario_ref or not professor_ref:
+        return None
+    return _find_import_class_by_triple(session, turma_ref, horario_ref, professor_ref)
+
+
+def _dedupe_import_students(session: Session) -> int:
+    students = session.exec(select(models.ImportStudent)).all()
+    seen: Dict[tuple[int, str, str], int] = {}
+    removed = 0
+
+    for student in students:
+        identity = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+        key = (student.class_id, _normalize_text(student.nome), identity)
+        previous_id = seen.get(key)
+        if previous_id is None:
+            seen[key] = int(student.id or 0)
+            continue
+
+        # Keep the oldest id and remove newer duplicates.
+        if int(student.id or 0) < previous_id:
+            old = session.get(models.ImportStudent, previous_id)
+            if old is not None:
+                session.delete(old)
+                removed += 1
+            seen[key] = int(student.id or 0)
+        else:
+            session.delete(student)
+            removed += 1
+
+    return removed
+
+
+def _apply_transfer_overrides(session: Session) -> int:
+    overrides = _load_transfer_overrides()
+    if not overrides:
+        return 0
+
+    students = session.exec(select(models.ImportStudent)).all()
+    by_identity: Dict[str, List[models.ImportStudent]] = {}
+    for student in students:
+        identity = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+        if not identity:
+            continue
+        by_identity.setdefault(identity, []).append(student)
+
+    moved = 0
+    for override in overrides:
+        identity = str(override.get("key") or "").strip()
+        if not identity:
+            identity = _student_identity_key(
+                str(override.get("nome") or ""),
+                str(override.get("data_nascimento") or ""),
+                str(override.get("whatsapp") or ""),
+            )
+        if not identity:
+            continue
+
+        target_class = _find_class_from_transfer_override(session, override)
+        if target_class is None:
+            continue
+
+        for student in by_identity.get(identity, []):
+            if student.class_id != target_class.id:
+                student.class_id = target_class.id
+                moved += 1
+
+    moved += _dedupe_import_students(session)
+    return moved
+
+
 def _to_proper_case(value: Optional[str]) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -2362,6 +2490,7 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
             student.parq = (row.get("parq") or "").strip()
             student.atestado = parse_bool(row.get("atestado") or "")
 
+        _apply_transfer_overrides(session)
         session.commit()
         _save_import_status(
             {
@@ -2472,6 +2601,8 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     if not student:
         raise HTTPException(status_code=404, detail="Import student not found")
 
+    previous_class_id = student.class_id
+
     target_class = _find_import_class_by_triple(
         session=session,
         turma=payload.turma,
@@ -2500,6 +2631,9 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     target_student.genero = str(payload.genero or "").strip()
     target_student.parq = str(payload.parq or "").strip()
     target_student.atestado = bool(payload.atestado)
+
+    if previous_class_id != target_class.id:
+        _upsert_transfer_override_for_student(target_student, target_class)
 
     session.add(target_student)
     session.commit()
