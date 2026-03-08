@@ -72,6 +72,7 @@ interface ClassStats {
 interface ActiveStudentLite {
   id?: string;
   nome?: string;
+  grupo?: string;
   turma?: string;
   turmaCodigo?: string;
   horario?: string;
@@ -108,6 +109,7 @@ interface StudentStatistics {
 }
 
 interface BootstrapClassLite {
+  grupo: string;
   codigo: string;
   turmaLabel: string;
   horario: string;
@@ -1108,6 +1110,7 @@ export const Reports: React.FC = () => {
         const data = response.data as {
           classes: Array<{
             id: number;
+            grupo?: string;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -1138,7 +1141,8 @@ export const Reports: React.FC = () => {
             id: String(student.id),
             nome: student.nome,
             turma: cls?.turma_label || cls?.codigo || "",
-            turmaCodigo: cls?.codigo || "",
+            turmaCodigo: cls?.grupo || cls?.codigo || "",
+            grupo: cls?.grupo || cls?.codigo || "",
             horario: cls?.horario || "",
             professor: cls?.professor || "",
             nivel: cls?.nivel || "",
@@ -1151,6 +1155,7 @@ export const Reports: React.FC = () => {
         });
 
         const mappedClasses: BootstrapClassLite[] = data.classes.map((cls) => ({
+          grupo: cls.grupo || cls.codigo || "",
           codigo: cls.codigo || "",
           turmaLabel: cls.turma_label || cls.codigo || "",
           horario: cls.horario || "",
@@ -1747,16 +1752,16 @@ export const Reports: React.FC = () => {
         cls.horario === (currentClassData?.horario || selectedHorario) &&
         cls.professor === (currentClassData?.professor || selectedProfessor)
     );
-    if (fromBootstrap?.codigo) return fromBootstrap.codigo;
+    if (fromBootstrap?.grupo || fromBootstrap?.codigo) return fromBootstrap.grupo || fromBootstrap.codigo;
 
     const fromStudents = studentsSnapshot.find(
       (student) =>
         (student.turma || "") === (currentClassData?.turma || selectedTurmaLabel) &&
         (student.horario || "") === (currentClassData?.horario || selectedHorario) &&
         (student.professor || "") === (currentClassData?.professor || selectedProfessor) &&
-        student.turmaCodigo
+        (student.grupo || student.turmaCodigo)
     );
-    return fromStudents?.turmaCodigo || "-";
+      return fromStudents?.grupo || fromStudents?.turmaCodigo || "-";
   })();
   const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
 

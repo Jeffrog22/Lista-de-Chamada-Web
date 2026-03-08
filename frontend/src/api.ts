@@ -544,6 +544,9 @@ export const importDataFile = (file: File, options?: { applyOverrides?: boolean 
 export const getImportDataStatus = () =>
   API.get("/api/import-data/status");
 
+export const getMaintenanceDiagnostics = () =>
+  API.get("/maintenance/diagnostics");
+
 // Login
 export const login = (username: string, password: string) =>
   API.post("/token", new URLSearchParams({ username, password }), {

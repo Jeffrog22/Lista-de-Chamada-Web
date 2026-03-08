@@ -7,6 +7,7 @@ import {
 import type { AcademicCalendarEvent, AcademicCalendarSettings } from "../utils/academicCalendar";
 
 interface ClassOption {
+  grupo?: string;
   turmaCodigo: string;
   turmaLabel: string;
   horario: string;
@@ -25,6 +26,7 @@ interface AttendanceRecord {
 
 interface ActiveStudentMeta {
   nome?: string;
+  grupo?: string;
   turma?: string;
   turmaCodigo?: string;
   horario?: string;
@@ -100,6 +102,7 @@ interface RenewalAlertInfo {
 // Interface para o Log da Piscina (logPiscina.xlsx)
 interface PoolLogEntry {
   data: string;
+  grupo?: string;
   turmaCodigo: string;
   turmaLabel: string;
   horario: string;
@@ -374,7 +377,7 @@ export const Attendance: React.FC = () => {
         getStringField(raw, "Turma", "turma_label", "turmaLabel", "turma") ||
         getStringField(raw, "label", "nome");
       const turmaCodigo =
-        getStringField(raw, "TurmaCodigo", "codigo", "turmaCodigo", "Atalho") || turmaLabel;
+        getStringField(raw, "Grupo", "grupo", "TurmaCodigo", "codigo", "turmaCodigo", "Atalho") || turmaLabel;
       const professor = getStringField(raw, "Professor", "professor");
       const nivel = getStringField(raw, "Nivel", "nivel");
       const diasSemanaRaw = getStringField(raw, "DiasSemana", "dias_semana", "diasSemana");
@@ -388,6 +391,7 @@ export const Attendance: React.FC = () => {
       )}`;
       if (seen.has(key)) return;
       seen.set(key, {
+        grupo: turmaCodigo || turmaLabel,
         turmaCodigo: turmaCodigo || turmaLabel,
         turmaLabel: turmaLabel || turmaCodigo,
         horario: canonicalHorario || horarioRaw,
@@ -569,11 +573,11 @@ export const Attendance: React.FC = () => {
     return [] as string[];
   };
 
-  const getTurmaKey = (opt: ClassOption) => opt.turmaLabel || opt.turmaCodigo;
+  const getTurmaKey = (opt: ClassOption) => opt.turmaLabel || opt.grupo || opt.turmaCodigo;
   const isSameTurma = (opt: ClassOption, turma: string) => {
     if (!turma) return false;
     const turmaNormalized = normalizeText(turma);
-    const codeNormalized = normalizeText(opt.turmaCodigo || "");
+    const codeNormalized = normalizeText(opt.grupo || opt.turmaCodigo || "");
     const labelNormalized = normalizeText(opt.turmaLabel || "");
     return turmaNormalized === codeNormalized || turmaNormalized === labelNormalized;
   };
@@ -610,14 +614,16 @@ export const Attendance: React.FC = () => {
         }
 
         const studentTurma = normalizeText(student?.turma || "");
-        const studentTurmaCodigo = normalizeText(student?.turmaCodigo || "");
+        const studentTurmaCodigo = normalizeText(student?.grupo || student?.turmaCodigo || "");
         const studentHorario = normalizeHorarioDigits(student?.horario || "");
         const studentProfessor = normalizeText(student?.professor || "");
 
         const exclusionTurma = normalizeText(
           exclusion?.turmaLabel || exclusion?.TurmaLabel || exclusion?.turma || exclusion?.Turma || ""
         );
-        const exclusionTurmaCodigo = normalizeText(exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
+        const exclusionTurmaCodigo = normalizeText(
+          exclusion?.grupo || exclusion?.Grupo || exclusion?.turmaCodigo || exclusion?.TurmaCodigo || ""
+        );
         const exclusionHorario = normalizeHorarioDigits(exclusion?.horario || exclusion?.Horario || "");
         const exclusionProfessor = normalizeText(exclusion?.professor || exclusion?.Professor || "");
 
@@ -2936,6 +2942,7 @@ export const Attendance: React.FC = () => {
           ...(full || {
             id: `excl-${Date.now()}`,
             studentUid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
+            grupo: selectedClass.turmaCodigo || "",
             nome: student.aluno,
             turma: turmaKey,
             turmaLabel: selectedClass.turmaLabel || selectedTurma || turmaKey,
@@ -2951,6 +2958,7 @@ export const Attendance: React.FC = () => {
             parQ: "",
             atestado: false,
           }),
+          grupo: selectedClass.turmaCodigo || "",
           student_uid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
           dataExclusao: new Date().toLocaleDateString("pt-BR"),
           motivo_exclusao: "Falta",

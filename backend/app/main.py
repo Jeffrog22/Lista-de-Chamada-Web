@@ -571,6 +571,7 @@ class ImportUnitOut(BaseModel):
 class ImportClassOut(BaseModel):
     id: int
     unit_id: int
+    grupo: str
     codigo: str
     turma_label: str
     horario: str
@@ -622,6 +623,12 @@ class MaintenanceBootstrapResetPayload(BaseModel):
     clear_transfer_overrides: bool = True
     clear_student_uid_registry: bool = True
     clear_import_status: bool = True
+
+
+class MaintenanceDiagnosticsOut(BaseModel):
+    bootstrap: Dict[str, int]
+    feb2026: Dict[str, int]
+    importStatus: Dict[str, Any]
 
 @app.get("/weather")
 def get_weather(date: str):
@@ -1381,6 +1388,23 @@ def _purge_month_from_pool_log(month: str) -> Dict[str, int]:
     return {"before": before, "after": len(next_df), "removed": removed}
 
 
+def _count_month_entries_in_json(file_path: str, month: str) -> int:
+    items = _load_json_list(file_path)
+    if not items:
+        return 0
+    return sum(1 for item in items if _entry_contains_month(item, month))
+
+
+def _count_month_entries_in_pool_log(month: str) -> int:
+    file_path = os.path.join(DATA_DIR, "logPiscina.xlsx")
+    if not os.path.exists(file_path):
+        return 0
+    df = _load_pool_log(file_path)
+    if len(df) == 0:
+        return 0
+    return int(df["Data"].apply(lambda value: _extract_month_key(value) == month).sum())
+
+
 def _purge_month_data(month: str, clear_transfer_overrides: bool = True) -> Dict[str, Any]:
     if not re.fullmatch(r"\d{4}-\d{2}", str(month or "").strip()):
         raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
@@ -1519,6 +1543,37 @@ def reset_bootstrap_data(
             "cleared": status_cleared,
         },
     }
+
+
+@app.get("/maintenance/diagnostics", response_model=MaintenanceDiagnosticsOut)
+def get_maintenance_diagnostics(session: Session = Depends(get_session)):
+    month = "2026-02"
+    units_count = len(session.exec(select(models.ImportUnit)).all())
+    classes_count = len(session.exec(select(models.ImportClass)).all())
+    students_count = len(session.exec(select(models.ImportStudent)).all())
+
+    feb_attendance = _count_month_entries_in_json(os.path.join(DATA_DIR, "baseChamada.json"), month)
+    feb_justifications = _count_month_entries_in_json(os.path.join(DATA_DIR, "baseJustificativas.json"), month)
+    feb_exclusions = _count_month_entries_in_json(os.path.join(DATA_DIR, "excludedStudents.json"), month)
+    snapshots = _load_weather_snapshots()
+    feb_snapshots = sum(1 for key in snapshots.keys() if str(key).startswith(f"{month}-"))
+    feb_pool = _count_month_entries_in_pool_log(month)
+
+    return MaintenanceDiagnosticsOut(
+        bootstrap={
+            "units": units_count,
+            "classes": classes_count,
+            "students": students_count,
+        },
+        feb2026={
+            "attendance": feb_attendance,
+            "justifications": feb_justifications,
+            "exclusions": feb_exclusions,
+            "weatherSnapshots": feb_snapshots,
+            "poolLog": feb_pool,
+        },
+        importStatus=_load_import_status(),
+    )
 
 def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> bool:
     cls_codigo = _normalize_text(cls.codigo or "")
@@ -2980,6 +3035,7 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
             ImportClassOut(
                 id=c.id,
                 unit_id=c.unit_id,
+                grupo=c.codigo,
                 codigo=c.codigo,
                 turma_label=c.turma_label,
                 horario=c.horario,

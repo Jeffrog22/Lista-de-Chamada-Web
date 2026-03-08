@@ -6,7 +6,7 @@ import { Reports } from "./pages/Reports";
 import { Vacancies } from "./pages/Vacancies";
 import { Exclusions } from "./pages/Exclusions";
 import { Login } from "./pages/Login";
-import { getBootstrap, getImportDataStatus, importDataFile } from "./api";
+import { getBootstrap, getImportDataStatus, getMaintenanceDiagnostics, importDataFile } from "./api";
 import "./App.simple.css";
 
 declare const __APP_VERSION__: string;
@@ -77,6 +77,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
+  const [maintenanceDiag, setMaintenanceDiag] = useState<any>(null);
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
     const byWidth = window.innerWidth <= 768;
     const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
@@ -186,6 +187,14 @@ export default function App() {
       .catch(() => {
         const fallbackDate = readLastImportAtFallback();
         setLastImportInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
+      });
+
+    getMaintenanceDiagnostics()
+      .then((res: ApiResponse) => {
+        setMaintenanceDiag(res.data || null);
+      })
+      .catch(() => {
+        setMaintenanceDiag(null);
       });
 
     try {
@@ -332,6 +341,7 @@ export default function App() {
     });
 
     const mappedClasses = (data.classes || []).map((cls: any) => ({
+      Grupo: cls.grupo || cls.codigo,
       Turma: cls.turma_label || cls.codigo,
       TurmaCodigo: cls.codigo,
       Horario: cls.horario,
@@ -487,6 +497,11 @@ export default function App() {
           <span className="user-info">
             Atualizado em: {formatImportDate(lastImportInfo?.last_import_at)}
           </span>
+          {maintenanceDiag && (
+            <span className="diag-badge" title="Diagnóstico de integridade do backend">
+              diag b:{maintenanceDiag?.bootstrap?.students ?? "-"} c:{maintenanceDiag?.bootstrap?.classes ?? "-"} fev:{(maintenanceDiag?.feb2026?.attendance ?? 0) + (maintenanceDiag?.feb2026?.justifications ?? 0) + (maintenanceDiag?.feb2026?.exclusions ?? 0)}
+            </span>
+          )}
           {quickTeacherOptions.length > 0 && (
             <>
               <select

@@ -5,6 +5,7 @@ import { addExclusion, createImportStudent, getBootstrap, getExcludedStudents, u
 interface Student {
   id: string;
   studentUid?: string;
+  grupo?: string;
   nome: string;
   nivel: string;
   idade: number;
@@ -341,6 +342,7 @@ export const Students: React.FC = () => {
         const data = response.data as {
           classes: Array<{
             id: number;
+            grupo?: string;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -377,7 +379,8 @@ export const Students: React.FC = () => {
             idade: calculateAge(student.data_nascimento || ""),
             categoria: student.categoria || "",
             turma: cls?.turma_label || cls?.codigo || "",
-            turmaCodigo: cls?.codigo || "",
+            turmaCodigo: cls?.grupo || cls?.codigo || "",
+            grupo: cls?.grupo || cls?.codigo || "",
             turmaLabel: cls?.turma_label || cls?.codigo || "",
             horario: cls?.horario || "",
             professor: cls?.professor || "",
@@ -395,6 +398,7 @@ export const Students: React.FC = () => {
         localStorage.setItem("activeStudents", JSON.stringify(finalList));
 
         const classStorage = data.classes.map((cls) => ({
+          Grupo: cls.grupo || cls.codigo,
           Turma: cls.turma_label || cls.codigo,
           TurmaCodigo: cls.codigo,
           Horario: cls.horario,
@@ -569,6 +573,7 @@ export const Students: React.FC = () => {
       const raw = localStorage.getItem("activeClasses");
       if (!raw) return null;
       const classes = JSON.parse(raw) as Array<{
+        Grupo?: string;
         Turma?: string;
         TurmaCodigo?: string;
         Horario?: string;
@@ -585,7 +590,7 @@ export const Students: React.FC = () => {
       };
       const horarioKey = horarioNorm(horario || "");
       const match = classes.find((cls) => {
-        const turmaKey = cls.TurmaCodigo || "";
+        const turmaKey = cls.Grupo || cls.TurmaCodigo || "";
         const turmaLabel = cls.Turma || "";
         if (!horarioKey || !professorNorm) return false;
         const turmaKeyNorm = normalizeText(turmaKey);
@@ -789,6 +794,7 @@ export const Students: React.FC = () => {
       const payload = {
         nome: student.nome,
         student_uid: student.studentUid || "",
+        grupo: student.grupo || student.turmaCodigo || "",
         turma: student.turmaLabel || student.turma || "",
         horario: student.horario || "",
         professor: student.professor || "",
@@ -856,6 +862,7 @@ export const Students: React.FC = () => {
     const studentData: Student = {
       id: studentId,
       studentUid: previousStudent?.studentUid || "",
+      grupo: turmaCodigo,
       nome: formData.nome,
       dataNascimento: formData.dataNascimento,
       genero: formData.genero,
@@ -979,6 +986,7 @@ export const Students: React.FC = () => {
     const exclusionPayload = {
       ...student,
       student_uid: student.studentUid || "",
+      grupo: student.grupo || student.turmaCodigo || "",
       turma: student.turmaLabel || student.turma || student.turmaCodigo || "",
       turmaLabel: student.turmaLabel || student.turma || student.turmaCodigo || "",
       turmaCodigo: student.turmaCodigo || "",
