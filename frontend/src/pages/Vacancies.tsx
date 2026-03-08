@@ -9,6 +9,7 @@ interface ActiveStudentLite {
   nome?: string;
   nivel?: string;
   turma?: string;
+  grupo?: string;
   turmaCodigo?: string;
   horario?: string;
   professor?: string;
@@ -25,6 +26,7 @@ interface TurmaMeta {
 
 interface BootstrapClassLite {
   id: number;
+  grupo?: string;
   codigo: string;
   turmaLabel: string;
   horario: string;
@@ -37,10 +39,12 @@ interface ExclusionLite {
   nome?: string;
   Nome?: string;
   turma?: string;
+  grupo?: string;
   turmaCodigo?: string;
   horario?: string;
   professor?: string;
   Turma?: string;
+  Grupo?: string;
   TurmaCodigo?: string;
   Horario?: string;
   Professor?: string;
@@ -115,6 +119,7 @@ export const Vacancies: React.FC = () => {
         const data = bootstrapResponse.data as {
           classes: Array<{
             id: number;
+            grupo?: string;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -147,7 +152,8 @@ export const Vacancies: React.FC = () => {
             nome: student.nome,
             nivel: cls?.nivel || student.nivel || "",
             turma: cls?.turma_label || cls?.codigo || "",
-            turmaCodigo: cls?.codigo || "",
+            grupo: cls?.grupo || cls?.codigo || "",
+            turmaCodigo: cls?.grupo || cls?.codigo || "",
             horario: cls?.horario || "",
             professor: cls?.professor || "",
           } as ActiveStudentLite;
@@ -155,6 +161,7 @@ export const Vacancies: React.FC = () => {
 
         const mappedClasses: BootstrapClassLite[] = data.classes.map((cls) => ({
           id: cls.id,
+          grupo: cls.grupo || cls.codigo || "",
           codigo: cls.codigo || "",
           turmaLabel: cls.turma_label || cls.codigo || "",
           horario: cls.horario || "",
@@ -257,12 +264,12 @@ export const Vacancies: React.FC = () => {
       if (!studentName || !exclusionName || studentName !== exclusionName) return false;
 
       const studentTurma = normalizeText(student?.turma || "");
-      const studentTurmaCodigo = normalizeText(student?.turmaCodigo || "");
+      const studentTurmaCodigo = normalizeText(student?.grupo || student?.turmaCodigo || "");
       const studentHorario = normalizeHorarioKey(student?.horario || "");
       const studentProfessor = normalizeText(student?.professor || "");
 
       const exclusionTurma = normalizeText(exclusion?.turma || exclusion?.Turma || "");
-      const exclusionTurmaCodigo = normalizeText(exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
+      const exclusionTurmaCodigo = normalizeText(exclusion?.grupo || exclusion?.Grupo || exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
       const exclusionHorario = normalizeHorarioKey(exclusion?.horario || exclusion?.Horario || "");
       const exclusionProfessor = normalizeText(exclusion?.professor || exclusion?.Professor || "");
 

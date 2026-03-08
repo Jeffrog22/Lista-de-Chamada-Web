@@ -323,12 +323,13 @@ export default function App() {
       return {
         id: String(student.id),
         studentUid: String(student.student_uid || ""),
+        grupo: cls?.grupo || cls?.codigo || "",
         nome: student.nome,
         nivel: cls?.nivel || "",
         idade: calculateAge(student.data_nascimento || ""),
         categoria: student.categoria || "",
         turma: cls?.turma_label || cls?.codigo || "",
-        turmaCodigo: cls?.codigo || "",
+        turmaCodigo: cls?.grupo || cls?.codigo || "",
         horario: cls?.horario || "",
         professor: cls?.professor || "",
         whatsapp: student.whatsapp || "",
@@ -343,7 +344,7 @@ export default function App() {
     const mappedClasses = (data.classes || []).map((cls: any) => ({
       Grupo: cls.grupo || cls.codigo,
       Turma: cls.turma_label || cls.codigo,
-      TurmaCodigo: cls.codigo,
+      TurmaCodigo: cls.grupo || cls.codigo,
       Horario: cls.horario,
       Professor: cls.professor,
       Nivel: cls.nivel,

@@ -5,6 +5,7 @@ import "./Exclusions.css";
 
 interface ExcludedStudent {
   id?: string;
+  grupo?: string;
   nome?: string;
   turma?: string;
   turmaLabel?: string;
@@ -24,6 +25,7 @@ interface ExcludedStudent {
   Nome?: string;
   Turma?: string;
   TurmaLabel?: string;
+  Grupo?: string;
   TurmaCodigo?: string;
   Horario?: string;
   Professor?: string;
@@ -267,6 +269,7 @@ export const Exclusions: React.FC = () => {
       const raw = localStorage.getItem("activeClasses");
       if (!raw) return null;
       const classes = JSON.parse(raw) as Array<{
+        Grupo?: string;
         Turma?: string;
         TurmaCodigo?: string;
         Horario?: string;
@@ -278,7 +281,7 @@ export const Exclusions: React.FC = () => {
       return (
         classes.find((cls) => {
           const labelNorm = normalizeText(cls.Turma || "");
-          const codeNorm = normalizeText(cls.TurmaCodigo || "");
+          const codeNorm = normalizeText(cls.Grupo || cls.TurmaCodigo || "");
           const clsHorario = normalizeHorarioDigits(cls.Horario || "");
           const clsProfessor = normalizeText(cls.Professor || "");
           const turmaMatches = turmaNorm && (turmaNorm === labelNorm || turmaNorm === codeNorm);
@@ -407,7 +410,7 @@ export const Exclusions: React.FC = () => {
 
     const classMatch = resolveClassFromTriple(formData.turma, formData.horario, formData.professor);
     const turmaLabel = classMatch?.Turma || formData.turma;
-    const turmaCodigo = classMatch?.TurmaCodigo || editingStudent.turmaCodigo || editingStudent.TurmaCodigo || "";
+    const turmaCodigo = classMatch?.Grupo || classMatch?.TurmaCodigo || editingStudent.grupo || editingStudent.turmaCodigo || editingStudent.Grupo || editingStudent.TurmaCodigo || "";
 
     const restorePayload = {
       id: editingStudent.id,
@@ -428,6 +431,7 @@ export const Exclusions: React.FC = () => {
       ...editingStudent,
       ...formData,
       turma: turmaLabel,
+      grupo: turmaCodigo,
       turmaLabel,
       turmaCodigo,
       idade: calculateAge(formData.dataNascimento),

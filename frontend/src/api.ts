@@ -81,7 +81,7 @@ const isValidExcludedStudentRecord = (item: any) => {
   if (name) return true;
 
   const id = String(item?.id || "").trim();
-  const turma = normalizeText(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.turmaCodigo || item?.TurmaCodigo);
+  const turma = normalizeText(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.grupo || item?.Grupo || item?.turmaCodigo || item?.TurmaCodigo);
   const horario = normalizeHorarioKey(item?.horario || item?.Horario);
   const professor = normalizeText(item?.professor || item?.Professor);
 
@@ -106,10 +106,10 @@ const exclusionMatches = (candidate: any, payload: any) => {
   if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
 
   const candidateTurma = normalizeText(
-    candidate?.turma || candidate?.Turma || candidate?.turmaLabel || candidate?.TurmaLabel || candidate?.turmaCodigo || candidate?.TurmaCodigo
+    candidate?.turma || candidate?.Turma || candidate?.turmaLabel || candidate?.TurmaLabel || candidate?.grupo || candidate?.Grupo || candidate?.turmaCodigo || candidate?.TurmaCodigo
   );
   const payloadTurma = normalizeText(
-    payload?.turma || payload?.Turma || payload?.turmaLabel || payload?.TurmaLabel || payload?.turmaCodigo || payload?.TurmaCodigo
+    payload?.turma || payload?.Turma || payload?.turmaLabel || payload?.TurmaLabel || payload?.grupo || payload?.Grupo || payload?.turmaCodigo || payload?.TurmaCodigo
   );
   const turmaMatches = !candidateTurma || !payloadTurma || candidateTurma === payloadTurma;
 
@@ -253,7 +253,7 @@ const normalizeAttendanceLogHorario = (value: unknown) => {
 };
 
 const getAttendanceLogQueueKey = (payload: any) => {
-  const turma = normalizeAttendanceLogField(payload?.turmaCodigo || payload?.turmaLabel);
+  const turma = normalizeAttendanceLogField(payload?.grupo || payload?.turmaCodigo || payload?.turmaLabel);
   const horario = normalizeAttendanceLogHorario(payload?.horario);
   const professor = normalizeAttendanceLogField(payload?.professor);
   const mes = normalizeAttendanceLogField(payload?.mes);

@@ -139,12 +139,13 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       const cls = classById.get(student.class_id);
       return {
         id: String(student.id),
+        grupo: cls?.grupo || cls?.codigo || "",
         nome: student.nome,
         nivel: cls?.nivel || "",
         idade: calculateAge(student.data_nascimento || ""),
         categoria: student.categoria || "",
         turma: cls?.turma_label || cls?.codigo || "",
-        turmaCodigo: cls?.codigo || "",
+        turmaCodigo: cls?.grupo || cls?.codigo || "",
         horario: cls?.horario || "",
         professor: cls?.professor || "",
         whatsapp: student.whatsapp || "",
@@ -157,8 +158,9 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     });
 
     const mappedClasses = (data.classes || []).map((cls: any) => ({
+      Grupo: cls.grupo || cls.codigo,
       Turma: cls.turma_label || cls.codigo,
-      TurmaCodigo: cls.codigo,
+      TurmaCodigo: cls.grupo || cls.codigo,
       Horario: cls.horario,
       Professor: cls.professor,
       Nivel: cls.nivel,

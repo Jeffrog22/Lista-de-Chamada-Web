@@ -6,6 +6,7 @@ import "./Classes.css";
 interface Class {
   id?: number;
   Turma: string;
+  Grupo?: string;
   TurmaCodigo?: string;
   Horario: string;
   Professor: string;
@@ -148,7 +149,7 @@ const buildNextTurmaCode = (professor: string, days: WeekdayValue[], existingCla
   const base = `${profCode}${diasCode}`;
   let nextIndex = 1;
   existingClasses.forEach((cls) => {
-    const currentCode = ((cls.TurmaCodigo || cls.Atalho || "") as string).trim().toLowerCase();
+    const currentCode = getClassGroup(cls).toLowerCase();
     const match = currentCode.match(new RegExp(`^${base}(\\d{2})$`, "i"));
     if (!match) return;
     const numeric = parseInt(match[1], 10);
@@ -166,6 +167,10 @@ const formatHorario = (value: string) => {
   }
   return digits;
 };
+
+function getClassGroup(cls: Partial<Class>) {
+  return String(cls.Grupo || cls.TurmaCodigo || cls.Atalho || cls.Turma || "").trim();
+}
 
 export const Classes: React.FC = () => {
   const [classes, setClasses] = useState<Class[]>([]);
@@ -189,7 +194,7 @@ export const Classes: React.FC = () => {
         const students = JSON.parse(studentsStr);
         const counts: { [key: string]: number } = {};
         students.forEach((s: any) => {
-          const key = s.turmaCodigo || s.turma;
+          const key = s.grupo || s.turmaCodigo || s.turma;
           if (key) {
             counts[key] = (counts[key] || 0) + 1;
           }
@@ -208,6 +213,7 @@ export const Classes: React.FC = () => {
         const data = response.data as {
           classes: Array<{
             id: number;
+            grupo?: string;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -222,8 +228,9 @@ export const Classes: React.FC = () => {
         if (data.classes.length === 0) return;
         const mapped = data.classes.map((cls) => ({
           id: cls.id,
+          Grupo: cls.grupo || cls.codigo,
           Turma: cls.turma_label || cls.codigo,
-          TurmaCodigo: cls.codigo,
+          TurmaCodigo: cls.grupo || cls.codigo,
           Horario: cls.horario,
           Professor: cls.professor,
           Nivel: cls.nivel,
@@ -355,6 +362,7 @@ export const Classes: React.FC = () => {
     const finalCode = String(formData.Atalho || formData.TurmaCodigo || "").trim();
     const finalPayload: Class = {
       ...(formData as Class),
+      Grupo: finalCode,
       TurmaCodigo: finalCode,
       Atalho: finalCode,
       DiasSemana:
@@ -406,6 +414,7 @@ export const Classes: React.FC = () => {
         const data = response.data as {
           classes: Array<{
             id: number;
+            grupo?: string;
             codigo: string;
             turma_label: string;
             horario: string;
@@ -418,8 +427,9 @@ export const Classes: React.FC = () => {
         };
         const mapped = data.classes.map((cls) => ({
           id: cls.id,
+          Grupo: cls.grupo || cls.codigo,
           Turma: cls.turma_label || cls.codigo,
-          TurmaCodigo: cls.codigo,
+          TurmaCodigo: cls.grupo || cls.codigo,
           Horario: cls.horario,
           Professor: cls.professor,
           Nivel: cls.nivel,
@@ -455,7 +465,7 @@ export const Classes: React.FC = () => {
   };
 
   const handleGoToAttendance = (classData: Class) => {
-    const targetValue = classData.TurmaCodigo || classData.Turma;
+    const targetValue = getClassGroup(classData) || classData.Turma;
     localStorage.setItem("attendanceTargetTurma", targetValue);
     localStorage.setItem(
       "attendanceSelection",
@@ -498,7 +508,7 @@ export const Classes: React.FC = () => {
 
       if (name === "Atalho") {
         const normalized = String(newValue).toLowerCase().replace(/[^a-z0-9]/g, "");
-        return { ...prev, Atalho: normalized, TurmaCodigo: normalized };
+        return { ...prev, Atalho: normalized, TurmaCodigo: normalized, Grupo: normalized };
       }
 
       return { ...prev, [name]: newValue };
@@ -697,7 +707,7 @@ export const Classes: React.FC = () => {
           <tbody>
             {sortedClasses.map((classData, idx) => (
               <tr key={idx} style={{ borderBottom: "1px solid #e0e0e0", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
-                <td style={{ padding: "12px" }} title={classData.TurmaCodigo ? `Codigo: ${classData.TurmaCodigo}` : ""}>
+                <td style={{ padding: "12px" }} title={getClassGroup(classData) ? `Codigo: ${getClassGroup(classData)}` : ""}>
                   {classData.Turma}
                 </td>
                 <td style={{ padding: "12px" }}>{formatHorario(classData.Horario)}</td>
@@ -710,7 +720,7 @@ export const Classes: React.FC = () => {
                   <span
                     style={{
                       ...getLotacaoStyle(
-                        studentCounts[classData.TurmaCodigo || classData.Turma] || 0,
+                        studentCounts[getClassGroup(classData) || classData.Turma] || 0,
                         classData.CapacidadeMaxima || 0
                       ),
                       padding: "4px 10px",
@@ -719,7 +729,7 @@ export const Classes: React.FC = () => {
                       fontSize: "12px",
                     }}
                   >
-                    {studentCounts[classData.TurmaCodigo || classData.Turma] || 0} / {classData.CapacidadeMaxima || 0}
+                    {studentCounts[getClassGroup(classData) || classData.Turma] || 0} / {classData.CapacidadeMaxima || 0}
                   </span>
                 </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
