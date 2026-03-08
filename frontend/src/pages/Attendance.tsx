@@ -13,6 +13,7 @@ interface ClassOption {
   horario: string;
   professor: string;
   nivel: string;
+  faixaEtaria?: string;
   diasSemana: string[]; // Ex: ["Terça", "Quinta"]
 }
 
@@ -282,6 +283,128 @@ const shouldJustifyByWeather = (conditionCode?: string, conditionLabel?: string,
   return false;
 };
 
+type SuggestedClassStatus = "normal" | "justificada" | "cancelada";
+
+type SuggestedClassDecision = {
+  status: SuggestedClassStatus;
+  reason: string;
+};
+
+const WEATHER_NORMAL_KEYWORDS = [
+  "encoberto",
+  "nublado",
+  "possibilidade de chuva",
+  "variacao de nebulosidade",
+  "ceu claro",
+  "predominio de sol",
+];
+
+const WEATHER_JUSTIFIED_KEYWORDS_CSV = [
+  "chuvas isoladas",
+  "chuva",
+  "instavel",
+  "pancadas de chuva",
+  "chuvisco",
+  "chuvoso",
+  "tempestade",
+  "nevoeiro",
+  "trovoad",
+  "raios",
+];
+
+const parseTemperatureNumber = (value: string) => {
+  const normalized = String(value || "").replace(/[^\d,.-]/g, "").replace(",", ".").trim();
+  if (!normalized) return Number.NaN;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+};
+
+const inferAgeRange = (value: string) => {
+  const text = String(value || "").toLowerCase();
+  const nums = text.match(/\d+/g)?.map((v) => Number(v)).filter((n) => Number.isFinite(n)) || [];
+  if (nums.length === 0) return null as { min: number; max: number } | null;
+  if (nums.length === 1) return { min: nums[0], max: nums[0] };
+  const min = Math.min(nums[0], nums[1]);
+  const max = Math.max(nums[0], nums[1]);
+  return { min, max };
+};
+
+const isInfantilClass = (nivel: string, faixaEtaria?: string) => {
+  const nivelNorm = normalizeWeatherText(nivel || "");
+  if (nivelNorm.includes("infant")) return true;
+
+  const range = inferAgeRange(faixaEtaria || "");
+  if (!range) return false;
+  return range.min <= 15 && range.max >= 7;
+};
+
+const isIniciacaoClass = (nivel: string) => {
+  const nivelNorm = normalizeWeatherText(nivel || "");
+  return nivelNorm.includes("iniciacao") || nivelNorm.includes("iniciac");
+};
+
+const getSuggestedDecisionFromRules = (params: {
+  conditionCode?: string;
+  conditionLabel?: string;
+  sensations?: string[];
+  tempPiscina?: string;
+  cloroPpm?: number;
+  nivel?: string;
+  faixaEtaria?: string;
+}): SuggestedClassDecision => {
+  const tempPiscina = parseTemperatureNumber(params.tempPiscina || "");
+  const cloro = Number.isFinite(params.cloroPpm ?? Number.NaN) ? Number(params.cloroPpm) : Number.NaN;
+  const nivel = String(params.nivel || "");
+  const faixaEtaria = String(params.faixaEtaria || "");
+
+  if (Number.isFinite(cloro) && cloro < 0.5) {
+    return { status: "cancelada", reason: "Cloro abaixo de 0,5 ppm" };
+  }
+
+  if (Number.isFinite(tempPiscina) && tempPiscina < 23) {
+    return { status: "cancelada", reason: "Temperatura da piscina abaixo de 23°C" };
+  }
+
+  if (Number.isFinite(tempPiscina) && tempPiscina < 25 && isInfantilClass(nivel, faixaEtaria)) {
+    return { status: "cancelada", reason: "Temperatura da piscina abaixo de 25°C para grupo infantil" };
+  }
+
+  if (Number.isFinite(tempPiscina) && tempPiscina < 28 && isIniciacaoClass(nivel)) {
+    return { status: "cancelada", reason: "Temperatura da piscina abaixo de 28°C para Iniciação" };
+  }
+
+  if (Number.isFinite(cloro) && ((cloro >= 0.5 && cloro <= 1.0) || cloro > 5.0)) {
+    return {
+      status: "justificada",
+      reason: cloro > 5.0 ? "Cloro acima de 5 ppm" : "Cloro entre 0,5 e 1 ppm",
+    };
+  }
+
+  const normalizedLabel = normalizeWeatherText(String(params.conditionLabel || ""));
+  const normalizedSensations = normalizeSensationList(params.sensations || []);
+  const hasColdOrWind = normalizedSensations.includes("Frio") || normalizedSensations.includes("Vento");
+  if (normalizedLabel) {
+    if (normalizedLabel.includes("chuvisco")) {
+      if (hasColdOrWind) {
+        return { status: "justificada", reason: "Chuvisco com frio/vento" };
+      }
+      return { status: "normal", reason: "Chuvisco leve sem frio/vento" };
+    }
+    if (WEATHER_JUSTIFIED_KEYWORDS_CSV.some((keyword) => normalizedLabel.includes(keyword))) {
+      return { status: "justificada", reason: "Condição climática desfavorável" };
+    }
+    if (WEATHER_NORMAL_KEYWORDS.some((keyword) => normalizedLabel.includes(keyword))) {
+      return { status: "normal", reason: "Condição climática favorável" };
+    }
+  }
+
+  if (shouldJustifyByWeather(params.conditionCode, params.conditionLabel, params.sensations || [])) {
+    return { status: "justificada", reason: "Condição climática desfavorável" };
+  }
+
+  return { status: "normal", reason: "Condição climática favorável" };
+};
+
 // Coordenadas fixas para API (simulação)
 // const LAT = "-23.049194";
 // const LON = "-47.007278";
@@ -296,6 +419,7 @@ type AttendanceDebugEvent = {
 };
 
 const DEFAULT_POOL_TEMP = "28";
+const CANCELLED_CLASS_REASON_PREFIX = "[AULA CANCELADA]";
 
 export const Attendance: React.FC = () => {
   const renewalAlertStorageKey = "attendanceAtestadoRenewalDismissed";
@@ -380,6 +504,7 @@ export const Attendance: React.FC = () => {
         getStringField(raw, "Grupo", "grupo", "TurmaCodigo", "codigo", "turmaCodigo", "Atalho") || turmaLabel;
       const professor = getStringField(raw, "Professor", "professor");
       const nivel = getStringField(raw, "Nivel", "nivel");
+      const faixaEtaria = getStringField(raw, "FaixaEtaria", "faixa_etaria", "faixaEtaria");
       const diasSemanaRaw = getStringField(raw, "DiasSemana", "dias_semana", "diasSemana");
       const horarioRaw = String(raw.Horario ?? raw.horario ?? "").trim();
       const canonicalHorario = getCanonicalHorario(horarioRaw);
@@ -397,6 +522,7 @@ export const Attendance: React.FC = () => {
         horario: canonicalHorario || horarioRaw,
         professor,
         nivel,
+        faixaEtaria,
         diasSemana: parseDiasSemana(diasSemanaRaw),
       });
     });
@@ -717,6 +843,7 @@ export const Attendance: React.FC = () => {
     horario: "",
     professor: "",
     nivel: "",
+    faixaEtaria: "",
     diasSemana: [],
   };
   const [selectedTurma, setSelectedTurma] = useState<string>(
@@ -976,6 +1103,82 @@ export const Attendance: React.FC = () => {
       .forEach((opt) => opt.professor && set.add(opt.professor));
     return Array.from(set);
   }, [classOptions, selectedTurma]);
+
+  const sortHorarioValues = (values: string[]) =>
+    [...values].sort((a, b) => {
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (Number.isNaN(na) && Number.isNaN(nb)) return 0;
+      if (Number.isNaN(na)) return 1;
+      if (Number.isNaN(nb)) return -1;
+      return na - nb;
+    });
+
+  const resolveHorariosForSelection = (turma: string, professor: string) => {
+    if (!turma || !professor) return [] as string[];
+    const tokens = new Set<string>();
+    classOptions
+      .filter((opt) => isSameTurma(opt, turma) && opt.professor === professor)
+      .forEach((opt) => {
+        extractHorarioTokens(opt.horario).forEach((token) => tokens.add(token));
+      });
+    return sortHorarioValues(Array.from(tokens));
+  };
+
+  const handleTurmaChange = useCallback(
+    (nextTurma: string) => {
+      setSelectedTurma(nextTurma);
+
+      if (!nextTurma) {
+        setSelectedProfessor("");
+        setSelectedHorario("");
+        return;
+      }
+
+      const sameTurma = classOptions.filter((opt) => isSameTurma(opt, nextTurma));
+      if (sameTurma.length === 0) {
+        setSelectedProfessor("");
+        setSelectedHorario("");
+        return;
+      }
+
+      const nextProfessor = sameTurma.some((opt) => opt.professor === selectedProfessor)
+        ? selectedProfessor
+        : sameTurma[0].professor;
+      setSelectedProfessor(nextProfessor);
+
+      const horarios = resolveHorariosForSelection(nextTurma, nextProfessor);
+      if (horarios.length === 0) {
+        setSelectedHorario("");
+        return;
+      }
+
+      const currentHorario = getCanonicalHorario(selectedHorario);
+      setSelectedHorario(horarios.includes(currentHorario) ? currentHorario : horarios[0]);
+    },
+    [classOptions, selectedProfessor, selectedHorario]
+  );
+
+  const handleProfessorChange = useCallback(
+    (nextProfessor: string) => {
+      setSelectedProfessor(nextProfessor);
+
+      if (!selectedTurma || !nextProfessor) {
+        setSelectedHorario("");
+        return;
+      }
+
+      const horarios = resolveHorariosForSelection(selectedTurma, nextProfessor);
+      if (horarios.length === 0) {
+        setSelectedHorario("");
+        return;
+      }
+
+      const currentHorario = getCanonicalHorario(selectedHorario);
+      setSelectedHorario(horarios.includes(currentHorario) ? currentHorario : horarios[0]);
+    },
+    [selectedTurma, selectedHorario, classOptions]
+  );
 
   useEffect(() => {
     if (horarioOptions.length === 0) {
@@ -1732,6 +1935,16 @@ export const Attendance: React.FC = () => {
     return description ? `Reunião: ${description}` : "Reunião";
   };
 
+  const getClimateCancellationReasonForDate = (date: string) => {
+    for (const student of attendance) {
+      const reason = String(student.justifications?.[date] || "").trim();
+      if (reason.startsWith(CANCELLED_CLASS_REASON_PREFIX)) {
+        return reason;
+      }
+    }
+    return "";
+  };
+
   const applyCalendarClosureJustification = async (date: string, reasonLabel: string) => {
     const persistence = resolvePersistenceContext();
     const changedEntries: Array<{ aluno_nome: string; data: string; motivo: string; turmaCodigo: string; turmaLabel: string; horario: string; professor: string }> = [];
@@ -1832,6 +2045,11 @@ export const Attendance: React.FC = () => {
 
   const handleDateClick = async (date: string) => {
     setSelectedDate(date);
+
+    const climateCancellationReason = getClimateCancellationReasonForDate(date);
+    if (climateCancellationReason) {
+      return;
+    }
 
     const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
     if (holidayBridgeEvent) {
@@ -2258,14 +2476,16 @@ export const Attendance: React.FC = () => {
   };
 
   // Matriz de Decisão
-  const getSuggestedStatus = (): "normal" | "justificada" => {
-    const { selectedIcons, weatherConditionCode } = poolData;
-    if (shouldJustifyByWeather(weatherConditionCode, poolData.weatherCondition, selectedIcons)) {
-      return "justificada";
-    }
-
-    return "normal";
-  };
+  const getSuggestedDecision = (): SuggestedClassDecision =>
+    getSuggestedDecisionFromRules({
+      conditionCode: poolData.weatherConditionCode,
+      conditionLabel: poolData.weatherCondition,
+      sensations: poolData.selectedIcons,
+      tempPiscina: poolData.tempPiscina,
+      cloroPpm: cloroLocked ? Number.NaN : poolData.cloro,
+      nivel: selectedClass.nivel,
+      faixaEtaria: selectedClass.faixaEtaria,
+    });
 
   const handleSaveLog = async (logTypeOverride?: ModalLogType | React.MouseEvent<HTMLButtonElement>) => {
     if (monthKey !== currentMonthKey) {
@@ -2282,18 +2502,22 @@ export const Attendance: React.FC = () => {
     }
 
     const effectiveLogType = typeof logTypeOverride === "string" ? logTypeOverride : poolData.logType;
-    const statusSugerido = getSuggestedStatus();
+    const suggestedDecision = getSuggestedDecision();
+    const statusSugerido = suggestedDecision.status;
     const isOccurrence = effectiveLogType === "ocorrencia";
     const occurrenceImpact = poolData.incidentImpact;
     const reasonLabel = isOccurrence
       ? `Ocorrência (${occurrenceImpact}): ${poolData.incidentType || poolData.personalType}`
-      : "Condições Climáticas";
+      : statusSugerido === "cancelada"
+        ? `${CANCELLED_CLASS_REASON_PREFIX} ${suggestedDecision.reason}`
+        : suggestedDecision.reason || "Condições Climáticas";
     
     // Lógica para aula justificada e ocorrência
     const shouldTreatOccurrenceAsClass = isOccurrence && occurrenceImpact === "aula";
     const shouldTreatOccurrenceAsDay = isOccurrence && occurrenceImpact === "dia";
     const shouldMassJustify =
       (effectiveLogType === "aula" && statusSugerido === "justificada") ||
+      (effectiveLogType === "aula" && statusSugerido === "cancelada") ||
       shouldTreatOccurrenceAsClass ||
       shouldTreatOccurrenceAsDay;
     const shouldAddJustificationNote = shouldMassJustify || isOccurrence;
@@ -3157,7 +3381,7 @@ export const Attendance: React.FC = () => {
           </label>
           <select
             value={selectedTurma}
-            onChange={(e) => setSelectedTurma(e.target.value)}
+            onChange={(e) => handleTurmaChange(e.target.value)}
             style={{
               width: "100%",
               padding: "8px 12px",
@@ -3187,7 +3411,7 @@ export const Attendance: React.FC = () => {
           </label>
           <select
             value={selectedProfessor}
-            onChange={(e) => setSelectedProfessor(e.target.value)}
+            onChange={(e) => handleProfessorChange(e.target.value)}
             disabled={!selectedTurma || professorOptions.length === 0}
             style={{
               width: "100%",
@@ -3389,11 +3613,14 @@ export const Attendance: React.FC = () => {
                   const isSelected = date === selectedDate;
                   const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
                   const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
+                  const climateCancellationReason = getClimateCancellationReasonForDate(date);
                   const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
                   const meetingEvent = getBlockingMeetingEventForDate(date);
-                  const isLockedDate = dayClosed || classBlockedByMeeting;
+                  const isLockedDate = dayClosed || classBlockedByMeeting || !!climateCancellationReason;
                   const headerTooltip = holidayBridgeEvent
                     ? buildHolidayBridgeReason(holidayBridgeEvent)
+                    : climateCancellationReason
+                      ? climateCancellationReason
                     : meetingEvent
                       ? buildMeetingReason(meetingEvent)
                     : isLockedDate
@@ -3520,12 +3747,15 @@ export const Attendance: React.FC = () => {
                     const dayClosed = isDateClosedForAttendance(date, calendarSettings, calendarEvents);
                     const classBlockedByMeeting = isClassBlockedByEventPeriod(date, selectedClass.horario || selectedHorario, calendarEvents);
                     const transferLock = getTransferLockForDate(item.aluno, date);
+                    const climateCancellationReason = getClimateCancellationReasonForDate(date);
                     const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
                     const meetingEvent = getBlockingMeetingEventForDate(date);
                     const isTransferLocked = !!transferLock;
-                    const isLockedDate = dayClosed || classBlockedByMeeting || isTransferLocked;
+                    const isLockedDate = dayClosed || classBlockedByMeeting || isTransferLocked || !!climateCancellationReason;
                     const cellTooltip = isTransferLocked
                       ? `Transf. > ${transferLock?.fromNivel || "Nível anterior"}`
+                      : climateCancellationReason
+                      ? climateCancellationReason
                       : holidayBridgeEvent
                       ? buildHolidayBridgeReason(holidayBridgeEvent)
                       : meetingEvent
@@ -4040,9 +4270,25 @@ export const Attendance: React.FC = () => {
                   })()}
                 </div>
 
-                <div style={{ background: getSuggestedStatus() === "justificada" ? "#fff3cd" : "#d4edda", padding: "10px", borderRadius: "6px", marginBottom: "15px", fontSize: "13px", textAlign: "center", border: "1px solid rgba(0,0,0,0.1)" }}>
-                  Status Sugerido: <strong>{getSuggestedStatus() === "justificada" ? "FALTA JUSTIFICADA" : "AULA NORMAL"}</strong>
-                </div>
+                {(() => {
+                  const suggested = getSuggestedDecision();
+                  const background = suggested.status === "cancelada"
+                    ? "#f8d7da"
+                    : suggested.status === "justificada"
+                      ? "#fff3cd"
+                      : "#d4edda";
+                  const label = suggested.status === "cancelada"
+                    ? "AULA CANCELADA"
+                    : suggested.status === "justificada"
+                      ? "FALTA JUSTIFICADA"
+                      : "AULA NORMAL";
+                  return (
+                    <div style={{ background, padding: "10px", borderRadius: "6px", marginBottom: "15px", fontSize: "13px", textAlign: "center", border: "1px solid rgba(0,0,0,0.1)" }}>
+                      Status Sugerido: <strong>{label}</strong>
+                      <div style={{ marginTop: "4px", fontSize: "11px", opacity: 0.85 }}>{suggested.reason}</div>
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button onClick={() => setModalStep("select")} style={{ flex: 1, padding: "10px", border: "1px solid #ccc", borderRadius: "6px", background: "white", cursor: "pointer" }}>Voltar</button>
@@ -4095,6 +4341,7 @@ export const Attendance: React.FC = () => {
                     <option value="">Selecione...</option>
                     <option value="Manutencao">Manutenção / Incidente</option>
                     <option value="Pessoal">Pessoal (Professor)</option>
+                    <option value="RaiosTrovoes">Raios e Trovões</option>
                   </select>
                 </div>
 
