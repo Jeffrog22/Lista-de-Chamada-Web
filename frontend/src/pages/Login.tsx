@@ -25,6 +25,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [loading, setLoading] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
+  const [quickProfessors, setQuickProfessors] = useState<string[]>([]);
 
   const importTimestampStorageKey = "last_import_at";
 
@@ -73,7 +74,19 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     }
 
     getBootstrap()
-      .then(() => setBackendOnline(true))
+      .then((res: ApiResponse) => {
+        setBackendOnline(true);
+        const classes = Array.isArray(res?.data?.classes) ? res.data.classes : [];
+        const professors: string[] = Array.from(
+          new Set(
+            classes
+              .map((cls: any) => String(cls?.professor || "").trim())
+              .filter(Boolean)
+          )
+        ) as string[];
+        professors.sort((a, b) => a.localeCompare(b, "pt-BR"));
+        setQuickProfessors(professors);
+      })
       .catch(() => setBackendOnline(false));
     getImportDataStatus()
       .then((res: ApiResponse) => {
@@ -167,8 +180,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setError(null);
     setStatus(null);
 
-    if (!profile.name || !profile.unit || !profile.email || !profile.whatsapp) {
-      setError("Preencha nome, unidade, email e whatsapp.");
+    if (!profile.name || !profile.unit) {
+      setError("Preencha nome e unidade.");
       return;
     }
 
@@ -193,8 +206,16 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       const res = await getBootstrap();
       applyBootstrap(res.data);
 
+      const normalizedProfile = {
+        ...profile,
+        name: String(profile.name || "").trim(),
+        unit: String(profile.unit || "").trim(),
+        email: String(profile.email || "").trim(),
+        whatsapp: String(profile.whatsapp || "").trim(),
+      };
+
       if (rememberProfile) {
-        localStorage.setItem(teacherProfileStorageKey, JSON.stringify(profile));
+        localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
       } else {
         localStorage.removeItem(teacherProfileStorageKey);
       }
@@ -202,6 +223,39 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       onLogin("local-session");
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Falha ao carregar dados do backend import.";
+      setError(detail);
+    } finally {
+      setLoading(false);
+      setStatus(null);
+    }
+  };
+
+  const handleQuickProfessorLogin = async (professorName: string) => {
+    const normalizedName = String(professorName || "").trim();
+    if (!normalizedName) return;
+
+    setError(null);
+    setStatus("Entrando com perfil rápido...");
+    setLoading(true);
+
+    const normalizedProfile = {
+      name: normalizedName,
+      unit: String(profile.unit || "Piscina Bela Vista").trim() || "Piscina Bela Vista",
+      email: String(profile.email || "").trim(),
+      whatsapp: String(profile.whatsapp || "").trim(),
+    };
+
+    try {
+      const res = await getBootstrap();
+      applyBootstrap(res.data);
+
+      if (rememberProfile) {
+        localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
+      }
+      localStorage.setItem("access_token", "local-session");
+      onLogin("local-session");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || "Falha no login rápido do professor.";
       setError(detail);
     } finally {
       setLoading(false);
@@ -228,6 +282,33 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         Atualizado em: {formatImportDate(importStatusInfo?.last_import_at)}
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
+
+      {quickProfessors.length > 0 && (
+        <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+          <div style={{ fontSize: 12, color: "#666" }}>Login rápido por professor cadastrado:</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {quickProfessors.slice(0, 8).map((professor) => (
+              <button
+                key={professor}
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickProfessorLogin(professor)}
+                style={{
+                  padding: "8px 10px",
+                  border: "1px solid #c7d2fe",
+                  borderRadius: 20,
+                  background: "#eef2ff",
+                  color: "#1e3a8a",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  fontSize: 12,
+                }}
+              >
+                {professor}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <label style={{ display: "flex", flexDirection: "column" }}>

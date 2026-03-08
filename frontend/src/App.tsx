@@ -23,6 +23,48 @@ const getViewFromHash = (hash: string): ViewType => {
   return (candidates.find((view) => view === normalized) || "main");
 };
 
+const purgeFebruaryLocalCache = () => {
+  const month = "2026-02";
+  const keysToRemove = [
+    "excludedStudents",
+    "pendingAttendanceLogs",
+    "attendanceRetroModeEnabled",
+    "attendanceReferenceMonth",
+    "attendanceSelection",
+    "attendanceTargetTurma",
+    "attendanceDateShortcut",
+  ];
+
+  keysToRemove.forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  });
+
+  try {
+    const allKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key) allKeys.push(key);
+    }
+
+    allKeys.forEach((key) => {
+      const shouldRemove =
+        key.startsWith("attendance:") && key.includes(`|${month}`)
+        || key.startsWith("climaCache:") && key.includes(month)
+        || key.startsWith("reportsClimaCache:") && key.includes(month);
+
+      if (shouldRemove) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch {
+    // ignore
+  }
+};
+
 export default function App() {
   const appVersion = (typeof __APP_VERSION__ === "string" && __APP_VERSION__.trim()) ? __APP_VERSION__.trim() : "v.local";
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
@@ -30,6 +72,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [teacherName, setTeacherName] = useState<string>("");
   const [teacherUnit, setTeacherUnit] = useState<string>("");
+  const [quickTeacherOptions, setQuickTeacherOptions] = useState<string[]>([]);
+  const [quickTeacherSelected, setQuickTeacherSelected] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
@@ -86,6 +130,8 @@ export default function App() {
   };
 
   useEffect(() => {
+    purgeFebruaryLocalCache();
+
     try {
       const searchParams = new URLSearchParams(window.location.search);
       const rawHash = String(window.location.hash || "");
@@ -141,7 +187,45 @@ export default function App() {
         const fallbackDate = readLastImportAtFallback();
         setLastImportInfo(fallbackDate ? { last_import_at: fallbackDate } : null);
       });
+
+    try {
+      const classesRaw = localStorage.getItem("activeClasses");
+      const classes = classesRaw ? JSON.parse(classesRaw) : [];
+      const teachers = Array.from(
+        new Set(
+          (Array.isArray(classes) ? classes : [])
+            .map((cls: any) => String(cls?.Professor || "").trim())
+            .filter(Boolean)
+        )
+      ) as string[];
+      teachers.sort((a, b) => a.localeCompare(b, "pt-BR"));
+      setQuickTeacherOptions(teachers);
+      if (!teacherName && teachers.length > 0) {
+        setQuickTeacherSelected(teachers[0]);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
+
+  const handleQuickTeacherApply = () => {
+    const nextTeacher = String(quickTeacherSelected || "").trim();
+    if (!nextTeacher) return;
+
+    const nextProfile = {
+      name: nextTeacher,
+      unit: teacherUnit || "Bela Vista",
+      email: "",
+      whatsapp: "",
+    };
+
+    try {
+      localStorage.setItem("teacherProfile", JSON.stringify(nextProfile));
+    } catch {
+      // ignore
+    }
+    setTeacherName(nextTeacher);
+  };
 
   const formatImportDate = (value?: string | null) => {
     if (!value) return "-";
@@ -276,9 +360,19 @@ export default function App() {
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
     if (!selected) return;
+
+    const februaryHint = /(^|[^a-z])(fev|fevereiro|feb|february)([^a-z]|$)|2026[-_]?02|02[-_]?2026/i.test(selected.name);
+    let applyOverrides = true;
+    if (februaryHint) {
+      const keepOriginalGroups = window.confirm(
+        "Arquivo parece ser de fevereiro. Deseja importar como baseline sem aplicar transferências (overrides)?"
+      );
+      applyOverrides = !keepOriginalGroups ? true : false;
+    }
+
     setUpdateStatus("Enviando arquivo...");
     try {
-      await importDataFile(selected);
+      await importDataFile(selected, { applyOverrides });
       const optimisticDate = saveLastImportAtFallback();
       setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
       setUpdateStatus("Carregando dados...");
@@ -393,6 +487,23 @@ export default function App() {
           <span className="user-info">
             Atualizado em: {formatImportDate(lastImportInfo?.last_import_at)}
           </span>
+          {quickTeacherOptions.length > 0 && (
+            <>
+              <select
+                value={quickTeacherSelected}
+                onChange={(e) => setQuickTeacherSelected(e.target.value)}
+                className="quick-teacher-select"
+                title="Login rápido de professor"
+              >
+                {quickTeacherOptions.map((teacher) => (
+                  <option key={teacher} value={teacher}>{teacher}</option>
+                ))}
+              </select>
+              <button className="logout-button" onClick={handleQuickTeacherApply}>
+                Entrar Professor
+              </button>
+            </>
+          )}
           <input
             ref={fileInputRef}
             type="file"

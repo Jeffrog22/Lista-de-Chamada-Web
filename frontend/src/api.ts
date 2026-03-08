@@ -530,9 +530,12 @@ export const createImportStudent = (data: any) =>
 export const updateImportStudent = (id: string, data: any) =>
   API.put(`/api/import-students/${id}`, data);
 
-export const importDataFile = (file: File) => {
+export const importDataFile = (file: File, options?: { applyOverrides?: boolean }) => {
   const formData = new FormData();
   formData.append("file", file);
+  if (typeof options?.applyOverrides === "boolean") {
+    formData.append("apply_overrides", String(options.applyOverrides));
+  }
   return API.post("/api/import-data", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

@@ -129,6 +129,16 @@ body, html {
   box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
 }
 
+.quick-teacher-select {
+  background: rgba(255, 255, 255, 0.96);
+  color: #2f3b6b;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  min-width: 150px;
+}
+
 .main-layout {
   display: flex;
   flex: 1;

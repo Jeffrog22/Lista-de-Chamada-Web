@@ -2570,8 +2570,6 @@ export const Attendance: React.FC = () => {
       );
 
       const backendByName = new Map<string, { attendance: Record<string, "Presente" | "Falta" | "Justificado" | ""> }>();
-      let matchedSnapshotStudentNames: string[] = [];
-      let matchedHasLog = false;
 
       try {
         const response = await getReports({ month: monthKey });
@@ -2613,9 +2611,6 @@ export const Attendance: React.FC = () => {
         });
 
         const matchedCount = Array.isArray(matchedClass?.alunos) ? matchedClass!.alunos.length : 0;
-        matchedSnapshotStudentNames = (matchedClass?.alunos || [])
-          .map((student) => String(student?.nome || "").trim())
-          .filter(Boolean);
         const sourceRef = `${monthKey} | ${selectedClass.turmaCodigo || selectedClass.turmaLabel || selectedTurma || ""} | ${selectedClass.horario || selectedHorario || ""} | ${selectedClass.professor || selectedProfessor || ""}`;
         const snapshotRef = matchedClass
           ? `${matchedClass.turma || ""} | ${matchedClass.horario || ""} | ${matchedClass.professor || ""}`
@@ -2628,7 +2623,6 @@ export const Attendance: React.FC = () => {
           studentCount: matchedCount,
           updatedAt: new Date().toLocaleTimeString("pt-BR"),
         });
-        matchedHasLog = Boolean(matchedClass?.hasLog);
 
         const readAlertKey = [
           monthKey,
@@ -2775,55 +2769,8 @@ export const Attendance: React.FC = () => {
       // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
       setHistory([]);
 
-      const rosterCandidates = (() => {
-        const snapshotRoster = Array.from(
-          new Set(
-            matchedSnapshotStudentNames
-              .map((name) => String(name || "").trim())
-              .filter(Boolean)
-          )
-        );
-
-        // If backend says there is a log, trust the snapshot roster as source of truth.
-        if (matchedHasLog && snapshotRoster.length > 0) {
-          return snapshotRoster;
-        }
-
-        const primary = Array.isArray(studentsPerClass[turmaLookup]) ? studentsPerClass[turmaLookup] : [];
-        if (primary.length > 0) {
-          if (snapshotRoster.length > 0 && backendByName.size > 0) {
-            const primaryMatchCount = primary.reduce((acc, name) => {
-              return acc + (backendByName.has(normalizeText(name || "")) ? 1 : 0);
-            }, 0);
-
-            const referenceSize = Math.max(1, Math.min(primary.length, backendByName.size));
-            const matchRatio = primaryMatchCount / referenceSize;
-            // When local names diverge too much from snapshot names, prefer snapshot roster.
-            if (matchRatio < 0.4) {
-              return snapshotRoster;
-            }
-          }
-          return primary;
-        }
-
-        const fromActiveMeta = Array.from(activeStudentByNameInClass.values())
-          .map((student) => String(student?.nome || "").trim())
-          .filter(Boolean);
-        if (fromActiveMeta.length > 0) return fromActiveMeta;
-
-        return snapshotRoster;
-      })();
-
-      const rosterNames = Array.from(
-        new Set(
-          rosterCandidates
-            .map((name) => String(name || "").trim())
-            .filter(Boolean)
-        )
-      );
-
       setAttendance(
-        rosterNames
+        (studentsPerClass[turmaLookup] || [])
           .filter((aluno) => !excludedNamesForSelectedClass.has(normalizeText(aluno || "")))
           .map((aluno, idx) => {
           const base = newDates.reduce(

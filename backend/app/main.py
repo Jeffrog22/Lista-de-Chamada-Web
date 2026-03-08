@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Response
+from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form, Response
 from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, get_session
 from app import crud, models
@@ -611,6 +611,17 @@ class ImportStudentUpsertPayload(BaseModel):
     genero: Optional[str] = ""
     parq: Optional[str] = ""
     atestado: bool = False
+
+
+class MaintenancePurgeMonthPayload(BaseModel):
+    month: str = "2026-02"
+    clear_transfer_overrides: bool = True
+
+
+class MaintenanceBootstrapResetPayload(BaseModel):
+    clear_transfer_overrides: bool = True
+    clear_student_uid_registry: bool = True
+    clear_import_status: bool = True
 
 @app.get("/weather")
 def get_weather(date: str):
@@ -1301,6 +1312,213 @@ def _saved_at_sort_key(value: Any) -> int:
         return int(parsed.value)
     except Exception:
         return -1
+
+
+def _extract_month_key(value: Any) -> str:
+    iso = _normalize_date_key(value)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", iso):
+        return iso[:7]
+    return ""
+
+
+def _entry_contains_month(entry: Dict[str, Any], month: str) -> bool:
+    if str(entry.get("mes") or "").strip() == month:
+        return True
+
+    for key in ["data", "dataExclusao", "saved_at"]:
+        if _extract_month_key(entry.get(key)) == month:
+            return True
+
+    registros = entry.get("registros") or []
+    if isinstance(registros, list):
+        for record in registros:
+            attendance = (record or {}).get("attendance") or {}
+            if isinstance(attendance, dict):
+                for date_key in attendance.keys():
+                    if _extract_month_key(date_key) == month:
+                        return True
+
+            justifications = (record or {}).get("justifications") or {}
+            if isinstance(justifications, dict):
+                for date_key in justifications.keys():
+                    if _extract_month_key(date_key) == month:
+                        return True
+
+    return False
+
+
+def _purge_month_from_json_file(file_path: str, month: str) -> Dict[str, int]:
+    items = _load_json_list(file_path)
+    if not items:
+        return {"before": 0, "after": 0, "removed": 0}
+
+    kept = [item for item in items if not _entry_contains_month(item, month)]
+    removed = len(items) - len(kept)
+    if removed > 0:
+        _save_json_list(file_path, kept)
+    return {"before": len(items), "after": len(kept), "removed": removed}
+
+
+def _purge_month_from_pool_log(month: str) -> Dict[str, int]:
+    file_path = os.path.join(DATA_DIR, "logPiscina.xlsx")
+    if not os.path.exists(file_path):
+        return {"before": 0, "after": 0, "removed": 0}
+
+    df = _load_pool_log(file_path)
+    before = len(df)
+    if before == 0:
+        return {"before": 0, "after": 0, "removed": 0}
+
+    keep_mask = ~df["Data"].apply(lambda value: _extract_month_key(value) == month)
+    next_df = df[keep_mask].copy()
+    removed = before - len(next_df)
+    if removed > 0:
+        try:
+            next_df.to_excel(file_path, index=False)
+        except PermissionError:
+            raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para limpar fevereiro.")
+
+    return {"before": before, "after": len(next_df), "removed": removed}
+
+
+def _purge_month_data(month: str, clear_transfer_overrides: bool = True) -> Dict[str, Any]:
+    if not re.fullmatch(r"\d{4}-\d{2}", str(month or "").strip()):
+        raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
+
+    month = str(month).strip()
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    chamada_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "baseChamada.json"), month)
+    justificativa_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "baseJustificativas.json"), month)
+    exclusao_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "excludedStudents.json"), month)
+
+    snapshots_path = _weather_snapshots_file()
+    snapshots = _load_weather_snapshots()
+    snapshots_before = len(snapshots)
+    snapshots_kept = {k: v for k, v in snapshots.items() if not str(k).startswith(f"{month}-")}
+    snapshots_removed = snapshots_before - len(snapshots_kept)
+    if snapshots_removed > 0:
+        _save_weather_snapshots(snapshots_kept)
+
+    pool_stats = _purge_month_from_pool_log(month)
+
+    overrides_cleared = False
+    overrides_count = 0
+    if clear_transfer_overrides:
+        overrides = _load_transfer_overrides()
+        overrides_count = len(overrides)
+        if overrides_count > 0:
+            _save_transfer_overrides([])
+            overrides_cleared = True
+
+    status_cleared = False
+    status_path = _import_status_file()
+    if os.path.exists(status_path):
+        try:
+            os.remove(status_path)
+            status_cleared = True
+        except Exception:
+            status_cleared = False
+
+    return {
+        "ok": True,
+        "month": month,
+        "attendance": chamada_stats,
+        "justifications": justificativa_stats,
+        "exclusions": exclusao_stats,
+        "weatherSnapshots": {
+            "before": snapshots_before,
+            "after": len(snapshots_kept),
+            "removed": snapshots_removed,
+        },
+        "poolLog": pool_stats,
+        "transferOverrides": {
+            "cleared": overrides_cleared,
+            "removed": overrides_count if overrides_cleared else 0,
+        },
+        "importStatus": {
+            "cleared": status_cleared,
+        },
+    }
+
+
+@app.post("/maintenance/purge-month-data")
+def purge_month_data(payload: MaintenancePurgeMonthPayload):
+    return _purge_month_data(
+        month=payload.month,
+        clear_transfer_overrides=payload.clear_transfer_overrides,
+    )
+
+
+@app.post("/maintenance/reset-bootstrap-data")
+def reset_bootstrap_data(
+    payload: MaintenanceBootstrapResetPayload,
+    session: Session = Depends(get_session),
+):
+    students = session.exec(select(models.ImportStudent)).all()
+    classes = session.exec(select(models.ImportClass)).all()
+    units = session.exec(select(models.ImportUnit)).all()
+
+    removed_students = len(students)
+    removed_classes = len(classes)
+    removed_units = len(units)
+
+    for student in students:
+        session.delete(student)
+    for cls in classes:
+        session.delete(cls)
+    for unit in units:
+        session.delete(unit)
+
+    session.commit()
+
+    transfer_removed = 0
+    transfer_cleared = False
+    if payload.clear_transfer_overrides:
+        overrides = _load_transfer_overrides()
+        transfer_removed = len(overrides)
+        if transfer_removed > 0:
+            _save_transfer_overrides([])
+            transfer_cleared = True
+
+    uid_removed = False
+    if payload.clear_student_uid_registry:
+        uid_path = _student_uid_registry_file()
+        if os.path.exists(uid_path):
+            try:
+                os.remove(uid_path)
+                uid_removed = True
+            except Exception:
+                uid_removed = False
+
+    status_cleared = False
+    if payload.clear_import_status:
+        status_path = _import_status_file()
+        if os.path.exists(status_path):
+            try:
+                os.remove(status_path)
+                status_cleared = True
+            except Exception:
+                status_cleared = False
+
+    return {
+        "ok": True,
+        "removed": {
+            "students": removed_students,
+            "classes": removed_classes,
+            "units": removed_units,
+        },
+        "transferOverrides": {
+            "cleared": transfer_cleared,
+            "removed": transfer_removed,
+        },
+        "studentUidRegistry": {
+            "cleared": uid_removed,
+        },
+        "importStatus": {
+            "cleared": status_cleared,
+        },
+    }
 
 def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> bool:
     cls_codigo = _normalize_text(cls.codigo or "")
@@ -2581,7 +2799,11 @@ def _import_student_out(
     )
 
 @app.post("/api/import-data", response_model=ImportResult)
-async def import_data(file: UploadFile = File(...), session: Session = Depends(get_session)) -> ImportResult:
+async def import_data(
+    file: UploadFile = File(...),
+    apply_overrides: bool = Form(True),
+    session: Session = Depends(get_session),
+) -> ImportResult:
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be .csv")
 
@@ -2698,7 +2920,8 @@ async def import_data(file: UploadFile = File(...), session: Session = Depends(g
             student.parq = (row.get("parq") or "").strip()
             student.atestado = parse_bool(row.get("atestado") or "")
 
-        _apply_transfer_overrides(session)
+        if apply_overrides:
+            _apply_transfer_overrides(session)
         _dedupe_import_students(session)
         _dedupe_import_students_global(session)
         session.commit()
