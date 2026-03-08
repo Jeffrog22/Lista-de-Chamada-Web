@@ -47,6 +47,7 @@ class ImportStats:
     created: int = 0
     updated: int = 0
     skipped_invalid_date: int = 0
+    removed_existing: int = 0
 
 
 
@@ -101,8 +102,14 @@ def _normalize_horario(raw_value: Any) -> str:
     if not raw:
         return ""
 
-    # keep period ranges (ex: 0600-1200) as-is
+    # Retro file may send ranges (0600-1200 / 1300-1800). We persist start time.
     if "-" in raw:
+        left = raw.split("-", 1)[0].strip()
+        left_digits = re.sub(r"\D", "", left)
+        if len(left_digits) == 3:
+            left_digits = f"0{left_digits}"
+        if len(left_digits) >= 4:
+            return f"{left_digits[:2]}:{left_digits[2:4]}"
         return raw
 
     digits = re.sub(r"\D", "", raw)
@@ -115,29 +122,54 @@ def _normalize_horario(raw_value: Any) -> str:
 
 
 def _coerce_number(raw_value: Any) -> str | float:
-    raw = str(raw_value or "").strip().replace("°c", "").replace("°", "").strip()
-    raw = raw.replace(",", ".")
+    raw = str(raw_value or "").strip()
     if not raw:
         return ""
+
+    raw = raw.replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", raw)
+    if not match:
+        return ""
+
     try:
-        value = float(raw)
+        value = float(match.group(0))
         if value.is_integer():
             return int(value)
         return value
     except ValueError:
-        return str(raw_value or "").strip()
+        return ""
 
 
 
 def _coerce_cloro(raw_value: Any) -> str | float:
-    raw = str(raw_value or "").strip().replace(",", ".")
+    raw = str(raw_value or "").strip()
     if not raw:
         return ""
+
+    raw = raw.replace(",", ".")
+    match = re.search(r"-?\d+(?:\.\d+)?", raw)
+    if not match:
+        return ""
+
     try:
-        value = float(raw)
+        value = float(match.group(0))
         return value
     except ValueError:
         return ""
+
+
+def _coerce_number_or_zero(raw_value: Any) -> float | int:
+    value = _coerce_number(raw_value)
+    if value == "":
+        return 0
+    return value
+
+
+def _coerce_cloro_or_zero(raw_value: Any) -> float | int:
+    value = _coerce_cloro(raw_value)
+    if value == "":
+        return 0
+    return value
 
 
 
@@ -166,10 +198,23 @@ def _row_key(row: dict[str, Any]) -> tuple[str, str, str, str, str]:
 
 
 
-def import_retro(csv_path: str, output_path: str, default_year: int, month_filter: str | None = None) -> ImportStats:
+def import_retro(
+    csv_path: str,
+    output_path: str,
+    default_year: int,
+    month_filter: str | None = None,
+    replace_month_data: bool = False,
+) -> ImportStats:
     df_in = _read_csv(csv_path).fillna("")
     df_out = _load_pool_log(output_path)
     stats = ImportStats(read_rows=len(df_in))
+
+    if replace_month_data and month_filter:
+        month_prefix = f"{month_filter}-"
+        before = len(df_out)
+        keep_mask = ~df_out["Data"].astype(str).str.startswith(month_prefix)
+        df_out = df_out[keep_mask].copy()
+        stats.removed_existing = before - len(df_out)
 
     existing_index: dict[tuple[str, str, str, str, str], int] = {}
     for idx, row in df_out.iterrows():
@@ -206,8 +251,8 @@ def import_retro(csv_path: str, output_path: str, default_year: int, month_filte
             "Nota": nota,
             "Tipo_ocorrencia": tipo_ocorrencia,
             "Temp. (C)": _coerce_number(src.get("Temp. (C)", "")),
-            "Piscina (C)": _coerce_number(src.get("Piscina (C)", "")),
-            "Cloro (ppm)": _coerce_cloro(src.get("Cloro (ppm)", "")),
+            "Piscina (C)": _coerce_number_or_zero(src.get("Piscina (C)", "")),
+            "Cloro (ppm)": _coerce_cloro_or_zero(src.get("Cloro (ppm)", "")),
         }
 
         key = _row_key(row)
@@ -233,6 +278,11 @@ def main() -> None:
     parser.add_argument("--year", type=int, default=2026, help="Ano padrão para datas no formato dd/mes")
     parser.add_argument("--month", default="", help="Filtro YYYY-MM (ex: 2026-02)")
     parser.add_argument(
+        "--replace-month-data",
+        action="store_true",
+        help="Remove registros existentes do mês filtrado antes de importar",
+    )
+    parser.add_argument(
         "--output",
         default=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "logPiscina.xlsx"),
         help="Caminho do arquivo logPiscina.xlsx",
@@ -246,6 +296,7 @@ def main() -> None:
         output_path=args.output,
         default_year=args.year,
         month_filter=month_filter,
+        replace_month_data=bool(args.replace_month_data),
     )
 
     print("Importacao concluida")
@@ -254,6 +305,7 @@ def main() -> None:
     print(f"criados={stats.created}")
     print(f"atualizados={stats.updated}")
     print(f"datas_invalidas={stats.skipped_invalid_date}")
+    print(f"removidos_mes={stats.removed_existing}")
     print(f"arquivo_saida={args.output}")
 
 
