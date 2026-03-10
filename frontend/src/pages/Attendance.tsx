@@ -493,6 +493,37 @@ export const Attendance: React.FC = () => {
 
   const getCanonicalHorario = (value?: string) => extractHorarioTokens(value)[0] || "";
 
+  const buildStudentsPerClassScopedKey = (turma: string, horario: string, professor: string) => {
+    const turmaKey = normalizeText(turma || "");
+    const horarioKey = normalizeHorarioDigits(horario || "");
+    const professorKey = normalizeText(professor || "");
+    if (!turmaKey || !horarioKey || !professorKey) return "";
+    return `${turmaKey}|${horarioKey}|${professorKey}`;
+  };
+
+  const getStudentNamesForClass = (
+    map: { [key: string]: string[] },
+    params: { turmaCodigo?: string; turmaLabel?: string; horario?: string; professor?: string }
+  ) => {
+    const scopedKeys = [
+      buildStudentsPerClassScopedKey(params.turmaCodigo || "", params.horario || "", params.professor || ""),
+      buildStudentsPerClassScopedKey(params.turmaLabel || "", params.horario || "", params.professor || ""),
+    ].filter(Boolean);
+
+    for (const key of scopedKeys) {
+      const names = map[key];
+      if (Array.isArray(names) && names.length > 0) return names;
+    }
+
+    const legacyKeys = [String(params.turmaCodigo || "").trim(), String(params.turmaLabel || "").trim()].filter(Boolean);
+    for (const key of legacyKeys) {
+      const names = map[key];
+      if (Array.isArray(names) && names.length > 0) return names;
+    }
+
+    return [] as string[];
+  };
+
   const normalizeClassOptions = (items: any[]): ClassOption[] => {
     const seen = new Map<string, ClassOption>();
     items.forEach((raw) => {
@@ -774,7 +805,13 @@ export const Attendance: React.FC = () => {
       filteredStudents.forEach((student: any) => {
         const turmaCodigo = String(student.turmaCodigo || "").trim();
         const turmaLabel = String(student.turmaLabel || student.turma || "").trim();
-        const keys = [turmaCodigo, turmaLabel].filter(Boolean);
+        const studentHorario = String(student.horario || "").trim();
+        const studentProfessor = String(student.professor || "").trim();
+        const scopedKeys = [
+          buildStudentsPerClassScopedKey(turmaCodigo, studentHorario, studentProfessor),
+          buildStudentsPerClassScopedKey(turmaLabel, studentHorario, studentProfessor),
+        ].filter(Boolean);
+        const keys = [...scopedKeys, turmaCodigo, turmaLabel].filter(Boolean);
         if (keys.length === 0 || !student.nome) return;
 
         keys.forEach((key) => {
@@ -1590,8 +1627,13 @@ export const Attendance: React.FC = () => {
 
   const storageKey = classKey ? `attendance:${classKey}` : "";
 
-  const initialTurmaLookup = selectedClass.turmaCodigo || selectedClass.turmaLabel;
-  const initialAttendance = (studentsPerClass[initialTurmaLookup] || []).map((aluno, idx) => ({
+  const initialStudents = getStudentNamesForClass(studentsPerClass, {
+    turmaCodigo: selectedClass.turmaCodigo,
+    turmaLabel: selectedClass.turmaLabel,
+    horario: selectedClass.horario || selectedHorario,
+    professor: selectedClass.professor || selectedProfessor,
+  });
+  const initialAttendance = initialStudents.map((aluno, idx) => ({
     id: idx + 1,
     aluno,
     attendance: dateDates.reduce(
@@ -2743,6 +2785,13 @@ export const Attendance: React.FC = () => {
         return;
       }
 
+      const classStudents = getStudentNamesForClass(studentsPerClass, {
+        turmaCodigo: selectedClass.turmaCodigo,
+        turmaLabel: selectedClass.turmaLabel,
+        horario: selectedClass.horario || selectedHorario,
+        professor: selectedClass.professor || selectedProfessor,
+      });
+
       const newDates = generateDates(selectedClass.diasSemana, monthKey).map((d) => d.split(" ")[0]);
       const storedRecords = loadAttendanceStorage();
       const excludedList = (() => {
@@ -3000,7 +3049,7 @@ export const Attendance: React.FC = () => {
       setHistory([]);
 
       setAttendance(
-        (studentsPerClass[turmaLookup] || [])
+        classStudents
           .filter((aluno) => !excludedNamesForSelectedClass.has(normalizeText(aluno || "")))
           .map((aluno, idx) => {
           const base = newDates.reduce(
