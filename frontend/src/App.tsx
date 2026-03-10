@@ -26,7 +26,6 @@ const getViewFromHash = (hash: string): ViewType => {
 const purgeFebruaryLocalCache = () => {
   const month = "2026-02";
   const keysToRemove = [
-    "excludedStudents",
     "pendingAttendanceLogs",
     "attendanceRetroModeEnabled",
     "attendanceReferenceMonth",
