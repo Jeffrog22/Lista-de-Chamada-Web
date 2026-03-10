@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getBootstrap, getImportDataStatus, importDataFile } from "../api";
+import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 type ApiResponse<T = any> = { data: T };
 
@@ -132,42 +133,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   };
 
   const applyBootstrap = (data: any) => {
-    const classById = new Map<number, any>();
-    (data.classes || []).forEach((cls: any) => classById.set(cls.id, cls));
-
-    const mappedStudents = (data.students || []).map((student: any) => {
-      const cls = classById.get(student.class_id);
-      return {
-        id: String(student.id),
-        grupo: cls?.grupo || cls?.codigo || "",
-        nome: student.nome,
-        nivel: cls?.nivel || "",
-        idade: calculateAge(student.data_nascimento || ""),
-        categoria: student.categoria || "",
-        turma: cls?.turma_label || cls?.codigo || "",
-        turmaCodigo: cls?.grupo || cls?.codigo || "",
-        horario: cls?.horario || "",
-        professor: cls?.professor || "",
-        whatsapp: student.whatsapp || "",
-        genero: student.genero || "",
-        dataNascimento: student.data_nascimento || "",
-        parQ: student.parq || "",
-        atestado: !!student.atestado,
-        dataAtestado: student.data_atestado || "",
-      };
-    });
-
-    const mappedClasses = (data.classes || []).map((cls: any) => ({
-      Grupo: cls.grupo || cls.codigo,
-      Turma: cls.turma_label || cls.codigo,
-      TurmaCodigo: cls.grupo || cls.codigo,
-      Horario: cls.horario,
-      Professor: cls.professor,
-      Nivel: cls.nivel,
-      Atalho: cls.codigo,
-      CapacidadeMaxima: cls.capacidade,
-      DiasSemana: cls.dias_semana,
-    }));
+    const { mappedStudents, mappedClasses } = mapBootstrapForStorage(data, calculateAge);
 
     if (mappedStudents.length > 0) {
       localStorage.setItem("activeStudents", JSON.stringify(mappedStudents));
@@ -191,7 +157,16 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     try {
       if (file) {
         setStatus("Enviando arquivo...");
-        await importDataFile(file);
+        try {
+          await importDataFile(file);
+        } catch (firstErr: any) {
+          const firstDetail = String(firstErr?.response?.data?.detail || "");
+          if (!/autoflush|integrityerror|unique/i.test(firstDetail)) {
+            throw firstErr;
+          }
+          setStatus("Reprocessando sem transferencias...");
+          await importDataFile(file, { applyOverrides: false });
+        }
         const optimisticDate = saveLastImportAtFallback();
         setImportStatusInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
         try {

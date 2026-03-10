@@ -7,6 +7,7 @@ import { Vacancies } from "./pages/Vacancies";
 import { Exclusions } from "./pages/Exclusions";
 import { Login } from "./pages/Login";
 import { getBootstrap, getImportDataStatus, getMaintenanceDiagnostics, importDataFile } from "./api";
+import { mapBootstrapForStorage } from "./utils/bootstrapMapping";
 import "./App.simple.css";
 
 declare const __APP_VERSION__: string;
@@ -314,86 +315,10 @@ export default function App() {
   };
 
   const applyBootstrap = (data: any) => {
-    const classById = new Map<number, any>();
-    (data.classes || []).forEach((cls: any) => classById.set(cls.id, cls));
+    const { mappedStudents, mappedClasses } = mapBootstrapForStorage(data, calculateAge);
 
-    const mappedStudents = (data.students || []).map((student: any) => {
-      const cls = classById.get(student.class_id);
-      return {
-        id: String(student.id),
-        studentUid: String(student.student_uid || ""),
-        grupo: cls?.grupo || cls?.codigo || "",
-        nome: student.nome,
-        nivel: cls?.nivel || "",
-        idade: calculateAge(student.data_nascimento || ""),
-        categoria: student.categoria || "",
-        turma: cls?.turma_label || cls?.codigo || "",
-        turmaCodigo: cls?.grupo || cls?.codigo || "",
-        horario: cls?.horario || "",
-        professor: cls?.professor || "",
-        whatsapp: student.whatsapp || "",
-        genero: student.genero || "",
-        dataNascimento: student.data_nascimento || "",
-        parQ: student.parq || "",
-        atestado: !!student.atestado,
-        dataAtestado: student.data_atestado || "",
-      };
-    });
-
-    const mappedClasses = (data.classes || []).map((cls: any) => ({
-      Grupo: cls.grupo || cls.codigo,
-      Turma: cls.turma_label || cls.codigo,
-      TurmaCodigo: cls.grupo || cls.codigo,
-      Horario: cls.horario,
-      Professor: cls.professor,
-      Nivel: cls.nivel,
-      Atalho: cls.codigo,
-      CapacidadeMaxima: cls.capacidade,
-      DiasSemana: cls.dias_semana,
-    }));
-
-    // Safeguard for known manual assignment that must stay in Daniela 15:15 (dqs04)
-    // even if imported bootstrap data arrives with stale professor linkage.
-    const normalizeName = (value: string) =>
-      String(value || "")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
-
-    const forcedAssignments = new Map<string, { turmaCodigo: string; horario: string; professor: string }>([
-      ["lucas quintilho de sousa", { turmaCodigo: "dqs04", horario: "1515", professor: "Daniela" }],
-    ]);
-
-    const classByTriple = new Map<string, any>();
-    mappedClasses.forEach((cls: any) => {
-      const turmaCodigo = String(cls.TurmaCodigo || cls.Grupo || "").trim();
-      const horario = String(cls.Horario || "").replace(/\D/g, "").slice(0, 4);
-      const professor = String(cls.Professor || "").trim().toLowerCase();
-      if (!turmaCodigo || !horario || !professor) return;
-      classByTriple.set(`${turmaCodigo}|${horario}|${professor}`, cls);
-    });
-
-    const patchedStudents = mappedStudents.map((student: any) => {
-      const forced = forcedAssignments.get(normalizeName(String(student.nome || "")));
-      if (!forced) return student;
-
-      const classKey = `${forced.turmaCodigo}|${String(forced.horario || "").replace(/\D/g, "").slice(0, 4)}|${String(forced.professor || "").trim().toLowerCase()}`;
-      const targetClass = classByTriple.get(classKey);
-
-      return {
-        ...student,
-        grupo: forced.turmaCodigo,
-        turmaCodigo: forced.turmaCodigo,
-        turma: targetClass?.Turma || student.turma,
-        horario: forced.horario,
-        professor: forced.professor,
-        nivel: targetClass?.Nivel || student.nivel,
-      };
-    });
-
-    if (patchedStudents.length > 0) {
-      localStorage.setItem("activeStudents", JSON.stringify(patchedStudents));
+    if (mappedStudents.length > 0) {
+      localStorage.setItem("activeStudents", JSON.stringify(mappedStudents));
     }
     if (mappedClasses.length > 0) {
       localStorage.setItem("activeClasses", JSON.stringify(mappedClasses));
@@ -422,7 +347,19 @@ export default function App() {
 
     setUpdateStatus("Enviando arquivo...");
     try {
-      await importDataFile(selected, { applyOverrides });
+      try {
+        await importDataFile(selected, { applyOverrides });
+      } catch (firstErr: any) {
+        const firstDetail = String(firstErr?.response?.data?.detail || "");
+        const shouldRetryWithoutOverrides = applyOverrides && /autoflush|integrityerror|unique/i.test(firstDetail);
+        if (!shouldRetryWithoutOverrides) {
+          throw firstErr;
+        }
+
+        setUpdateStatus("Reprocessando sem transferencias...");
+        await importDataFile(selected, { applyOverrides: false });
+      }
+
       const optimisticDate = saveLastImportAtFallback();
       setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
       setUpdateStatus("Carregando dados...");

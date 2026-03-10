@@ -617,6 +617,7 @@ class ImportStudentUpsertPayload(BaseModel):
 class MaintenancePurgeMonthPayload(BaseModel):
     month: str = "2026-02"
     clear_transfer_overrides: bool = True
+    clear_exclusions: bool = False
 
 
 class MaintenanceBootstrapResetPayload(BaseModel):
@@ -1139,38 +1140,70 @@ def _apply_transfer_overrides(session: Session) -> int:
     if not overrides:
         return 0
 
-    students = session.exec(select(models.ImportStudent)).all()
-    by_identity: Dict[str, List[models.ImportStudent]] = {}
-    for student in students:
-        identity = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
-        if not identity:
-            continue
-        by_identity.setdefault(identity, []).append(student)
+    with session.no_autoflush:
+        students = session.exec(select(models.ImportStudent)).all()
+        classes = session.exec(select(models.ImportClass)).all()
 
-    moved = 0
-    for override in overrides:
-        identity = str(override.get("key") or "").strip()
-        if not identity:
-            identity = _student_identity_key(
-                str(override.get("nome") or ""),
-                str(override.get("data_nascimento") or ""),
-                str(override.get("whatsapp") or ""),
-            )
-        if not identity:
-            continue
+        by_identity: Dict[str, List[models.ImportStudent]] = {}
+        for student in students:
+            identity = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+            if not identity:
+                continue
+            by_identity.setdefault(identity, []).append(student)
 
-        target_class = _find_class_from_transfer_override(session, override)
-        if target_class is None:
-            continue
+        def _resolve_target_class(override: Dict[str, Any]) -> Optional[models.ImportClass]:
+            turma_ref = _normalize_text(override.get("turmaCodigo") or override.get("turmaLabel") or "")
+            horario_ref = _normalize_horario_value(str(override.get("horario") or ""))
+            professor_ref = _normalize_text(override.get("professor") or "")
+            if not turma_ref or not horario_ref or not professor_ref:
+                return None
 
-        for student in by_identity.get(identity, []):
-            if student.class_id != target_class.id:
-                student.class_id = target_class.id
+            for cls in classes:
+                cls_codigo = _normalize_text(cls.codigo or "")
+                cls_label = _normalize_text(cls.turma_label or cls.codigo or "")
+                cls_horario = _normalize_horario_value(cls.horario or "")
+                cls_professor = _normalize_text(cls.professor or "")
+                turma_matches = turma_ref in {cls_codigo, cls_label}
+                if turma_matches and cls_horario == horario_ref and cls_professor == professor_ref:
+                    return cls
+            return None
+
+        moved = 0
+        for override in overrides:
+            identity = str(override.get("key") or "").strip()
+            if not identity:
+                identity = _student_identity_key(
+                    str(override.get("nome") or ""),
+                    str(override.get("data_nascimento") or ""),
+                    str(override.get("whatsapp") or ""),
+                )
+            if not identity:
+                continue
+
+            target_class = _resolve_target_class(override)
+            if target_class is None:
+                continue
+
+            group = list(by_identity.get(identity, []))
+            if not group:
+                continue
+
+            group.sort(key=lambda item: int(item.id or 0))
+            canonical = group[0]
+
+            if canonical.class_id != target_class.id:
+                canonical.class_id = target_class.id
                 moved += 1
 
-    moved += _dedupe_import_students(session)
-    moved += _dedupe_import_students_global(session)
-    return moved
+            for duplicate in group[1:]:
+                session.delete(duplicate)
+                moved += 1
+
+            by_identity[identity] = [canonical]
+
+        moved += _dedupe_import_students(session)
+        moved += _dedupe_import_students_global(session)
+        return moved
 
 
 def _to_proper_case(value: Optional[str]) -> str:
@@ -1405,7 +1438,11 @@ def _count_month_entries_in_pool_log(month: str) -> int:
     return int(df["Data"].apply(lambda value: _extract_month_key(value) == month).sum())
 
 
-def _purge_month_data(month: str, clear_transfer_overrides: bool = True) -> Dict[str, Any]:
+def _purge_month_data(
+    month: str,
+    clear_transfer_overrides: bool = True,
+    clear_exclusions: bool = False,
+) -> Dict[str, Any]:
     if not re.fullmatch(r"\d{4}-\d{2}", str(month or "").strip()):
         raise HTTPException(status_code=400, detail="month must be in YYYY-MM format")
 
@@ -1414,7 +1451,18 @@ def _purge_month_data(month: str, clear_transfer_overrides: bool = True) -> Dict
 
     chamada_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "baseChamada.json"), month)
     justificativa_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "baseJustificativas.json"), month)
-    exclusao_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "excludedStudents.json"), month)
+    if clear_exclusions:
+        exclusao_stats = _purge_month_from_json_file(os.path.join(DATA_DIR, "excludedStudents.json"), month)
+    else:
+        total_exclusions = len(_load_json_list(os.path.join(DATA_DIR, "excludedStudents.json")))
+        month_exclusions = _count_month_entries_in_json(os.path.join(DATA_DIR, "excludedStudents.json"), month)
+        exclusao_stats = {
+            "before": total_exclusions,
+            "after": total_exclusions,
+            "removed": 0,
+            "skipped": True,
+            "month_matches": month_exclusions,
+        }
 
     snapshots_path = _weather_snapshots_file()
     snapshots = _load_weather_snapshots()
@@ -1471,6 +1519,7 @@ def purge_month_data(payload: MaintenancePurgeMonthPayload):
     return _purge_month_data(
         month=payload.month,
         clear_transfer_overrides=payload.clear_transfer_overrides,
+        clear_exclusions=payload.clear_exclusions,
     )
 
 

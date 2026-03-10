@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { addExclusion, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
+import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 interface Student {
   id: string;
@@ -366,53 +367,22 @@ export const Students: React.FC = () => {
           }>;
         };
 
-        const classById = new Map<number, (typeof data.classes)[number]>();
-        data.classes.forEach((cls) => classById.set(cls.id, cls));
-
-        const mapped = data.students.map((student) => {
-          const cls = classById.get(student.class_id);
-          return {
-            id: String(student.id),
-            studentUid: String((student as any).student_uid || ""),
-            nome: student.nome,
-            nivel: cls?.nivel || "",
-            idade: calculateAge(student.data_nascimento || ""),
-            categoria: student.categoria || "",
-            turma: cls?.turma_label || cls?.codigo || "",
-            turmaCodigo: cls?.grupo || cls?.codigo || "",
-            grupo: cls?.grupo || cls?.codigo || "",
-            turmaLabel: cls?.turma_label || cls?.codigo || "",
-            horario: cls?.horario || "",
-            professor: cls?.professor || "",
-            whatsapp: student.whatsapp || "",
-            genero: student.genero || "",
-            dataNascimento: student.data_nascimento || "",
-            parQ: student.parq || "",
-            atestado: !!student.atestado,
-            dataAtestado: student.data_atestado || "",
-          } as Student;
-        });
+        const { mappedStudents, mappedClasses } = mapBootstrapForStorage(data, calculateAge);
+        const mapped = mappedStudents as Student[];
 
         const finalList = dedupeStudents(mapped);
         setStudents(finalList);
         localStorage.setItem("activeStudents", JSON.stringify(finalList));
 
-        const classStorage = data.classes.map((cls) => ({
-          Grupo: cls.grupo || cls.codigo,
-          Turma: cls.turma_label || cls.codigo,
-          TurmaCodigo: cls.codigo,
-          Horario: cls.horario,
-          Professor: cls.professor,
-          Nivel: cls.nivel,
-          FaixaEtaria: cls.faixa_etaria,
-          Atalho: cls.codigo,
-          CapacidadeMaxima: cls.capacidade,
-          DiasSemana: cls.dias_semana,
-        }));
+        const classStorage = mappedClasses;
         if (classStorage.length > 0) {
           localStorage.setItem("activeClasses", JSON.stringify(classStorage));
-          const professors = Array.from(
-            new Set(classStorage.map((cls) => cls.Professor).filter(Boolean))
+          const professors: string[] = Array.from(
+            new Set<string>(
+              classStorage
+                .map((cls: any) => String(cls?.Professor || "").trim())
+                .filter((value: string) => Boolean(value))
+            )
           );
           setProfessorOptions(professors);
         }
