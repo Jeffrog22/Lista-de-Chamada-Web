@@ -352,8 +352,48 @@ export default function App() {
       DiasSemana: cls.dias_semana,
     }));
 
-    if (mappedStudents.length > 0) {
-      localStorage.setItem("activeStudents", JSON.stringify(mappedStudents));
+    // Safeguard for known manual assignment that must stay in Daniela 15:15 (dqs04)
+    // even if imported bootstrap data arrives with stale professor linkage.
+    const normalizeName = (value: string) =>
+      String(value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const forcedAssignments = new Map<string, { turmaCodigo: string; horario: string; professor: string }>([
+      ["lucas quintilho de sousa", { turmaCodigo: "dqs04", horario: "1515", professor: "Daniela" }],
+    ]);
+
+    const classByTriple = new Map<string, any>();
+    mappedClasses.forEach((cls: any) => {
+      const turmaCodigo = String(cls.TurmaCodigo || cls.Grupo || "").trim();
+      const horario = String(cls.Horario || "").replace(/\D/g, "").slice(0, 4);
+      const professor = String(cls.Professor || "").trim().toLowerCase();
+      if (!turmaCodigo || !horario || !professor) return;
+      classByTriple.set(`${turmaCodigo}|${horario}|${professor}`, cls);
+    });
+
+    const patchedStudents = mappedStudents.map((student: any) => {
+      const forced = forcedAssignments.get(normalizeName(String(student.nome || "")));
+      if (!forced) return student;
+
+      const classKey = `${forced.turmaCodigo}|${String(forced.horario || "").replace(/\D/g, "").slice(0, 4)}|${String(forced.professor || "").trim().toLowerCase()}`;
+      const targetClass = classByTriple.get(classKey);
+
+      return {
+        ...student,
+        grupo: forced.turmaCodigo,
+        turmaCodigo: forced.turmaCodigo,
+        turma: targetClass?.Turma || student.turma,
+        horario: forced.horario,
+        professor: forced.professor,
+        nivel: targetClass?.Nivel || student.nivel,
+      };
+    });
+
+    if (patchedStudents.length > 0) {
+      localStorage.setItem("activeStudents", JSON.stringify(patchedStudents));
     }
     if (mappedClasses.length > 0) {
       localStorage.setItem("activeClasses", JSON.stringify(mappedClasses));
