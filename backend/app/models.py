@@ -126,7 +126,7 @@ class ImportStudent(SQLModel, table=True):
         UniqueConstraint("class_id", "nome", name="uq_import_student_class_nome"),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
-    class_id: int
+    class_id: Optional[int] = None
     nome: str
     whatsapp: str = ""
     data_nascimento: str = ""

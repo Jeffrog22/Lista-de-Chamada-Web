@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form, Response
 from sqlmodel import Session, select, func
-from app.database import create_db_and_tables, get_session
+from app.database import create_db_and_tables, migrate_db, get_session
 from app import crud, models
 from typing import List, Optional, Dict, Any
 import os
@@ -68,6 +68,7 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    migrate_db()
     os.makedirs(DATA_DIR, exist_ok=True)
 
 @app.get("/health")
@@ -587,7 +588,7 @@ class ImportClassOut(BaseModel):
 class ImportStudentOut(BaseModel):
     id: int
     student_uid: str = ""
-    class_id: int
+    class_id: Optional[int] = None
     nome: str
     whatsapp: str
     data_nascimento: str
@@ -605,9 +606,9 @@ class BootstrapOut(BaseModel):
 class ImportStudentUpsertPayload(BaseModel):
     nome: str
     student_uid: Optional[str] = ""
-    turma: str
-    horario: str
-    professor: str
+    turma: Optional[str] = ""
+    horario: Optional[str] = ""
+    professor: Optional[str] = ""
     whatsapp: Optional[str] = ""
     data_nascimento: Optional[str] = ""
     data_atestado: Optional[str] = ""
@@ -1127,8 +1128,11 @@ def _dedupe_import_students_global(session: Session) -> int:
         if len(grouped_students) <= 1:
             continue
 
-        # Keep the oldest id as canonical and delete duplicated entries across classes.
-        keep = min(grouped_students, key=lambda s: int(s.id or 0))
+        # Prefer the allocated student (class_id not None); among equals, keep oldest id.
+        keep = min(
+            grouped_students,
+            key=lambda s: (0 if s.class_id is not None else 1, int(s.id or 0)),
+        )
         for student in grouped_students:
             if student.id == keep.id:
                 continue
@@ -2850,11 +2854,17 @@ def get_or_create_import_class(session: Session, unit_id: int, codigo: str, hora
     )
     return session.exec(stmt).first()
 
-def get_or_create_import_student(session: Session, class_id: int, nome: str) -> models.ImportStudent | None:
-    stmt = select(models.ImportStudent).where(
-        models.ImportStudent.class_id == class_id,
-        models.ImportStudent.nome == nome,
-    )
+def get_or_create_import_student(session: Session, class_id: Optional[int], nome: str) -> models.ImportStudent | None:
+    if class_id is None:
+        stmt = select(models.ImportStudent).where(
+            models.ImportStudent.class_id.is_(None),
+            models.ImportStudent.nome == nome,
+        )
+    else:
+        stmt = select(models.ImportStudent).where(
+            models.ImportStudent.class_id == class_id,
+            models.ImportStudent.nome == nome,
+        )
     return session.exec(stmt).first()
 
 def _find_import_class_by_triple(
@@ -2939,16 +2949,9 @@ async def import_data(
         if delimiter != ",":
             reader = csv.DictReader(StringIO(text), delimiter=delimiter)
 
-    required = {
-        "unidade",
-        "turma_codigo",
-        "horario",
-        "professor",
-        "nivel",
-        "capacidade",
-        "dias_semana",
+    # Personal columns always required; class columns are optional (enables personal-only CSV)
+    personal_required = {
         "aluno_nome",
-        "aluno_turma",
         "whatsapp",
         "data_nascimento",
         "data_atest",
@@ -2957,13 +2960,17 @@ async def import_data(
         "parq",
         "atestado",
     }
+    class_columns = {"unidade", "turma_codigo", "horario", "professor", "nivel", "capacidade", "dias_semana", "aluno_turma"}
 
     if reader.fieldnames is None:
         raise HTTPException(status_code=400, detail="CSV header not found")
 
-    missing = required.difference({name.strip() for name in reader.fieldnames})
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Missing columns: {', '.join(sorted(missing))}")
+    fieldnames_stripped = {name.strip() for name in reader.fieldnames}
+    missing_personal = personal_required.difference(fieldnames_stripped)
+    if missing_personal:
+        raise HTTPException(status_code=400, detail=f"Missing columns: {', '.join(sorted(missing_personal))}")
+
+    full_mode = class_columns.issubset(fieldnames_stripped)
 
     counters: Dict[str, int] = {
         "units_created": 0,
@@ -2977,47 +2984,67 @@ async def import_data(
 
     try:
         for row in reader:
-            unidade = (row.get("unidade") or "").strip()
-            codigo = (row.get("turma_codigo") or "").strip()
-            raw_horario = (row.get("horario") or "").strip()
-            horario = _normalize_horario_value(raw_horario)
             aluno_nome = (row.get("aluno_nome") or "").strip()
-
-            if not unidade or not codigo or not horario or not aluno_nome:
+            if not aluno_nome:
                 continue
 
             rows_processed += 1
 
-            unit = get_or_create_import_unit(session, unidade)
-            if unit.id:
-                counters["units_updated"] += 1
-            else:
-                counters["units_created"] += 1
+            if full_mode:
+                unidade = (row.get("unidade") or "").strip()
+                codigo = (row.get("turma_codigo") or "").strip()
+                raw_horario = (row.get("horario") or "").strip()
+                horario = _normalize_horario_value(raw_horario)
 
-            class_obj = get_or_create_import_class(session, unit.id, codigo, horario)
-            if class_obj:
-                counters["classes_updated"] += 1
-            else:
-                class_obj = models.ImportClass(unit_id=unit.id, codigo=codigo, horario=horario)
-                session.add(class_obj)
-                session.flush()
-                counters["classes_created"] += 1
+                if not unidade or not codigo or not horario:
+                    # Missing class identifiers even in full mode — treat as personal
+                    student = get_or_create_import_student(session, None, aluno_nome)
+                    if student:
+                        counters["students_updated"] += 1
+                    else:
+                        student = models.ImportStudent(class_id=None, nome=aluno_nome)
+                        session.add(student)
+                        counters["students_created"] += 1
+                else:
+                    unit = get_or_create_import_unit(session, unidade)
+                    if unit.id:
+                        counters["units_updated"] += 1
+                    else:
+                        counters["units_created"] += 1
 
-            class_obj.horario = horario
-            class_obj.professor = (row.get("professor") or "").strip()
-            class_obj.nivel = (row.get("nivel") or "").strip()
-            class_obj.faixa_etaria = (row.get("faixa_etaria") or "").strip()
-            class_obj.capacidade = int((row.get("capacidade") or "0") or 0)
-            class_obj.dias_semana = (row.get("dias_semana") or "").strip()
-            class_obj.turma_label = (row.get("aluno_turma") or "").strip() or codigo
+                    class_obj = get_or_create_import_class(session, unit.id, codigo, horario)
+                    if class_obj:
+                        counters["classes_updated"] += 1
+                    else:
+                        class_obj = models.ImportClass(unit_id=unit.id, codigo=codigo, horario=horario)
+                        session.add(class_obj)
+                        session.flush()
+                        counters["classes_created"] += 1
 
-            student = get_or_create_import_student(session, class_obj.id, aluno_nome)
-            if student:
-                counters["students_updated"] += 1
+                    class_obj.horario = horario
+                    class_obj.professor = (row.get("professor") or "").strip()
+                    class_obj.nivel = (row.get("nivel") or "").strip()
+                    class_obj.faixa_etaria = (row.get("faixa_etaria") or "").strip()
+                    class_obj.capacidade = int((row.get("capacidade") or "0") or 0)
+                    class_obj.dias_semana = (row.get("dias_semana") or "").strip()
+                    class_obj.turma_label = (row.get("aluno_turma") or "").strip() or codigo
+
+                    student = get_or_create_import_student(session, class_obj.id, aluno_nome)
+                    if student:
+                        counters["students_updated"] += 1
+                    else:
+                        student = models.ImportStudent(class_id=class_obj.id, nome=aluno_nome)
+                        session.add(student)
+                        counters["students_created"] += 1
             else:
-                student = models.ImportStudent(class_id=class_obj.id, nome=aluno_nome)
-                session.add(student)
-                counters["students_created"] += 1
+                # Personal-only CSV — no class assignment
+                student = get_or_create_import_student(session, None, aluno_nome)
+                if student:
+                    counters["students_updated"] += 1
+                else:
+                    student = models.ImportStudent(class_id=None, nome=aluno_nome)
+                    session.add(student)
+                    counters["students_created"] += 1
 
             student.whatsapp = _format_whatsapp(row.get("whatsapp"))
             student.data_nascimento = (row.get("data_nascimento") or "").strip()
@@ -3072,7 +3099,14 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
     students_stmt = select(models.ImportStudent)
     if class_ids:
         students_stmt = students_stmt.where(models.ImportStudent.class_id.in_(class_ids))
-    students = session.exec(students_stmt).all()
+    students = list(session.exec(students_stmt).all())
+
+    # Also include unallocated students (class_id IS NULL)
+    unallocated_stmt = select(models.ImportStudent).where(models.ImportStudent.class_id.is_(None))
+    unallocated = session.exec(unallocated_stmt).all()
+    # Avoid duplicates if class_ids was empty (all students already fetched)
+    if class_ids:
+        students = students + list(unallocated)
 
     for student in students:
         _, changed = _ensure_student_uid_for_student(student, registry=uid_registry)
@@ -3107,25 +3141,32 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
 
 @app.post("/api/import-students", response_model=ImportStudentOut)
 def create_import_student(payload: ImportStudentUpsertPayload, session: Session = Depends(get_session)) -> ImportStudentOut:
-    target_class = _find_import_class_by_triple(
-        session=session,
-        turma=payload.turma,
-        horario=payload.horario,
-        professor=payload.professor,
-    )
-    if not target_class:
-        raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
-
     nome = str(payload.nome or "").strip()
     if not nome:
         raise HTTPException(status_code=400, detail="nome is required")
 
-    student = get_or_create_import_student(session, target_class.id, nome)
+    has_class_info = any([str(payload.turma or "").strip(), str(payload.horario or "").strip(), str(payload.professor or "").strip()])
+
+    if has_class_info:
+        target_class = _find_import_class_by_triple(
+            session=session,
+            turma=payload.turma,
+            horario=payload.horario,
+            professor=payload.professor,
+        )
+        if not target_class:
+            raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
+        target_class_id: Optional[int] = target_class.id
+    else:
+        target_class = None
+        target_class_id = None
+
+    student = get_or_create_import_student(session, target_class_id, nome)
     if not student:
-        student = models.ImportStudent(class_id=target_class.id, nome=nome)
+        student = models.ImportStudent(class_id=target_class_id, nome=nome)
         session.add(student)
 
-    student.class_id = target_class.id
+    student.class_id = target_class_id
     student.nome = nome
     student.whatsapp = _format_whatsapp(payload.whatsapp)
     student.data_nascimento = str(payload.data_nascimento or "").strip()
@@ -3145,28 +3186,34 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     if not student:
         raise HTTPException(status_code=404, detail="Import student not found")
 
-    previous_class_id = student.class_id
-
-    target_class = _find_import_class_by_triple(
-        session=session,
-        turma=payload.turma,
-        horario=payload.horario,
-        professor=payload.professor,
-    )
-    if not target_class:
-        raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
-
     nome = str(payload.nome or "").strip()
     if not nome:
         raise HTTPException(status_code=400, detail="nome is required")
 
-    existing_target = get_or_create_import_student(session, target_class.id, nome)
+    previous_class_id = student.class_id
+    has_class_info = any([str(payload.turma or "").strip(), str(payload.horario or "").strip(), str(payload.professor or "").strip()])
+
+    if has_class_info:
+        target_class = _find_import_class_by_triple(
+            session=session,
+            turma=payload.turma,
+            horario=payload.horario,
+            professor=payload.professor,
+        )
+        if not target_class:
+            raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
+        target_class_id: Optional[int] = target_class.id
+    else:
+        target_class = None
+        target_class_id = None
+
+    existing_target = get_or_create_import_student(session, target_class_id, nome)
     target_student = student
     if existing_target and existing_target.id != student.id:
         target_student = existing_target
         session.delete(student)
 
-    target_student.class_id = target_class.id
+    target_student.class_id = target_class_id
     target_student.nome = nome
     target_student.whatsapp = _format_whatsapp(payload.whatsapp)
     target_student.data_nascimento = str(payload.data_nascimento or "").strip()
@@ -3176,7 +3223,7 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     target_student.parq = str(payload.parq or "").strip()
     target_student.atestado = bool(payload.atestado)
 
-    if previous_class_id != target_class.id:
+    if target_class is not None and previous_class_id != target_class_id:
         _upsert_transfer_override_for_student(target_student, target_class)
 
     session.add(target_student)

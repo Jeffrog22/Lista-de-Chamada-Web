@@ -792,8 +792,8 @@ export const Students: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.nome || !formData.turma) {
-      alert("Preencha os campos obrigatórios (Nome, Turma)");
+    if (!formData.nome) {
+      alert("Preencha o nome do aluno.");
       return;
     }
 
@@ -1343,41 +1343,79 @@ export const Students: React.FC = () => {
                 <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{student.idade}</td>
                 <td style={{ padding: "12px" }}>{student.categoria}</td>
                 <td style={{ padding: "10px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
-                  <span
-                    style={{
-                      background: "#eef2ff",
-                      color: "#4f46e5",
-                      padding: "3px 6px",
-                      borderRadius: "4px",
-                      fontWeight: "bold",
-                      fontSize: "11px",
-                      whiteSpace: "nowrap",
-                      display: "inline-block",
-                    }}
-                  >
-                    {getTurmaDisplayLabel(student)}
-                  </span>
+                  {getTurmaDisplayLabel(student) ? (
+                    <span
+                      style={{
+                        background: "#eef2ff",
+                        color: "#4f46e5",
+                        padding: "3px 6px",
+                        borderRadius: "4px",
+                        fontWeight: "bold",
+                        fontSize: "11px",
+                        whiteSpace: "nowrap",
+                        display: "inline-block",
+                      }}
+                    >
+                      {getTurmaDisplayLabel(student)}
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        background: "#fff3cd",
+                        color: "#856404",
+                        padding: "3px 6px",
+                        borderRadius: "4px",
+                        fontWeight: "bold",
+                        fontSize: "11px",
+                        whiteSpace: "nowrap",
+                        display: "inline-block",
+                        border: "1px solid #ffc107",
+                      }}
+                    >
+                      Pendente
+                    </span>
+                  )}
                 </td>
                 <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "10px 8px", textAlign: "center", display: "flex", gap: "6px", justifyContent: "center" }}>
-                  <button
-                    onClick={() => handleGoToAttendance(student)}
-                    title="Ir para chamada"
-                    style={{
-                      background: "#28a745",
-                      color: "white",
-                      border: "none",
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "11px",
-                      lineHeight: 1.1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {isCompactViewport ? "📅" : "📅 Chamada"}
-                  </button>
+                  {getTurmaDisplayLabel(student) ? (
+                    <button
+                      onClick={() => handleGoToAttendance(student)}
+                      title="Ir para chamada"
+                      style={{
+                        background: "#28a745",
+                        color: "white",
+                        border: "none",
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {isCompactViewport ? "📅" : "📅 Chamada"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleEditClick(student)}
+                      title="Alocar em turma"
+                      style={{
+                        background: "#fd7e14",
+                        color: "white",
+                        border: "none",
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "11px",
+                        lineHeight: 1.1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {isCompactViewport ? "📌" : "📌 Alocar"}
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(student)}
                     title="Excluir aluno"
