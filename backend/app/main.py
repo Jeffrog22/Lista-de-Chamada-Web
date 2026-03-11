@@ -506,21 +506,24 @@ def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
     def _norm(value: str) -> str:
         return str(value or "").strip()
 
+    def _norm_key(value: str) -> str:
+        return _normalize_text_fold(_norm(value))
+
     data_val = _normalize_date_key(entry.data)
-    turma_codigo = _norm(entry.turmaCodigo)
-    turma_label = _norm(entry.turmaLabel)
+    turma_codigo = _norm_key(entry.turmaCodigo)
+    turma_label = _norm_key(entry.turmaLabel)
     horario = _format_horario(entry.horario)
-    professor = _norm(entry.professor)
+    professor = _norm_key(entry.professor)
 
     mask = df["Data"].apply(_normalize_date_key) == data_val
     if turma_codigo:
-        mask = mask & (df["TurmaCodigo"].astype(str).str.strip() == turma_codigo)
+        mask = mask & (df["TurmaCodigo"].astype(str).map(_norm_key) == turma_codigo)
     if turma_label:
-        mask = mask & (df["TurmaLabel"].astype(str).str.strip() == turma_label)
+        mask = mask & (df["TurmaLabel"].astype(str).map(_norm_key) == turma_label)
     if horario:
         mask = mask & (df["Horario"].astype(str).map(_format_horario).str.strip() == horario)
     if professor:
-        mask = mask & (df["Professor"].astype(str).str.strip() == professor)
+        mask = mask & (df["Professor"].astype(str).map(_norm_key) == professor)
     return mask
 
 class ImportResult(BaseModel):

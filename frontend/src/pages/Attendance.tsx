@@ -2192,61 +2192,8 @@ export const Attendance: React.FC = () => {
 
       setShowDateModal(true);
       return;
-    } catch (error) {
-      // Tenta prefill pelo log do dia (qualquer turma)
-      try {
-        const dayLog = await getPoolLog(date);
-        if (dayLog?.data && typeof dayLog.data === "object") {
-          const data = dayLog.data as {
-            clima1: string;
-            clima2: string;
-            tempExterna: string;
-            tempPiscina: string;
-            cloroPpm: number | null;
-          };
-
-          const icons = normalizeSensationList(
-            (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
-          );
-          const inferredCondition = String(data.clima1 || "").trim();
-          const inferredConditionLabel = normalizeWeatherConditionLabel(inferredCondition, "");
-          const normalizedTemp = normalizeNumberInput(data.tempExterna);
-          const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
-
-          const cloroValue = data.cloroPpm;
-          const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
-          setPoolData(prev => ({
-            ...prev,
-            tempExterna: normalizedTemp,
-            tempPiscina: normalizeNumberInput(data.tempPiscina),
-            cloro: cloroEnabled ? cloroValue : 1.5,
-            cloroEnabled,
-            selectedIcons: icons.length ? icons : [fallbackSensation],
-            weatherCondition: inferredConditionLabel,
-            weatherConditionCode: "",
-            incidentType: "",
-            incidentNote: "",
-            incidentImpact: "aula",
-            logType: "aula",
-          }));
-
-          const existingCache = getClimaCache(date);
-          setClimaCache(date, {
-            tempExterna: normalizedTemp,
-            selectedIcons: icons.length ? icons : [fallbackSensation],
-            apiTemp: existingCache?.apiTemp,
-            apiCondition: existingCache?.apiCondition,
-            apiConditionCode: existingCache?.apiConditionCode,
-            weatherCondition: inferredConditionLabel,
-          });
-
-          setClimaPrefillApplied(true);
-          setShowDateModal(true);
-          return;
-        }
-      } catch {
-        // Continua com prefill via clima
-      }
+    } catch {
+      // Continua com prefill via cache/API; evita fallback de outra turma no mesmo dia.
     }
 
     // Intentional any cast so we can read cached fields without the compiler narrowing the result to never

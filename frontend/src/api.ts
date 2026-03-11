@@ -217,11 +217,9 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
   const local = Array.isArray(localItems) ? localItems : [];
   if (local.length === 0) return { synced: 0, items: local };
 
-  const candidates = remote.length === 0
-    ? local.filter((localItem) => !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem)))
-    : local.filter(
-        (localItem) => isPendingExcludedSync(localItem) && !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem))
-      );
+  const candidates = local.filter(
+    (localItem) => isPendingExcludedSync(localItem) && !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem))
+  );
   if (candidates.length === 0) return { synced: 0, items: local };
 
   const results = await Promise.allSettled(
