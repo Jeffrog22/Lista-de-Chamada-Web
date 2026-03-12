@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
+import { addExclusion, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 interface Student {
@@ -22,6 +22,13 @@ interface Student {
   parQ: string;
   atestado: boolean;
   dataAtestado?: string;
+}
+
+interface AllocationTarget {
+  turma: string;
+  horario: string;
+  professor: string;
+  turmaCodigo?: string;
 }
 
 const WhatsappButton: React.FC<{ phoneNumber: string }> = ({ phoneNumber }) => {
@@ -214,6 +221,9 @@ export const Students: React.FC = () => {
     return Array.from(seen.values());
   };
   const [students, setStudents] = useState<Student[]>([]);
+  const [allocationTarget, setAllocationTarget] = useState<AllocationTarget | null>(null);
+  const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
+  const [isAllocatingBulk, setIsAllocatingBulk] = useState(false);
   const [excludedRecords, setExcludedRecords] = useState<any[]>(() => {
     try {
       const raw = localStorage.getItem("excludedStudents");
@@ -232,6 +242,24 @@ export const Students: React.FC = () => {
     if (!lookup) return;
     setSearchTerm(lookup);
     localStorage.removeItem("studentLookupName");
+  }, []);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("studentAllocationTarget");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.turma && parsed.horario && parsed.professor) {
+        setAllocationTarget({
+          turma: String(parsed.turma || ""),
+          horario: String(parsed.horario || ""),
+          professor: String(parsed.professor || ""),
+          turmaCodigo: String(parsed.turmaCodigo || ""),
+        });
+      }
+      localStorage.removeItem("studentAllocationTarget");
+    } catch {
+      localStorage.removeItem("studentAllocationTarget");
+    }
   }, []);
   // helper moved up so horarioOptions can reference it without hoisting issues
   const formatHorario = (value: string) => {
@@ -422,6 +450,10 @@ export const Students: React.FC = () => {
       // ignore
     }
   }, [professorOptions.length]);
+
+  useEffect(() => {
+    setSelectedPendingIds([]);
+  }, [allocationTarget]);
 
   const [sortKey, setSortKey] = useState<    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
   >(null);
@@ -1052,6 +1084,8 @@ export const Students: React.FC = () => {
     );
   });
 
+  const pendingStudents = filteredStudents.filter((student) => !getTurmaDisplayLabel(student));
+
   const sortedStudents = [...filteredStudents].sort((a, b) => {
     if (!sortKey) return 0;
     let result = 0;
@@ -1082,6 +1116,111 @@ export const Students: React.FC = () => {
     }
     return sortDir === "asc" ? result : -result;
   });
+
+  const displayedStudents = allocationTarget
+    ? [...pendingStudents].sort((a, b) => a.nome.localeCompare(b.nome))
+    : sortedStudents;
+
+  const selectablePendingIds = displayedStudents
+    .map((student) => {
+      const numericId = Number(student.id);
+      return Number.isFinite(numericId) ? String(student.id) : "";
+    })
+    .filter(Boolean);
+
+  const allPendingSelected =
+    selectablePendingIds.length > 0 && selectablePendingIds.every((id) => selectedPendingIds.includes(id));
+
+  const reloadBootstrapData = async () => {
+    const response = await getBootstrap();
+    const data = response.data as {
+      classes: Array<{
+        id: number;
+        grupo?: string;
+        codigo: string;
+        turma_label: string;
+        horario: string;
+        professor: string;
+        nivel: string;
+        faixa_etaria: string;
+        capacidade: number;
+        dias_semana: string;
+      }>;
+      students: Array<{
+        id: number;
+        class_id: number;
+        nome: string;
+        whatsapp: string;
+        data_nascimento: string;
+        data_atestado: string;
+        categoria: string;
+        genero: string;
+        parq: string;
+        atestado: boolean;
+      }>;
+    };
+
+    const { mappedStudents, mappedClasses } = mapBootstrapForStorage(data, calculateAge);
+    const finalList = dedupeStudents(mappedStudents as Student[]);
+    setStudents(finalList);
+    localStorage.setItem("activeStudents", JSON.stringify(finalList));
+    localStorage.setItem("activeClasses", JSON.stringify(mappedClasses));
+
+    const professors: string[] = Array.from(
+      new Set<string>(
+        mappedClasses
+          .map((cls: any) => String(cls?.Professor || "").trim())
+          .filter((value: string) => Boolean(value))
+      )
+    );
+    setProfessorOptions(professors);
+  };
+
+  const togglePendingSelection = (studentId: string) => {
+    setSelectedPendingIds((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const toggleSelectAllPending = () => {
+    setSelectedPendingIds(allPendingSelected ? [] : selectablePendingIds);
+  };
+
+  const handleCancelAllocationMode = () => {
+    setAllocationTarget(null);
+    setSelectedPendingIds([]);
+  };
+
+  const handleBulkAllocate = async () => {
+    if (!allocationTarget) return;
+
+    const numericIds = selectedPendingIds
+      .map((studentId) => Number(studentId))
+      .filter((studentId) => Number.isFinite(studentId));
+    if (numericIds.length === 0) {
+      alert("Selecione pelo menos um aluno pendente.");
+      return;
+    }
+
+    try {
+      setIsAllocatingBulk(true);
+      await bulkAllocateImportStudents({
+        student_ids: numericIds,
+        turma: allocationTarget.turma,
+        horario: allocationTarget.horario,
+        professor: allocationTarget.professor,
+      });
+      await reloadBootstrapData();
+      setSelectedPendingIds([]);
+      setAllocationTarget(null);
+      alert("Alunos alocados com sucesso!");
+    } catch (error) {
+      console.error("Falha ao alocar alunos em lote", error);
+      alert("Nao foi possivel alocar os alunos selecionados.");
+    } finally {
+      setIsAllocatingBulk(false);
+    }
+  };
 
   const formatMobileStudentName = (fullName: string) => {
     const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
@@ -1131,6 +1270,82 @@ export const Students: React.FC = () => {
 
   return (
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
+      {allocationTarget && (
+        <div
+          style={{
+            marginBottom: "16px",
+            padding: "14px 16px",
+            borderRadius: "10px",
+            background: "#fff7ed",
+            border: "1px solid #fdba74",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: "#9a3412", textTransform: "uppercase" }}>
+              modo de alocacao
+            </div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#7c2d12" }}>
+              {allocationTarget.turma} • {formatHorario(allocationTarget.horario)} • {allocationTarget.professor}
+            </div>
+            <div style={{ fontSize: "12px", color: "#9a3412", marginTop: "4px" }}>
+              Selecione alunos pendentes para admitir nesta turma.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={toggleSelectAllPending}
+              style={{
+                background: "#fed7aa",
+                color: "#9a3412",
+                border: "none",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              {allPendingSelected ? "Desmarcar todos" : "Selecionar todos"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelAllocationMode}
+              style={{
+                background: "#e5e7eb",
+                color: "#111827",
+                border: "none",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkAllocate}
+              disabled={isAllocatingBulk || selectedPendingIds.length === 0}
+              style={{
+                background: isAllocatingBulk || selectedPendingIds.length === 0 ? "#cbd5e1" : "#ea580c",
+                color: "white",
+                border: "none",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                cursor: isAllocatingBulk || selectedPendingIds.length === 0 ? "not-allowed" : "pointer",
+                fontWeight: 700,
+              }}
+            >
+              {isAllocatingBulk ? "Alocando..." : `Alocar selecionados (${selectedPendingIds.length})`}
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
         <div style={{ flex: 1, position: "relative" }}>
           <input
@@ -1171,44 +1386,48 @@ export const Students: React.FC = () => {
         {loading && (
           <span style={{ fontSize: "12px", color: "#666" }}>Carregando...</span>
         )}
-        <button
-          onClick={() => {
-            setFilters({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
-            setSearchTerm("");
-            setSortKey(null);
-            setSortDir("asc");
-          }}
-          style={{
-            background: "#f59e0b",
-            color: "white",
-            border: "none",
-            padding: "12px 24px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px",
-            whiteSpace: "nowrap",
-            marginRight: "10px",
-          }}
-        >
-          Limpar filtros
-        </button>
-        <button
-          onClick={handleAddClick}
-          style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            border: "none",
-            padding: "12px 24px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "14px",
-            whiteSpace: "nowrap"
-          }}
-        >
-          + Aluno
-        </button>
+        {!allocationTarget && (
+          <>
+            <button
+              onClick={() => {
+                setFilters({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
+                setSearchTerm("");
+                setSortKey(null);
+                setSortDir("asc");
+              }}
+              style={{
+                background: "#f59e0b",
+                color: "white",
+                border: "none",
+                padding: "12px 24px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+                whiteSpace: "nowrap",
+                marginRight: "10px",
+              }}
+            >
+              Limpar filtros
+            </button>
+            <button
+              onClick={handleAddClick}
+              style={{
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white",
+                border: "none",
+                padding: "12px 24px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+                whiteSpace: "nowrap"
+              }}
+            >
+              + Aluno
+            </button>
+          </>
+        )}
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -1259,7 +1478,7 @@ export const Students: React.FC = () => {
               >
                 Professor{getSortIndicator("professor")}
               </th>
-              <th style={{ padding: "12px", textAlign: "center" }}>Ações</th>
+              <th style={{ padding: "12px", textAlign: "center" }}>{allocationTarget ? "Selecionar" : "Ações"}</th>
             </tr>
             {/* filtro acumulativo */}
             <tr className="filter-row">
@@ -1318,12 +1537,14 @@ export const Students: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {sortedStudents.map((student, idx) => (
+            {displayedStudents.map((student, idx) => (
               <tr key={student.id} style={{ borderBottom: "1px solid #eee", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
                 <td 
-                  style={{ padding: "10px 8px", fontWeight: 500, cursor: "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
-                  onClick={() => handleEditClick(student)}
-                  title="Clique para editar"
+                  style={{ padding: "10px 8px", fontWeight: 500, cursor: allocationTarget ? "default" : "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
+                  onClick={() => {
+                    if (!allocationTarget) handleEditClick(student);
+                  }}
+                  title={allocationTarget ? undefined : "Clique para editar"}
                 >
                   <span
                     style={{
@@ -1379,59 +1600,71 @@ export const Students: React.FC = () => {
                 <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "10px 8px", textAlign: "center", display: "flex", gap: "6px", justifyContent: "center" }}>
-                  {getTurmaDisplayLabel(student) ? (
-                    <button
-                      onClick={() => handleGoToAttendance(student)}
-                      title="Ir para chamada"
-                      style={{
-                        background: "#28a745",
-                        color: "white",
-                        border: "none",
-                        padding: "4px 8px",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "11px",
-                        lineHeight: 1.1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {isCompactViewport ? "📅" : "📅 Chamada"}
-                    </button>
+                  {allocationTarget ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedPendingIds.includes(String(student.id))}
+                      onChange={() => togglePendingSelection(String(student.id))}
+                      disabled={!Number.isFinite(Number(student.id))}
+                      style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                    />
                   ) : (
-                    <button
-                      onClick={() => handleEditClick(student)}
-                      title="Alocar em turma"
-                      style={{
-                        background: "#fd7e14",
-                        color: "white",
-                        border: "none",
-                        padding: "4px 8px",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontSize: "11px",
-                        lineHeight: 1.1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {isCompactViewport ? "📌" : "📌 Alocar"}
-                    </button>
+                    <>
+                      {getTurmaDisplayLabel(student) ? (
+                        <button
+                          onClick={() => handleGoToAttendance(student)}
+                          title="Ir para chamada"
+                          style={{
+                            background: "#28a745",
+                            color: "white",
+                            border: "none",
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "11px",
+                            lineHeight: 1.1,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {isCompactViewport ? "📅" : "📅 Chamada"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleEditClick(student)}
+                          title="Alocar em turma"
+                          style={{
+                            background: "#fd7e14",
+                            color: "white",
+                            border: "none",
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "11px",
+                            lineHeight: 1.1,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {isCompactViewport ? "📌" : "📌 Alocar"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(student)}
+                        title="Excluir aluno"
+                        style={{
+                          background: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          fontSize: "11px",
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => handleDelete(student)}
-                    title="Excluir aluno"
-                    style={{
-                      background: "#dc3545",
-                      color: "white",
-                      border: "none",
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "11px",
-                      lineHeight: 1.1,
-                    }}
-                  >
-                    🗑️
-                  </button>
                 </td>
               </tr>
             ))}
@@ -1439,9 +1672,9 @@ export const Students: React.FC = () => {
         </table>
       </div>
 
-      {filteredStudents.length === 0 && (
+      {displayedStudents.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
-          Nenhum aluno encontrado
+          {allocationTarget ? "Nenhum aluno pendente encontrado" : "Nenhum aluno encontrado"}
         </div>
       )}
 

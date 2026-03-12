@@ -618,6 +618,13 @@ class ImportStudentUpsertPayload(BaseModel):
     atestado: bool = False
 
 
+class ImportStudentBulkAllocatePayload(BaseModel):
+    student_ids: list[int]
+    turma: str
+    horario: str
+    professor: str
+
+
 class MaintenancePurgeMonthPayload(BaseModel):
     month: str = "2026-02"
     clear_transfer_overrides: bool = True
@@ -3232,6 +3239,60 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     session.commit()
     session.refresh(target_student)
     return _import_student_out(target_student, preferred_uid=payload.student_uid)
+
+
+@app.post("/api/import-students/bulk-allocate")
+def bulk_allocate_import_students(
+    payload: ImportStudentBulkAllocatePayload,
+    session: Session = Depends(get_session),
+):
+    student_ids = sorted({int(student_id) for student_id in payload.student_ids if int(student_id) > 0})
+    if not student_ids:
+        raise HTTPException(status_code=400, detail="student_ids is required")
+
+    target_class = _find_import_class_by_triple(
+        session=session,
+        turma=payload.turma,
+        horario=payload.horario,
+        professor=payload.professor,
+    )
+    if not target_class:
+        raise HTTPException(status_code=404, detail="Class not found for turma/horario/professor")
+
+    students = session.exec(
+        select(models.ImportStudent).where(models.ImportStudent.id.in_(student_ids))
+    ).all()
+    found_ids = {int(student.id) for student in students if student.id is not None}
+    missing_ids = [student_id for student_id in student_ids if student_id not in found_ids]
+    if missing_ids:
+        raise HTTPException(status_code=404, detail=f"Import students not found: {missing_ids}")
+
+    updated = 0
+    for student in students:
+        previous_class_id = student.class_id
+        existing_target = get_or_create_import_student(session, target_class.id, student.nome)
+        target_student = student
+        if existing_target and existing_target.id != student.id:
+            target_student = existing_target
+            target_student.whatsapp = student.whatsapp
+            target_student.data_nascimento = student.data_nascimento
+            target_student.data_atestado = student.data_atestado
+            target_student.categoria = student.categoria
+            target_student.genero = student.genero
+            target_student.parq = student.parq
+            target_student.atestado = student.atestado
+            session.delete(student)
+
+        target_student.class_id = target_class.id
+        if previous_class_id != target_class.id:
+            _upsert_transfer_override_for_student(target_student, target_class)
+        session.add(target_student)
+        updated += 1
+
+    _dedupe_import_students(session)
+    _dedupe_import_students_global(session)
+    session.commit()
+    return {"ok": True, "updated": updated}
 
 # Users endpoints (bootstrap)
 @app.post("/users/register")

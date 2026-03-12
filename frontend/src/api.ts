@@ -528,6 +528,13 @@ export const createImportStudent = (data: any) =>
 export const updateImportStudent = (id: string, data: any) =>
   API.put(`/api/import-students/${id}`, data);
 
+export const bulkAllocateImportStudents = (data: {
+  student_ids: number[];
+  turma: string;
+  horario: string;
+  professor: string;
+}) => API.post("/api/import-students/bulk-allocate", data);
+
 export const importDataFile = (file: File, options?: { applyOverrides?: boolean }) => {
   const formData = new FormData();
   formData.append("file", file);

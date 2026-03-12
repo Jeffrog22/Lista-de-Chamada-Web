@@ -358,6 +358,20 @@ export const Classes: React.FC = () => {
     setShowForm(true);
   };
 
+  const handleAllocateClick = () => {
+    if (!editingClass) return;
+    localStorage.setItem(
+      "studentAllocationTarget",
+      JSON.stringify({
+        turma: editingClass.Turma || "",
+        horario: editingClass.Horario || "",
+        professor: editingClass.Professor || "",
+        turmaCodigo: editingClass.TurmaCodigo || editingClass.Grupo || editingClass.Atalho || "",
+      })
+    );
+    window.location.hash = "students";
+  };
+
   const handleSave = async () => {
     const finalCode = String(formData.Atalho || formData.TurmaCodigo || "").trim();
     const finalPayload: Class = {
@@ -551,6 +565,16 @@ export const Classes: React.FC = () => {
               <h3>{editingClass ? "Editar Turma" : "Adicionar Turma"}</h3>
             </div>
             <div className="nova-turma-card__summary">
+              {editingClass && (
+                <button
+                  type="button"
+                  onClick={handleAllocateClick}
+                  className="btn-primary btn-gradient"
+                  style={{ marginBottom: "8px", alignSelf: "flex-end" }}
+                >
+                  📌 Alocar
+                </button>
+              )}
               <span className="nova-turma-card__summary-title">dias</span>
               <strong className="nova-turma-card__summary-text">{diasResumo}</strong>
               <span className="nova-turma-card__summary-meta">
