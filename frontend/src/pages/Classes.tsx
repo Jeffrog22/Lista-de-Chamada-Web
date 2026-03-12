@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { getBootstrap, addClass, updateClass } from "../api";
 import "./Classes.css";
@@ -173,6 +173,9 @@ function getClassGroup(cls: Partial<Class>) {
 }
 
 export const Classes: React.FC = () => {
+  type SortColumn = "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria";
+  type SortRule = { key: SortColumn; dir: "asc" | "desc" };
+
   const [classes, setClasses] = useState<Class[]>([]);
   
   const [loading] = useState(false);
@@ -181,15 +184,7 @@ export const Classes: React.FC = () => {
   const [formData, setFormData] = useState<Partial<Class>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [studentCounts, setStudentCounts] = useState<{ [key: string]: number }>({});
-  const [sortKey, setSortKey] = useState<"Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria" | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [filters, setFilters] = useState({
-    turma: "",
-    horario: "",
-    professor: "",
-    nivel: "",
-    faixaEtaria: "",
-  });
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
   const [selectedDays, setSelectedDays] = useState<WeekdayValue[]>([]);
   const [turmaTouched, setTurmaTouched] = useState(false);
   const [codeTouched, setCodeTouched] = useState(false);
@@ -280,57 +275,12 @@ export const Classes: React.FC = () => {
     }));
   }, [showForm, editingClass, selectedDays, formData.Professor, classes, turmaTouched, codeTouched]);
 
-  const term = searchTerm.trim().toLowerCase();
-
-  const matchesSearch = (c: Class) =>
-    !term ||
-    c.Turma.toLowerCase().includes(term) ||
-    c.Professor.toLowerCase().includes(term) ||
-    (c.Nivel || "").toLowerCase().includes(term);
-
-  const matchesColumnFilters = (
-    c: Class,
-    active: { turma: string; horario: string; professor: string; nivel: string; faixaEtaria: string }
-  ) => {
-    const turmaOk = !active.turma || normalizeSimple(c.Turma) === normalizeSimple(active.turma);
-    const horarioOk = !active.horario || normalizeSimple(c.Horario) === normalizeSimple(active.horario);
-    const professorOk = !active.professor || normalizeSimple(c.Professor) === normalizeSimple(active.professor);
-    const nivelOk = !active.nivel || normalizeSimple(c.Nivel || "") === normalizeSimple(active.nivel);
-    const faixaEtariaOk =
-      !active.faixaEtaria || normalizeSimple(c.FaixaEtaria || "") === normalizeSimple(active.faixaEtaria);
-
-    return turmaOk && horarioOk && professorOk && nivelOk && faixaEtariaOk;
-  };
-
-  const filteredClasses = classes.filter((c) => matchesSearch(c) && matchesColumnFilters(c, filters));
-
-  const buildOptionsFor = useMemo(() => {
-    return (field: "turma" | "horario" | "professor" | "nivel" | "faixaEtaria") => {
-      const scoped = classes.filter((c) => {
-        if (!matchesSearch(c)) return false;
-        const base = { ...filters, [field]: "" };
-        return matchesColumnFilters(c, base);
-      });
-
-      const values = scoped
-        .map((c) => {
-          if (field === "turma") return c.Turma;
-          if (field === "horario") return c.Horario;
-          if (field === "professor") return c.Professor;
-          if (field === "nivel") return c.Nivel || "";
-          return c.FaixaEtaria || "";
-        })
-        .filter(Boolean);
-
-      return Array.from(new Set(values)).sort((a, b) => String(a).localeCompare(String(b)));
-    };
-  }, [classes, filters, term]);
-
-  const turmaOptions = buildOptionsFor("turma");
-  const horarioOptions = buildOptionsFor("horario");
-  const professorOptions = buildOptionsFor("professor");
-  const nivelOptions = buildOptionsFor("nivel");
-  const faixaEtariaOptions = buildOptionsFor("faixaEtaria");
+  const filteredClasses = classes.filter(
+    (c) =>
+      c.Turma.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.Professor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.Nivel || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const nivelOrder = [
     "iniciacao b",
@@ -362,34 +312,56 @@ export const Classes: React.FC = () => {
   };
 
   const sortedClasses = [...filteredClasses].sort((a, b) => {
-    if (!sortKey) return 0;
-    let result = 0;
-    if (sortKey === "Turma") {
-      result = a.Turma.localeCompare(b.Turma);
-    } else if (sortKey === "Horario") {
-      result = compareHorario(a.Horario, b.Horario);
-    } else if (sortKey === "Professor") {
-      result = a.Professor.localeCompare(b.Professor);
-    } else if (sortKey === "Nivel") {
-      result = getNivelRank(a.Nivel) - getNivelRank(b.Nivel);
-    } else if (sortKey === "FaixaEtaria") {
-      result = (a.FaixaEtaria || "").localeCompare(b.FaixaEtaria || "");
+    if (sortRules.length === 0) return 0;
+
+    const compareByRule = (rule: SortRule) => {
+      if (rule.key === "Turma") {
+        return a.Turma.localeCompare(b.Turma);
+      }
+      if (rule.key === "Horario") {
+        return compareHorario(a.Horario, b.Horario);
+      }
+      if (rule.key === "Professor") {
+        return a.Professor.localeCompare(b.Professor);
+      }
+      if (rule.key === "Nivel") {
+        return getNivelRank(a.Nivel) - getNivelRank(b.Nivel);
+      }
+      return (a.FaixaEtaria || "").localeCompare(b.FaixaEtaria || "");
+    };
+
+    for (const rule of sortRules) {
+      const result = compareByRule(rule);
+      if (result !== 0) {
+        return rule.dir === "asc" ? result : -result;
+      }
     }
-    return sortDir === "asc" ? result : -result;
+    return 0;
   });
 
-  const handleSort = (key: "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria") => {
-    if (sortKey === key) {
-      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+  const handleSort = (key: SortColumn) => {
+    setSortRules((prev) => {
+      const idx = prev.findIndex((rule) => rule.key === key);
+      if (idx < 0) {
+        return [...prev, { key, dir: "asc" }];
+      }
+
+      const current = prev[idx];
+      if (current.dir === "asc") {
+        const next = [...prev];
+        next[idx] = { ...current, dir: "desc" };
+        return next;
+      }
+
+      return prev.filter((rule) => rule.key !== key);
+    });
   };
 
-  const getSortIndicator = (key: "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria") => {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ▲" : " ▼";
+  const getSortIndicator = (key: SortColumn) => {
+    const idx = sortRules.findIndex((rule) => rule.key === key);
+    if (idx < 0) return "";
+    const dir = sortRules[idx].dir === "asc" ? "▲" : "▼";
+    return ` ${dir}${idx + 1}`;
   };
 
   const handleAddClick = () => {
@@ -603,15 +575,6 @@ export const Classes: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button
-            onClick={() => {
-              setFilters({ turma: "", horario: "", professor: "", nivel: "", faixaEtaria: "" });
-              setSearchTerm("");
-            }}
-            className="btn-secondary"
-          >
-            Limpar filtros
-          </button>
           <button onClick={handleAddClick} className="btn-primary btn-gradient">
             ➕ Nova Turma
           </button>
@@ -787,70 +750,6 @@ export const Classes: React.FC = () => {
               </th>
               <th style={{ padding: "12px", textAlign: "center", fontWeight: "bold" }}>Lotação</th>
               <th style={{ padding: "12px", textAlign: "right", fontWeight: "bold" }}>Ações</th>
-            </tr>
-            <tr className="filter-row">
-              <th style={{ padding: "8px" }}>
-                <select
-                  value={filters.turma}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, turma: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                >
-                  <option value="">Todas</option>
-                  {turmaOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </th>
-              <th style={{ padding: "8px" }}>
-                <select
-                  value={filters.horario}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, horario: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                >
-                  <option value="">Todos</option>
-                  {horarioOptions.map((option) => (
-                    <option key={option} value={option}>{formatHorario(option)}</option>
-                  ))}
-                </select>
-              </th>
-              <th style={{ padding: "8px" }}>
-                <select
-                  value={filters.professor}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, professor: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                >
-                  <option value="">Todos</option>
-                  {professorOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </th>
-              <th style={{ padding: "8px" }}>
-                <select
-                  value={filters.nivel}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, nivel: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                >
-                  <option value="">Todos</option>
-                  {nivelOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </th>
-              <th style={{ padding: "8px" }}>
-                <select
-                  value={filters.faixaEtaria}
-                  onChange={(e) => setFilters((prev) => ({ ...prev, faixaEtaria: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
-                >
-                  <option value="">Todas</option>
-                  {faixaEtariaOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </select>
-              </th>
-              <th style={{ padding: "8px" }}></th>
-              <th style={{ padding: "8px" }}></th>
             </tr>
           </thead>
           <tbody>
