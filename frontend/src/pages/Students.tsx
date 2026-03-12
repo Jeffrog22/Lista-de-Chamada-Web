@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { addExclusion, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
@@ -224,6 +224,7 @@ export const Students: React.FC = () => {
   const [allocationTarget, setAllocationTarget] = useState<AllocationTarget | null>(null);
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [isAllocatingBulk, setIsAllocatingBulk] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [excludedRecords, setExcludedRecords] = useState<any[]>(() => {
     try {
       const raw = localStorage.getItem("excludedStudents");
@@ -1180,6 +1181,12 @@ export const Students: React.FC = () => {
     setSelectedPendingIds((prev) =>
       prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
     );
+    requestAnimationFrame(() => {
+      if (allocationTarget && searchInputRef.current) {
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+      }
+    });
   };
 
   const toggleSelectAllPending = () => {
@@ -1349,10 +1356,16 @@ export const Students: React.FC = () => {
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
         <div style={{ flex: 1, position: "relative" }}>
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="🔍 Buscar aluno por nome, nível, categoria, idade ou professor..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onFocus={(e) => {
+              if (allocationTarget && e.currentTarget.value) {
+                e.currentTarget.select();
+              }
+            }}
             style={{
               width: "100%",
               padding: "12px 36px 12px 12px",
