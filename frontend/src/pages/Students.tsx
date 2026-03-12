@@ -1434,6 +1434,17 @@ export const Students: React.FC = () => {
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
           <thead>
             <tr style={{ background: "#f4f4f4", color: "#333", borderBottom: "2px solid #ddd" }}>
+              {allocationTarget && (
+                <th style={{ padding: "12px", textAlign: "center", width: "44px" }}>
+                  <input
+                    type="checkbox"
+                    checked={allPendingSelected}
+                    onChange={toggleSelectAllPending}
+                    title={allPendingSelected ? "Desmarcar todos" : "Selecionar todos"}
+                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                  />
+                </th>
+              )}
               <th
                 onClick={() => handleSort("nome")}
                 style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
@@ -1482,6 +1493,7 @@ export const Students: React.FC = () => {
             </tr>
             {/* filtro acumulativo */}
             <tr className="filter-row">
+              {allocationTarget && <th style={{ padding: "8px" }}></th>}
               <th style={{ padding: "8px" }}></th>
               <th style={{ padding: "8px" }}>
                 <select
@@ -1539,12 +1551,27 @@ export const Students: React.FC = () => {
           <tbody>
             {displayedStudents.map((student, idx) => (
               <tr key={student.id} style={{ borderBottom: "1px solid #eee", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
+                {allocationTarget && (
+                  <td style={{ padding: "10px 6px", textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedPendingIds.includes(String(student.id))}
+                      onChange={() => togglePendingSelection(String(student.id))}
+                      disabled={!Number.isFinite(Number(student.id))}
+                      style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                    />
+                  </td>
+                )}
                 <td 
-                  style={{ padding: "10px 8px", fontWeight: 500, cursor: allocationTarget ? "default" : "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
+                  style={{ padding: "10px 8px", fontWeight: 500, cursor: allocationTarget ? "pointer" : "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
                   onClick={() => {
-                    if (!allocationTarget) handleEditClick(student);
+                    if (allocationTarget) {
+                      togglePendingSelection(String(student.id));
+                    } else {
+                      handleEditClick(student);
+                    }
                   }}
-                  title={allocationTarget ? undefined : "Clique para editar"}
+                  title={allocationTarget ? "Clique para selecionar" : "Clique para editar"}
                 >
                   <span
                     style={{
@@ -1600,15 +1627,7 @@ export const Students: React.FC = () => {
                 <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
                 <td style={{ padding: "12px" }}>{student.professor}</td>
                 <td style={{ padding: "10px 8px", textAlign: "center", display: "flex", gap: "6px", justifyContent: "center" }}>
-                  {allocationTarget ? (
-                    <input
-                      type="checkbox"
-                      checked={selectedPendingIds.includes(String(student.id))}
-                      onChange={() => togglePendingSelection(String(student.id))}
-                      disabled={!Number.isFinite(Number(student.id))}
-                      style={{ width: "18px", height: "18px", cursor: "pointer" }}
-                    />
-                  ) : (
+                  {allocationTarget ? null : (
                     <>
                       {getTurmaDisplayLabel(student) ? (
                         <button

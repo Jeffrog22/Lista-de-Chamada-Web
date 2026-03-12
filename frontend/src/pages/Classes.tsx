@@ -175,6 +175,7 @@ function getClassGroup(cls: Partial<Class>) {
 export const Classes: React.FC = () => {
   type SortColumn = "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria";
   type SortRule = { key: SortColumn; dir: "asc" | "desc" };
+  const classesViewStateKey = "classesViewState";
 
   const [classes, setClasses] = useState<Class[]>([]);
   
@@ -188,6 +189,39 @@ export const Classes: React.FC = () => {
   const [selectedDays, setSelectedDays] = useState<WeekdayValue[]>([]);
   const [turmaTouched, setTurmaTouched] = useState(false);
   const [codeTouched, setCodeTouched] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(classesViewStateKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        searchTerm?: string;
+        sortRules?: Array<{ key: SortColumn; dir: "asc" | "desc" }>;
+      };
+      if (typeof parsed.searchTerm === "string") {
+        setSearchTerm(parsed.searchTerm);
+      }
+      if (Array.isArray(parsed.sortRules)) {
+        const validKeys: SortColumn[] = ["Turma", "Horario", "Professor", "Nivel", "FaixaEtaria"];
+        const validRules = parsed.sortRules.filter(
+          (rule) => validKeys.includes(rule.key) && (rule.dir === "asc" || rule.dir === "desc")
+        );
+        setSortRules(validRules);
+      }
+    } catch {
+      localStorage.removeItem(classesViewStateKey);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      classesViewStateKey,
+      JSON.stringify({
+        searchTerm,
+        sortRules,
+      })
+    );
+  }, [searchTerm, sortRules]);
 
   useEffect(() => {
     const updateCounts = () => {
