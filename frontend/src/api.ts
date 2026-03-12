@@ -251,7 +251,7 @@ const normalizeAttendanceLogHorario = (value: unknown) => {
 };
 
 const getAttendanceLogQueueKey = (payload: any) => {
-  const turma = normalizeAttendanceLogField(payload?.grupo || payload?.turmaCodigo || payload?.turmaLabel);
+  const turma = normalizeAttendanceLogField(payload?.turmaCodigo || payload?.turmaLabel);
   const horario = normalizeAttendanceLogHorario(payload?.horario);
   const professor = normalizeAttendanceLogField(payload?.professor);
   const mes = normalizeAttendanceLogField(payload?.mes);
@@ -449,7 +449,11 @@ export const savePoolLog = (data: any) =>
   API.post("/pool-log", data);
 
 export const getPoolLog = (date: string, params?: Record<string, string | undefined>) => {
-  const query = new URLSearchParams({ date, ...(params || {}) });
+  const query = new URLSearchParams({ date });
+  Object.entries(params || {}).forEach(([key, value]) => {
+    const normalized = String(value || "").trim();
+    if (normalized) query.set(key, normalized);
+  });
   return API.get(`/pool-log?${query.toString()}`);
 };
 

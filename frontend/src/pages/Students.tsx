@@ -485,6 +485,7 @@ export const Students: React.FC = () => {
   >(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showModal, setShowModal] = useState(false);
+  const modalContentRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(true);
   const [minAgeError, setMinAgeError] = useState<string>("");
@@ -507,6 +508,22 @@ export const Students: React.FC = () => {
     atestado: false,
     dataAtestado: ""
   });
+
+  // Scroll modal to top when opening
+  useEffect(() => {
+    if (showModal && modalContentRef.current) {
+      modalContentRef.current.scrollTop = 0;
+      // Auto-focus edit button if viewing existing student
+      if (editingId && !isEditing) {
+        const editBtn = Array.from(modalContentRef.current.querySelectorAll("button")).find((btn) =>
+          String(btn.textContent || "").includes("Editar")
+        ) as HTMLButtonElement | undefined;
+        if (editBtn) {
+          setTimeout(() => editBtn.focus(), 50);
+        }
+      }
+    }
+  }, [showModal, editingId, isEditing]);
 
   // Carregar dados persistentes (sticky) ao iniciar
   useEffect(() => {
@@ -1878,7 +1895,7 @@ export const Students: React.FC = () => {
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
           background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000
         }}>
-          <div style={{ background: "white", padding: "25px", borderRadius: "12px", width: "500px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+          <div ref={modalContentRef} style={{ background: "white", padding: "25px", borderRadius: "12px", width: "500px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "10px" }}>
               <h2 style={{ margin: 0, color: "#2c3e50" }}>
                 {editingId ? "Aluno" : "Adicionar Novo Aluno"}

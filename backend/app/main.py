@@ -458,6 +458,17 @@ def _format_temperature_output(value: Any, fallback: str = "28") -> str:
     return fallback
 
 
+def _normalize_excel_string(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
+    return str(value).strip()
+
+
 def _normalize_date_key(value: Any) -> str:
     if value is None:
         return ""
@@ -857,20 +868,90 @@ def get_pool_log(
         )
         match = df[_pool_log_mask(df, entry)]
         if match.empty:
+            # Fallback controlado: mantém Data/Horário/Professor e alterna apenas
+            # a identificação da turma entre código e label.
+            fallback_candidates: List[PoolLogEntryModel] = []
+            if turmaCodigo and not turmaLabel:
+                fallback_candidates.append(
+                    PoolLogEntryModel(
+                        data=date,
+                        turmaCodigo="",
+                        turmaLabel=turmaCodigo,
+                        horario=horario or "",
+                        professor=professor or "",
+                        clima1="",
+                        clima2="",
+                        statusAula="",
+                        nota="",
+                        tipoOcorrencia="",
+                    )
+                )
+            if turmaLabel and not turmaCodigo:
+                fallback_candidates.append(
+                    PoolLogEntryModel(
+                        data=date,
+                        turmaCodigo=turmaLabel,
+                        turmaLabel="",
+                        horario=horario or "",
+                        professor=professor or "",
+                        clima1="",
+                        clima2="",
+                        statusAula="",
+                        nota="",
+                        tipoOcorrencia="",
+                    )
+                )
+            if turmaCodigo and turmaLabel:
+                fallback_candidates.extend(
+                    [
+                        PoolLogEntryModel(
+                            data=date,
+                            turmaCodigo=turmaCodigo,
+                            turmaLabel="",
+                            horario=horario or "",
+                            professor=professor or "",
+                            clima1="",
+                            clima2="",
+                            statusAula="",
+                            nota="",
+                            tipoOcorrencia="",
+                        ),
+                        PoolLogEntryModel(
+                            data=date,
+                            turmaCodigo="",
+                            turmaLabel=turmaLabel,
+                            horario=horario or "",
+                            professor=professor or "",
+                            clima1="",
+                            clima2="",
+                            statusAula="",
+                            nota="",
+                            tipoOcorrencia="",
+                        ),
+                    ]
+                )
+
+            for candidate in fallback_candidates:
+                candidate_match = df[_pool_log_mask(df, candidate)]
+                if not candidate_match.empty:
+                    match = candidate_match
+                    break
+
+        if match.empty:
             return Response(status_code=204)
 
         row = match.iloc[0].to_dict()
         return {
             "data": _normalize_date_key(row.get("Data", "")),
-            "turmaCodigo": str(row.get("TurmaCodigo", "")),
-            "turmaLabel": str(row.get("TurmaLabel", "")),
-            "horario": str(row.get("Horario", "")),
-            "professor": str(row.get("Professor", "")),
-            "clima1": str(row.get("Clima 1", "")),
-            "clima2": str(row.get("Clima 2", "")),
-            "statusAula": str(row.get("Status_aula", "")),
-            "nota": str(row.get("Nota", "")),
-            "tipoOcorrencia": str(row.get("Tipo_ocorrencia", "")),
+            "turmaCodigo": _normalize_excel_string(row.get("TurmaCodigo", "")),
+            "turmaLabel": _normalize_excel_string(row.get("TurmaLabel", "")),
+            "horario": _normalize_excel_string(row.get("Horario", "")),
+            "professor": _normalize_excel_string(row.get("Professor", "")),
+            "clima1": _normalize_excel_string(row.get("Clima 1", "")),
+            "clima2": _normalize_excel_string(row.get("Clima 2", "")),
+            "statusAula": _normalize_excel_string(row.get("Status_aula", "")),
+            "nota": _normalize_excel_string(row.get("Nota", "")),
+            "tipoOcorrencia": _normalize_excel_string(row.get("Tipo_ocorrencia", "")),
             "tempExterna": _format_temperature_output(row.get("Temp. (C)", None), ""),
             "tempPiscina": _format_temperature_output(row.get("Piscina (C)", None), "28"),
             "cloroPpm": row.get("Cloro (ppm)", None),
@@ -2187,13 +2268,6 @@ def _attendance_log_lookup_keys(item: Dict[str, Any]) -> List[str]:
             for turma_key in _turma_variants(turma_label):
                 keys.append("|".join(["label", turma_key, horario_key, professor_key]))
 
-    # retrocompatibilidade para registros antigos sem horario/professor
-    if turma_codigo:
-        keys.append(f"codigo|{turma_codigo}||")
-    if turma_label:
-        keys.append(f"label|{turma_label}||")
-        keys.append(f"label|{_normalize_text(turma_label)}||")
-
     return keys
 
 def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
@@ -2431,21 +2505,11 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                 for p in professor_variants:
                     composite_keys.append(f"label|{turma_candidate}|{h}|{p}")
 
-        fallback_codigo = f"codigo|{turma_key}||" if turma_key else ""
-        fallback_label = f"label|{turma_label}||" if turma_label else ""
-        fallback_label_normalized = f"label|{_normalize_text(turma_label)}||" if turma_label else ""
-
         log_entry = None
         for key in composite_keys:
             log_entry = latest_logs.get(key)
             if log_entry:
                 break
-        if log_entry is None:
-            log_entry = (
-                (latest_logs.get(fallback_codigo) if fallback_codigo else None)
-                or (latest_logs.get(fallback_label) if fallback_label else None)
-                or (latest_logs.get(fallback_label_normalized) if fallback_label_normalized else None)
-            )
 
         excluded_names = {
             _normalize_text(entry.get("nome") or entry.get("Nome") or "")

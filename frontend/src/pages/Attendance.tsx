@@ -807,12 +807,17 @@ export const Attendance: React.FC = () => {
         const turmaLabel = String(student.turmaLabel || student.turma || "").trim();
         const studentHorario = String(student.horario || "").trim();
         const studentProfessor = String(student.professor || "").trim();
+        // Validate: only add students with ALL required allocation fields
+        if (!turmaCodigo && !turmaLabel) return; // Must have turma
+        if (!studentHorario) return; // Must have horario
+        if (!studentProfessor) return; // Must have professor
+        if (!student.nome) return; // Must have name
+        
         const scopedKeys = [
           buildStudentsPerClassScopedKey(turmaCodigo, studentHorario, studentProfessor),
           buildStudentsPerClassScopedKey(turmaLabel, studentHorario, studentProfessor),
         ].filter(Boolean);
         const keys = [...scopedKeys, turmaCodigo, turmaLabel].filter(Boolean);
-        if (keys.length === 0 || !student.nome) return;
 
         keys.forEach((key) => {
           if (!studentsPerClass[key]) {
@@ -2137,8 +2142,8 @@ export const Attendance: React.FC = () => {
       const existing = await getPoolLog(date, {
         turmaCodigo: selectedClass.turmaCodigo,
         turmaLabel: selectedClass.turmaLabel,
-        horario: selectedClass.horario,
-        professor: selectedClass.professor,
+        horario: selectedClass.horario || selectedHorario,
+        professor: selectedClass.professor || selectedProfessor,
       });
       if (!existing?.data || typeof existing.data !== "object") {
         throw new Error("no pool log");
