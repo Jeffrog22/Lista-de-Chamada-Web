@@ -533,6 +533,7 @@ export const bulkAllocateImportStudents = (data: {
   turma: string;
   horario: string;
   professor: string;
+  movement_type?: "correction" | "transfer";
 }) => API.post("/api/import-students/bulk-allocate", data);
 
 export const importDataFile = (file: File, options?: { applyOverrides?: boolean }) => {

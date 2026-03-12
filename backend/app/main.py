@@ -623,6 +623,7 @@ class ImportStudentBulkAllocatePayload(BaseModel):
     turma: str
     horario: str
     professor: str
+    movement_type: str = "correction"
 
 
 class MaintenancePurgeMonthPayload(BaseModel):
@@ -3267,6 +3268,9 @@ def bulk_allocate_import_students(
     if missing_ids:
         raise HTTPException(status_code=404, detail=f"Import students not found: {missing_ids}")
 
+    movement_type = str(payload.movement_type or "correction").strip().lower()
+    is_transfer = movement_type == "transfer"
+
     updated = 0
     for student in students:
         previous_class_id = student.class_id
@@ -3284,7 +3288,7 @@ def bulk_allocate_import_students(
             session.delete(student)
 
         target_student.class_id = target_class.id
-        if previous_class_id != target_class.id:
+        if is_transfer and previous_class_id != target_class.id:
             _upsert_transfer_override_for_student(target_student, target_class)
         session.add(target_student)
         updated += 1

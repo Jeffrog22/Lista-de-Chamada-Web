@@ -209,6 +209,25 @@ export const Students: React.FC = () => {
     }
   };
 
+  const clearTransferHistoryForNames = (names: string[]) => {
+    try {
+      const normalizedNames = new Set(
+        names
+          .map((name) => normalizeText(String(name || "")))
+          .filter(Boolean)
+      );
+      if (normalizedNames.size === 0) return;
+
+      const raw = localStorage.getItem(transferHistoryStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      const filtered = list.filter((entry: any) => !normalizedNames.has(normalizeText(entry?.nome || "")));
+      localStorage.setItem(transferHistoryStorageKey, JSON.stringify(filtered));
+    } catch {
+      // ignore storage failures
+    }
+  };
+
 
   const dedupeStudents = (list: Student[]) => {
     const seen = new Map<string, Student>();
@@ -222,6 +241,7 @@ export const Students: React.FC = () => {
   };
   const [students, setStudents] = useState<Student[]>([]);
   const [allocationTarget, setAllocationTarget] = useState<AllocationTarget | null>(null);
+  const [allocationMovementType, setAllocationMovementType] = useState<"correction" | "transfer">("correction");
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [isAllocatingBulk, setIsAllocatingBulk] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -454,6 +474,11 @@ export const Students: React.FC = () => {
 
   useEffect(() => {
     setSelectedPendingIds([]);
+  }, [allocationTarget]);
+
+  useEffect(() => {
+    if (!allocationTarget) return;
+    setAllocationMovementType("correction");
   }, [allocationTarget]);
 
   const [sortKey, setSortKey] = useState<    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
@@ -890,7 +915,7 @@ export const Students: React.FC = () => {
         normalizeHorarioKey(previousStudent.horario || "") !== normalizeHorarioKey(studentData.horario || "") ||
         normalizeText(previousStudent.professor || "") !== normalizeText(studentData.professor || "");
 
-      if (changedNivel || changedClass) {
+      if (changedNivel) {
         saveTransferHistory({
           nome: studentData.nome,
           fromNivel: previousStudent.nivel || "",
@@ -903,6 +928,8 @@ export const Students: React.FC = () => {
           toProfessor: studentData.professor || "",
           effectiveDate: new Date().toISOString().slice(0, 10),
         });
+      } else if (changedClass) {
+        clearTransferHistoryForNames([studentData.nome]);
       }
     }
 
@@ -1201,6 +1228,7 @@ export const Students: React.FC = () => {
   const handleBulkAllocate = async () => {
     if (!allocationTarget) return;
 
+    const selectedStudents = displayedStudents.filter((student) => selectedPendingIds.includes(String(student.id)));
     const numericIds = selectedPendingIds
       .map((studentId) => Number(studentId))
       .filter((studentId) => Number.isFinite(studentId));
@@ -1216,7 +1244,11 @@ export const Students: React.FC = () => {
         turma: allocationTarget.turma,
         horario: allocationTarget.horario,
         professor: allocationTarget.professor,
+        movement_type: allocationMovementType,
       });
+      if (allocationMovementType === "correction") {
+        clearTransferHistoryForNames(selectedStudents.map((student) => student.nome));
+      }
       await reloadBootstrapData();
       setSelectedPendingIds([]);
       setAllocationTarget(null);
@@ -1301,6 +1333,44 @@ export const Students: React.FC = () => {
             </div>
             <div style={{ fontSize: "12px", color: "#9a3412", marginTop: "4px" }}>
               Selecione alunos pendentes para admitir nesta turma.
+            </div>
+            <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "12px", color: "#7c2d12", fontWeight: 700 }}>Tipo:</span>
+              <button
+                type="button"
+                onClick={() => setAllocationMovementType("correction")}
+                style={{
+                  border: "none",
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  background: allocationMovementType === "correction" ? "#ea580c" : "#fed7aa",
+                  color: allocationMovementType === "correction" ? "#fff" : "#9a3412",
+                }}
+              >
+                Correção
+              </button>
+              <button
+                type="button"
+                onClick={() => setAllocationMovementType("transfer")}
+                style={{
+                  border: "none",
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  background: allocationMovementType === "transfer" ? "#2563eb" : "#dbeafe",
+                  color: allocationMovementType === "transfer" ? "#fff" : "#1d4ed8",
+                }}
+              >
+                Transferência
+              </button>
+              <span style={{ fontSize: "11px", color: "#9a3412" }}>
+                Correção não bloqueia histórico retroativo.
+              </span>
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
