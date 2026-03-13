@@ -43,7 +43,7 @@ def test_pool_log_roundtrip(client: TestClient, tmp_path: Path):
     response = client.post("/pool-log", json=payload)
     assert response.status_code == 200
     assert response.json()["ok"] is True
-    assert response.json()["action"] in {"created", "updated"}
+    assert response.json()["action"] == "created"
 
     saved_file = tmp_path / "logPiscina.xlsx"
     assert saved_file.exists()
@@ -89,3 +89,77 @@ def test_pool_log_defaults_temp_piscina(client: TestClient, tmp_path: Path):
     assert get_resp.status_code == 200
     fetched = get_resp.json()
     assert fetched["tempPiscina"] == "28"
+
+
+def test_pool_log_daywide_latest_applicable_record(client: TestClient):
+    morning = _build_payload(
+        {
+            "data": "2026-03-10",
+            "turmaCodigo": "A1",
+            "turmaLabel": "Grupo A",
+            "horario": "06:00",
+            "professor": "Daniela",
+            "clima1": "Nublado",
+            "clima2": "Frio",
+            "tempExterna": "20",
+        }
+    )
+    afternoon = _build_payload(
+        {
+            "data": "2026-03-10",
+            "turmaCodigo": "B2",
+            "turmaLabel": "Grupo B",
+            "horario": "13:00",
+            "professor": "Jefferson",
+            "clima1": "Chuva",
+            "clima2": "Abafado",
+            "tempExterna": "26",
+        }
+    )
+
+    assert client.post("/pool-log", json=morning).status_code == 200
+    assert client.post("/pool-log", json=afternoon).status_code == 200
+
+    resp_10h = client.get(
+        "/pool-log",
+        params={
+            "date": "2026-03-10",
+            "turmaCodigo": "QUALQUER",
+            "turmaLabel": "Outro Grupo",
+            "horario": "10:00",
+            "professor": "Outro Prof",
+        },
+    )
+    assert resp_10h.status_code == 200
+    assert resp_10h.json()["clima1"] == "Nublado"
+
+    resp_16h = client.get(
+        "/pool-log",
+        params={
+            "date": "2026-03-10",
+            "turmaCodigo": "QUALQUER",
+            "turmaLabel": "Outro Grupo",
+            "horario": "16:00",
+            "professor": "Outro Prof",
+        },
+    )
+    assert resp_16h.status_code == 200
+    assert resp_16h.json()["clima1"] == "Chuva"
+    assert resp_16h.json()["horario"] == "13:00"
+
+
+def test_pool_log_noop_when_same_day_state_repeats(client: TestClient, tmp_path: Path):
+    payload = _build_payload({"data": "2026-03-11", "horario": "13:00"})
+
+    first = client.post("/pool-log", json=payload)
+    second = client.post("/pool-log", json=payload)
+
+    assert first.status_code == 200
+    assert first.json()["action"] == "created"
+    assert second.status_code == 200
+    assert second.json()["action"] == "noop"
+
+    saved_file = tmp_path / "logPiscina.xlsx"
+    df = pd.read_excel(saved_file)
+    same_day = df[df["Data"] == payload["data"]]
+    assert len(same_day) == 1

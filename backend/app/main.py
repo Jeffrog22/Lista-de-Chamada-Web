@@ -599,6 +599,71 @@ def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
         mask = mask & ((professor_col == professor) | (professor_col == ""))
     return mask
 
+def _pool_log_row_as_response(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "data": _normalize_date_key(row.get("Data", "")),
+        "turmaCodigo": _normalize_excel_string(row.get("TurmaCodigo", "")),
+        "turmaLabel": _normalize_excel_string(row.get("TurmaLabel", "")),
+        "horario": _normalize_excel_string(row.get("Horario", "")),
+        "professor": _normalize_excel_string(row.get("Professor", "")),
+        "clima1": _normalize_excel_string(row.get("Clima 1", "")),
+        "clima2": _normalize_excel_string(row.get("Clima 2", "")),
+        "statusAula": _normalize_excel_string(row.get("Status_aula", "")),
+        "nota": _normalize_excel_string(row.get("Nota", "")),
+        "tipoOcorrencia": _normalize_excel_string(row.get("Tipo_ocorrencia", "")),
+        "tempExterna": _format_temperature_output(row.get("Temp. (C)", None), ""),
+        "tempPiscina": _format_temperature_output(row.get("Piscina (C)", None), "28"),
+        "cloroPpm": row.get("Cloro (ppm)", None),
+    }
+
+def _pool_log_meaningful_signature(row: Dict[str, Any]) -> tuple:
+    return (
+        _normalize_excel_string(row.get("Clima 1", "")),
+        _normalize_excel_string(row.get("Clima 2", "")),
+        _normalize_excel_string(row.get("Status_aula", "")),
+        _normalize_excel_string(row.get("Nota", "")),
+        _normalize_excel_string(row.get("Tipo_ocorrencia", "")),
+        _format_temperature_output(row.get("Temp. (C)", None), ""),
+        _format_temperature_output(row.get("Piscina (C)", None), "28"),
+        "" if row.get("Cloro (ppm)", None) is None else _normalize_excel_string(row.get("Cloro (ppm)", None)),
+    )
+
+def _select_latest_pool_log_for_day(df: pd.DataFrame, date_value: str, requested_horario: str) -> Optional[Dict[str, Any]]:
+    if df.empty or "Data" not in df.columns:
+        return None
+
+    date_key = _normalize_date_key(date_value)
+    if not date_key:
+        return None
+
+    day_rows = df[df["Data"].apply(_normalize_date_key) == date_key]
+    if day_rows.empty:
+        return None
+
+    requested_minutes = _horario_to_minutes(requested_horario)
+    selected: Optional[Dict[str, Any]] = None
+    selected_minutes = -1
+    selected_index = -1
+
+    for row_index, row in day_rows.iterrows():
+        row_minutes = _horario_to_minutes(_normalize_excel_string(row.get("Horario", "")))
+        if requested_minutes is not None:
+            if row_minutes is None or row_minutes > requested_minutes:
+                continue
+        current_minutes = row_minutes if row_minutes is not None else -1
+        if current_minutes > selected_minutes or (current_minutes == selected_minutes and int(row_index) >= selected_index):
+            selected = row.to_dict()
+            selected_minutes = current_minutes
+            selected_index = int(row_index)
+
+    if selected is not None:
+        return selected
+
+    if requested_minutes is None:
+        return day_rows.iloc[-1].to_dict()
+
+    return None
+
 class ImportResult(BaseModel):
     units_created: int
     units_updated: int
@@ -866,27 +931,12 @@ def append_pool_log(entry: PoolLogEntryModel):
             "Cloro (ppm)": cloro_value,
         }
 
-        mask = _pool_log_mask(df, entry)
-        if mask.any():
-            df.loc[mask, POOL_LOG_COLUMNS] = [
-                row["Data"],
-                row["TurmaCodigo"],
-                row["TurmaLabel"],
-                row["Horario"],
-                row["Professor"],
-                row["Clima 1"],
-                row["Clima 2"],
-                row["Status_aula"],
-                row["Nota"],
-                row["Tipo_ocorrencia"],
-                row["Temp. (C)"],
-                row["Piscina (C)"],
-                row["Cloro (ppm)"],
-            ]
-            action = "updated"
-        else:
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            action = "created"
+        latest_for_day = _select_latest_pool_log_for_day(df, entry.data, entry.horario)
+        if latest_for_day and _pool_log_meaningful_signature(latest_for_day) == _pool_log_meaningful_signature(row):
+            return {"ok": True, "action": "noop", "file": file_path}
+
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        action = "created"
 
         try:
             df.to_excel(file_path, index=False)
@@ -915,145 +965,11 @@ def get_pool_log(
         if "Data" not in df.columns:
             return Response(status_code=204)
 
-        entry = PoolLogEntryModel(
-            data=date,
-            turmaCodigo=turmaCodigo or "",
-            turmaLabel=turmaLabel or "",
-            horario=horario or "",
-            professor=professor or "",
-            clima1="",
-            clima2="",
-            statusAula="",
-            nota="",
-            tipoOcorrencia="",
-        )
-        match = df[_pool_log_mask(df, entry)]
-        if match.empty:
-            # Fallback controlado: mantém Data/Horário/Professor e alterna apenas
-            # a identificação da turma entre código e label.
-            fallback_candidates: List[PoolLogEntryModel] = []
-            if turmaCodigo and not turmaLabel:
-                fallback_candidates.append(
-                    PoolLogEntryModel(
-                        data=date,
-                        turmaCodigo="",
-                        turmaLabel=turmaCodigo,
-                        horario=horario or "",
-                        professor=professor or "",
-                        clima1="",
-                        clima2="",
-                        statusAula="",
-                        nota="",
-                        tipoOcorrencia="",
-                    )
-                )
-            if turmaLabel and not turmaCodigo:
-                fallback_candidates.append(
-                    PoolLogEntryModel(
-                        data=date,
-                        turmaCodigo=turmaLabel,
-                        turmaLabel="",
-                        horario=horario or "",
-                        professor=professor or "",
-                        clima1="",
-                        clima2="",
-                        statusAula="",
-                        nota="",
-                        tipoOcorrencia="",
-                    )
-                )
-            if turmaCodigo and turmaLabel:
-                fallback_candidates.extend(
-                    [
-                        PoolLogEntryModel(
-                            data=date,
-                            turmaCodigo=turmaCodigo,
-                            turmaLabel="",
-                            horario=horario or "",
-                            professor=professor or "",
-                            clima1="",
-                            clima2="",
-                            statusAula="",
-                            nota="",
-                            tipoOcorrencia="",
-                        ),
-                        PoolLogEntryModel(
-                            data=date,
-                            turmaCodigo="",
-                            turmaLabel=turmaLabel,
-                            horario=horario or "",
-                            professor=professor or "",
-                            clima1="",
-                            clima2="",
-                            statusAula="",
-                            nota="",
-                            tipoOcorrencia="",
-                        ),
-                    ]
-                )
-
-            for candidate in fallback_candidates:
-                candidate_match = df[_pool_log_mask(df, candidate)]
-                if not candidate_match.empty:
-                    match = candidate_match
-                    break
-
-            if match.empty:
-                # Fallback retroativo controlado:
-                # mantém Data + Horário + Turma (código/label), e aceita Professor vazio no registro.
-                date_key = _normalize_date_key(date)
-                requested_horario = _format_horario(horario or "")
-                requested_turmas = {
-                    _normalize_text_fold(str(turmaCodigo or "").strip()),
-                    _normalize_text_fold(str(turmaLabel or "").strip()),
-                }
-                requested_turmas = {value for value in requested_turmas if value}
-                requested_professor = _normalize_text_fold(str(professor or "").strip())
-
-                relaxed = df[df["Data"].apply(_normalize_date_key) == date_key]
-                if requested_horario:
-                    relaxed = relaxed[relaxed["Horario"].astype(str).apply(lambda value: _horario_matches(requested_horario, value))]
-
-                if requested_turmas:
-                    relaxed = relaxed[
-                        relaxed.apply(
-                            lambda row: (
-                                _normalize_text_fold(_normalize_excel_string(row.get("TurmaCodigo", ""))) in requested_turmas
-                                or _normalize_text_fold(_normalize_excel_string(row.get("TurmaLabel", ""))) in requested_turmas
-                            ),
-                            axis=1,
-                        )
-                    ]
-
-                if requested_professor:
-                    relaxed = relaxed[
-                        relaxed["Professor"].astype(str).map(_normalize_text_fold).apply(
-                            lambda value: (not value) or value == requested_professor
-                        )
-                    ]
-
-                if not relaxed.empty:
-                    match = relaxed
-
-        if match.empty:
+        selected_row = _select_latest_pool_log_for_day(df, date, horario or "")
+        if selected_row is None:
             return Response(status_code=204)
 
-        row = match.iloc[0].to_dict()
-        return {
-            "data": _normalize_date_key(row.get("Data", "")),
-            "turmaCodigo": _normalize_excel_string(row.get("TurmaCodigo", "")),
-            "turmaLabel": _normalize_excel_string(row.get("TurmaLabel", "")),
-            "horario": _normalize_excel_string(row.get("Horario", "")),
-            "professor": _normalize_excel_string(row.get("Professor", "")),
-            "clima1": _normalize_excel_string(row.get("Clima 1", "")),
-            "clima2": _normalize_excel_string(row.get("Clima 2", "")),
-            "statusAula": _normalize_excel_string(row.get("Status_aula", "")),
-            "nota": _normalize_excel_string(row.get("Nota", "")),
-            "tipoOcorrencia": _normalize_excel_string(row.get("Tipo_ocorrencia", "")),
-            "tempExterna": _format_temperature_output(row.get("Temp. (C)", None), ""),
-            "tempPiscina": _format_temperature_output(row.get("Piscina (C)", None), "28"),
-            "cloroPpm": row.get("Cloro (ppm)", None),
-        }
+        return _pool_log_row_as_response(selected_row)
     except HTTPException:
         raise
     except Exception as exc:
