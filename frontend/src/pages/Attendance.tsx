@@ -515,12 +515,6 @@ export const Attendance: React.FC = () => {
       if (Array.isArray(names) && names.length > 0) return names;
     }
 
-    const legacyKeys = [String(params.turmaCodigo || "").trim(), String(params.turmaLabel || "").trim()].filter(Boolean);
-    for (const key of legacyKeys) {
-      const names = map[key];
-      if (Array.isArray(names) && names.length > 0) return names;
-    }
-
     return [] as string[];
   };
 
@@ -817,7 +811,7 @@ export const Attendance: React.FC = () => {
           buildStudentsPerClassScopedKey(turmaCodigo, studentHorario, studentProfessor),
           buildStudentsPerClassScopedKey(turmaLabel, studentHorario, studentProfessor),
         ].filter(Boolean);
-        const keys = [...scopedKeys, turmaCodigo, turmaLabel].filter(Boolean);
+        const keys = [...scopedKeys].filter(Boolean);
 
         keys.forEach((key) => {
           if (!studentsPerClass[key]) {

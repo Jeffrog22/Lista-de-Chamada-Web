@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { getBootstrap, addClass, updateClass } from "../api";
 import "./Classes.css";
@@ -173,6 +173,8 @@ function getClassGroup(cls: Partial<Class>) {
 }
 
 export const Classes: React.FC = () => {
+  const editCardRef = useRef<HTMLElement | null>(null);
+  const allocateButtonRef = useRef<HTMLButtonElement | null>(null);
   type SortColumn = "Turma" | "Horario" | "Professor" | "Nivel" | "FaixaEtaria";
   type SortRule = { key: SortColumn; dir: "asc" | "desc" };
   const classesViewStateKey = "classesViewState";
@@ -414,6 +416,11 @@ export const Classes: React.FC = () => {
     setCodeTouched(true);
     setFormData(classData);
     setShowForm(true);
+
+    requestAnimationFrame(() => {
+      editCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setTimeout(() => allocateButtonRef.current?.focus(), 80);
+    });
   };
 
   const handleAllocateClick = () => {
@@ -616,7 +623,7 @@ export const Classes: React.FC = () => {
       </div>
 
       {showForm && (
-        <section className="nova-turma-card">
+        <section ref={editCardRef} className="nova-turma-card">
           <header className="nova-turma-card__header">
             <div>
               <p className="nova-turma-card__eyebrow">painel rápido</p>
@@ -625,6 +632,7 @@ export const Classes: React.FC = () => {
             <div className="nova-turma-card__summary">
               {editingClass && (
                 <button
+                  ref={allocateButtonRef}
                   type="button"
                   onClick={handleAllocateClick}
                   className="btn-primary btn-gradient"
