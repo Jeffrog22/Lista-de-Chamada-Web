@@ -937,6 +937,45 @@ def get_pool_log(
                     match = candidate_match
                     break
 
+            if match.empty:
+                # Fallback retroativo controlado:
+                # mantém Data + Horário + Turma (código/label), e aceita Professor vazio no registro.
+                date_key = _normalize_date_key(date)
+                requested_horario = _format_horario(horario or "")
+                requested_turmas = {
+                    _normalize_text_fold(str(turmaCodigo or "").strip()),
+                    _normalize_text_fold(str(turmaLabel or "").strip()),
+                }
+                requested_turmas = {value for value in requested_turmas if value}
+                requested_professor = _normalize_text_fold(str(professor or "").strip())
+
+                relaxed = df[df["Data"].apply(_normalize_date_key) == date_key]
+                if requested_horario:
+                    relaxed = relaxed[
+                        relaxed["Horario"].astype(str).map(_format_horario).str.strip() == requested_horario
+                    ]
+
+                if requested_turmas:
+                    relaxed = relaxed[
+                        relaxed.apply(
+                            lambda row: (
+                                _normalize_text_fold(_normalize_excel_string(row.get("TurmaCodigo", ""))) in requested_turmas
+                                or _normalize_text_fold(_normalize_excel_string(row.get("TurmaLabel", ""))) in requested_turmas
+                            ),
+                            axis=1,
+                        )
+                    ]
+
+                if requested_professor:
+                    relaxed = relaxed[
+                        relaxed["Professor"].astype(str).map(_normalize_text_fold).apply(
+                            lambda value: (not value) or value == requested_professor
+                        )
+                    ]
+
+                if not relaxed.empty:
+                    match = relaxed
+
         if match.empty:
             return Response(status_code=204)
 
