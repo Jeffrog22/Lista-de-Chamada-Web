@@ -2133,16 +2133,54 @@ export const Attendance: React.FC = () => {
     }));
 
     try {
-      const existing = await getPoolLog(date, {
-        turmaCodigo: selectedClass.turmaCodigo,
-        turmaLabel: selectedClass.turmaLabel,
-        horario: selectedClass.horario || selectedHorario,
-        professor: selectedClass.professor || selectedProfessor,
-      });
-      if (!existing?.data || typeof existing.data !== "object") {
-        throw new Error("no pool log");
+      const selectedTurmaCodigo = String(selectedClass.turmaCodigo || "").trim();
+      const selectedTurmaLabel = String(selectedClass.turmaLabel || selectedTurma || "").trim();
+      const selectedHorarioValue = String(selectedClass.horario || selectedHorario || "").trim();
+      const selectedProfessorValue = String(selectedClass.professor || selectedProfessor || "").trim();
+
+      const horarioDigits = normalizeHorarioDigits(selectedHorarioValue);
+      const horarioHour = horarioDigits ? Number(horarioDigits.slice(0, 2)) : Number.NaN;
+      const legacyHorarioAnchor = Number.isFinite(horarioHour)
+        ? horarioHour < 12
+          ? "06:00"
+          : horarioHour < 18
+            ? "13:00"
+            : "19:00"
+        : "";
+
+      const queryCandidates: Array<Record<string, string>> = [
+        {
+          turmaCodigo: selectedTurmaCodigo,
+          turmaLabel: selectedTurmaLabel,
+          horario: selectedHorarioValue,
+          professor: selectedProfessorValue,
+        },
+        {
+          turmaCodigo: "",
+          turmaLabel: selectedTurmaLabel,
+          horario: selectedHorarioValue,
+          professor: "",
+        },
+      ];
+
+      if (legacyHorarioAnchor && legacyHorarioAnchor !== formatHorario(selectedHorarioValue)) {
+        queryCandidates.push(
+          {
+            turmaCodigo: selectedTurmaCodigo,
+            turmaLabel: selectedTurmaLabel,
+            horario: legacyHorarioAnchor,
+            professor: selectedProfessorValue,
+          },
+          {
+            turmaCodigo: "",
+            turmaLabel: selectedTurmaLabel,
+            horario: legacyHorarioAnchor,
+            professor: "",
+          }
+        );
       }
-      const data = existing.data as {
+
+      type PoolLogResponseData = {
         turmaCodigo?: string;
         turmaLabel?: string;
         horario?: string;
@@ -2155,6 +2193,20 @@ export const Attendance: React.FC = () => {
         tempPiscina: string;
         cloroPpm: number | null;
       };
+
+      let data: PoolLogResponseData | null = null;
+
+      for (const candidate of queryCandidates) {
+        const existing = await getPoolLog(date, candidate);
+        if (existing?.data && typeof existing.data === "object") {
+          data = existing.data as PoolLogResponseData;
+          break;
+        }
+      }
+
+      if (!data) {
+        throw new Error("no pool log");
+      }
 
       const icons = normalizeSensationList(
         (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())

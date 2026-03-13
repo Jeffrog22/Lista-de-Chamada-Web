@@ -415,6 +415,45 @@ def _format_horario(value: str) -> str:
         return f"{digits[:2]}:{digits[2:4]}"
     return raw
 
+def _horario_to_minutes(value: str) -> Optional[int]:
+    normalized = _format_horario(value)
+    if not normalized or ":" not in normalized:
+        return None
+    try:
+        hh, mm = normalized.split(":", 1)
+        hour = int(hh)
+        minute = int(mm)
+    except Exception:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+def _horario_bucket(value: str) -> str:
+    minutes = _horario_to_minutes(value)
+    if minutes is None:
+        return ""
+    if minutes < 12 * 60:
+        return "manha"
+    if minutes < 18 * 60:
+        return "tarde"
+    return "noite"
+
+def _horario_matches(requested: str, stored: str) -> bool:
+    req = _format_horario(requested)
+    saved = _format_horario(stored)
+    if not req:
+        return True
+    if not saved:
+        return False
+    if req == saved:
+        return True
+    # Compatibilidade retroativa: alguns logs antigos usam horário âncora
+    # por período (ex.: 13:00) e não o horário exato da turma (ex.: 16:00).
+    req_bucket = _horario_bucket(req)
+    saved_bucket = _horario_bucket(saved)
+    return bool(req_bucket and saved_bucket and req_bucket == saved_bucket)
+
 def _format_whatsapp(value: Any) -> str:
     raw = str(value or "").strip()
     if raw == "":
@@ -515,8 +554,15 @@ def _load_pool_log(file_path: str) -> pd.DataFrame:
     return df
 
 def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
-    def _norm(value: str) -> str:
-        return str(value or "").strip()
+    def _norm(value: Any) -> str:
+        if value is None:
+            return ""
+        try:
+            if pd.isna(value):
+                return ""
+        except Exception:
+            pass
+        return str(value).strip()
 
     def _norm_key(value: str) -> str:
         return _normalize_text_fold(_norm(value))
@@ -529,13 +575,28 @@ def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
 
     mask = df["Data"].apply(_normalize_date_key) == data_val
     if turma_codigo:
-        mask = mask & (df["TurmaCodigo"].astype(str).map(_norm_key) == turma_codigo)
+        turma_codigo_col = df["TurmaCodigo"].astype(str).map(_norm_key)
+        if turma_label:
+            # Compatibilidade retroativa: quando o código vier vazio em registros antigos,
+            # permite casar pelo label mantendo os demais critérios.
+            mask = mask & ((turma_codigo_col == turma_codigo) | (turma_codigo_col == ""))
+        else:
+            mask = mask & (turma_codigo_col == turma_codigo)
     if turma_label:
-        mask = mask & (df["TurmaLabel"].astype(str).map(_norm_key) == turma_label)
+        turma_label_col = df["TurmaLabel"].astype(str).map(_norm_key)
+        if turma_codigo:
+            # Compatibilidade retroativa: quando o label vier vazio em registros antigos,
+            # permite casar pelo código mantendo os demais critérios.
+            mask = mask & ((turma_label_col == turma_label) | (turma_label_col == ""))
+        else:
+            mask = mask & (turma_label_col == turma_label)
     if horario:
-        mask = mask & (df["Horario"].astype(str).map(_format_horario).str.strip() == horario)
+        mask = mask & df["Horario"].astype(str).apply(lambda value: _horario_matches(horario, value))
     if professor:
-        mask = mask & (df["Professor"].astype(str).map(_norm_key) == professor)
+        professor_col = df["Professor"].astype(str).map(_norm_key)
+        # Compatibilidade retroativa: professor vazio no histórico deve casar
+        # com o professor informado na seleção atual.
+        mask = mask & ((professor_col == professor) | (professor_col == ""))
     return mask
 
 class ImportResult(BaseModel):
@@ -951,9 +1012,7 @@ def get_pool_log(
 
                 relaxed = df[df["Data"].apply(_normalize_date_key) == date_key]
                 if requested_horario:
-                    relaxed = relaxed[
-                        relaxed["Horario"].astype(str).map(_format_horario).str.strip() == requested_horario
-                    ]
+                    relaxed = relaxed[relaxed["Horario"].astype(str).apply(lambda value: _horario_matches(requested_horario, value))]
 
                 if requested_turmas:
                     relaxed = relaxed[
