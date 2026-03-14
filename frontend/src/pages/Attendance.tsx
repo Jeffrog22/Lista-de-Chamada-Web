@@ -1824,6 +1824,7 @@ export const Attendance: React.FC = () => {
       return true;
     }
   });
+  const [showClearOptions, setShowClearOptions] = useState(false);
   
   // Dados do Formulário do Modal
   const [poolData, setPoolData] = useState({
@@ -2191,6 +2192,7 @@ export const Attendance: React.FC = () => {
         professor?: string;
         clima1: string;
         clima2: string;
+        statusAula?: string;
         nota: string;
         tipoOcorrencia: string;
         tempExterna: string;
@@ -2212,6 +2214,7 @@ export const Attendance: React.FC = () => {
         throw new Error("no pool log");
       }
 
+      const statusFromLog = String(data.statusAula || "").toLowerCase();
       const icons = normalizeSensationList(
         (data.clima2 ? data.clima2.split(",") : []).map((item) => item.trim())
       );
@@ -2236,6 +2239,17 @@ export const Attendance: React.FC = () => {
         incidentImpact: "aula",
         logType: modalLogType,
       }));
+
+      if (statusFromLog === "cancelada" || statusFromLog === "justificada") {
+        const reason = inferredCondition || "Condições Climáticas";
+        const reasonLabel = statusFromLog === "cancelada"
+          ? `${CANCELLED_CLASS_REASON_PREFIX} ${reason}`
+          : reason;
+
+        await applyCalendarClosureJustification(date, reasonLabel);
+        return;
+      }
+
       setClimaPrefillApplied(true);
 
       if (modalLogType === "ocorrencia") {
@@ -3215,6 +3229,30 @@ export const Attendance: React.FC = () => {
     );
   };
 
+  const handleClearDay = () => {
+    if (!selectedDate) return;
+
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setAttendance((prev) =>
+      prev.map((item) => ({
+        ...item,
+        attendance: {
+          ...item.attendance,
+          [selectedDate]: "",
+        },
+      }))
+    );
+  };
+
+  const handleClearOption = (mode: "all" | "day") => {
+    if (mode === "all") {
+      handleClearAll();
+    } else {
+      handleClearDay();
+    }
+    setShowClearOptions(false);
+  };
+
   // Função de Exclusão: Ativada quando o aluno tem 3 ou mais faltas
   const excluirAluno = (id: number) => {
     if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
@@ -4006,28 +4044,79 @@ export const Attendance: React.FC = () => {
         >
           ↶ Desfazer
         </button>
-        <button
-          onClick={handleClearAll}
-          style={{
-            background: "#e8e8e8",
-            color: "#333",
-            border: "1px solid #ccc",
-            padding: "10px 18px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: "14px",
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            (e.target as HTMLButtonElement).style.background = "#d0d0d0";
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLButtonElement).style.background = "#e8e8e8";
-          }}
-        >
-          🔄 Limpar Tudo
-        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowClearOptions((prev) => !prev)}
+            style={{
+              background: "#e8e8e8",
+              color: "#333",
+              border: "1px solid #ccc",
+              padding: "10px 18px",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "14px",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.target as HTMLButtonElement).style.background = "#d0d0d0";
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.background = "#e8e8e8";
+            }}
+          >
+            🔄 Limpar
+          </button>
+          {showClearOptions && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 6px)",
+                background: "#fff",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+                padding: "6px",
+                minWidth: "130px",
+                zIndex: 20,
+              }}
+            >
+              <button
+                onClick={() => handleClearOption("all")}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 10px",
+                  border: "none",
+                  borderRadius: "6px",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                Tudo
+              </button>
+              <button
+                onClick={() => handleClearOption("day")}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 10px",
+                  border: "none",
+                  borderRadius: "6px",
+                  background: "transparent",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                Dia ({selectedDate.split("-").reverse().join("/")})
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={handleSave}
           style={{
