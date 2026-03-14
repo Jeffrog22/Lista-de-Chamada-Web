@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -1713,6 +1713,8 @@ export const Attendance: React.FC = () => {
   };
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string>("");
   const hydrationRequestIdRef = useRef(0);
+  const [hydrationRefreshSeq, setHydrationRefreshSeq] = useState(0);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [hydrationReadInfo, setHydrationReadInfo] = useState<{
     ref: string;
     snapshot: string;
@@ -2807,6 +2809,36 @@ export const Attendance: React.FC = () => {
   })();
 
   const selectedDaysKey = selectedClass.diasSemana.join("|");
+
+  useEffect(() => {
+    const triggerRefresh = () => {
+      setHydrationRefreshSeq((prev) => prev + 1);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        triggerRefresh();
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        triggerRefresh();
+      }
+    }, 30000);
+
+    window.addEventListener("focus", triggerRefresh);
+    window.addEventListener("pageshow", triggerRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", triggerRefresh);
+      window.removeEventListener("pageshow", triggerRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -3128,7 +3160,7 @@ export const Attendance: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor]);
+  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor, hydrationRefreshSeq]);
 
   useEffect(() => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;
@@ -3464,6 +3496,31 @@ export const Attendance: React.FC = () => {
       .catch(() => {
         alert("Erro ao salvar chamada. Tente novamente.");
       });
+  };
+
+  const handleForceSyncNow = async () => {
+    if (isManualSyncing) return;
+
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) {
+      alert("Selecione turma, horário e professor válidos antes de sincronizar.");
+      return;
+    }
+
+    setIsManualSyncing(true);
+    try {
+      await flushPendingAttendanceLogs().catch(() => ({ flushed: 0, pending: 0 }));
+      await forceAttendanceSync({
+        turmaCodigo: persistence.turmaCodigo,
+        turmaLabel: persistence.turmaLabel,
+        horario: persistence.horario,
+        professor: persistence.professor,
+        mes: monthKey,
+      });
+      setHydrationRefreshSeq((prev) => prev + 1);
+    } finally {
+      setIsManualSyncing(false);
+    }
   };
 
   return (
@@ -4116,6 +4173,23 @@ export const Attendance: React.FC = () => {
             </div>
           )}
         </div>
+        <button
+          onClick={handleForceSyncNow}
+          disabled={isManualSyncing}
+          style={{
+            background: isManualSyncing ? "#94a3b8" : "#334155",
+            color: "white",
+            border: "none",
+            padding: "10px 18px",
+            borderRadius: "8px",
+            cursor: isManualSyncing ? "not-allowed" : "pointer",
+            fontWeight: 600,
+            fontSize: "14px",
+            opacity: isManualSyncing ? 0.85 : 1,
+          }}
+        >
+          {isManualSyncing ? "⏳ Sincronizando..." : "🔄 Forçar Sync Agora"}
+        </button>
         <button
           onClick={handleSave}
           style={{

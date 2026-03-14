@@ -101,7 +101,15 @@ class AttendanceLogPayload(BaseModel):
     horario: str = ""
     professor: str = ""
     mes: str = ""
+    clientSavedAt: Optional[str] = ""
     registros: List[AttendanceLogItem]
+
+class AttendanceSyncProbePayload(BaseModel):
+    turmaCodigo: str = ""
+    turmaLabel: str = ""
+    horario: str = ""
+    professor: str = ""
+    mes: str = ""
 
 class JustificationLogEntry(BaseModel):
     aluno_nome: str
@@ -1017,6 +1025,17 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 latest_same_class = candidate
                 break
 
+        client_saved_at = _saved_at_sort_key(item.get("clientSavedAt"))
+        latest_saved_at = _saved_at_sort_key((latest_same_class or {}).get("saved_at"))
+
+        if latest_same_class and client_saved_at and latest_saved_at and client_saved_at < latest_saved_at:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "stale_snapshot",
+                "latest_saved_at": latest_same_class.get("saved_at"),
+            }
+
         incoming_registros = item.get("registros") or []
         if latest_same_class and isinstance(latest_same_class.get("registros"), list):
             existing_registros = latest_same_class.get("registros") or []
@@ -1044,6 +1063,32 @@ def append_attendance_log(payload: AttendanceLogPayload):
         return {"ok": True, "file": file_path}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"attendance-log error: {exc}")
+
+@app.post("/attendance-log/force-sync")
+def force_attendance_sync(payload: AttendanceSyncProbePayload):
+    try:
+        item = payload.dict()
+        item["horario"] = _normalize_horario_key(item.get("horario") or "")
+        item["turmaCodigo"] = str(item.get("turmaCodigo") or "").strip()
+        item["turmaLabel"] = str(item.get("turmaLabel") or "").strip()
+        item["professor"] = str(item.get("professor") or "").strip()
+        item["mes"] = str(item.get("mes") or "").strip()
+
+        latest_logs = _load_latest_attendance_logs(item.get("mes") or None)
+        latest_same_class: Optional[Dict[str, Any]] = None
+        for key in _attendance_log_lookup_keys(item):
+            candidate = latest_logs.get(key)
+            if candidate:
+                latest_same_class = candidate
+                break
+
+        return {
+            "ok": True,
+            "hasLog": bool(latest_same_class),
+            "saved_at": (latest_same_class or {}).get("saved_at"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"attendance-sync error: {exc}")
 
 @app.post("/justifications-log")
 def append_justifications_log(entries: List[JustificationLogEntry]):
