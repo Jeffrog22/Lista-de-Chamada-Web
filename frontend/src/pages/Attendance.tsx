@@ -2093,7 +2093,7 @@ export const Attendance: React.FC = () => {
 
     const climateCancellationReason = getClimateCancellationReasonForDate(date);
     if (climateCancellationReason) {
-      return;
+      await applyCalendarClosureJustification(date, climateCancellationReason);
     }
 
     const holidayBridgeEvent = getHolidayBridgeEventForDate(date);
