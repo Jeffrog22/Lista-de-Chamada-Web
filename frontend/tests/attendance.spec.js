@@ -6,6 +6,44 @@ test('attendance triple selection shows students', async ({ page }) => {
   // set token so app renders
   await page.addInitScript(() => {
     localStorage.setItem('access_token', 'local-session');
+
+    localStorage.setItem(
+      'activeClasses',
+      JSON.stringify([
+        {
+          Grupo: 'INF-A',
+          Turma: 'Terça e Quinta',
+          TurmaCodigo: 'INF-A',
+          Horario: '18:30',
+          Professor: 'Professor Teste',
+          Nivel: 'Iniciante',
+        },
+      ])
+    );
+
+    localStorage.setItem(
+      'activeStudents',
+      JSON.stringify([
+        {
+          id: 'e2e-1',
+          studentUid: 'uid-e2e-1',
+          nome: 'Aluno E2E',
+          turma: 'Terça e Quinta',
+          turmaLabel: 'Terça e Quinta',
+          turmaCodigo: 'INF-A',
+          grupo: 'INF-A',
+          horario: '18:30',
+          professor: 'Professor Teste',
+          nivel: 'Iniciante',
+          categoria: 'Juvenil',
+          dataNascimento: '01/01/2012',
+          genero: 'Masculino',
+          parQ: 'Não',
+          atestado: false,
+          whatsapp: '',
+        },
+      ])
+    );
   });
 
   await page.goto('http://localhost:5173/#attendance', { timeout: 60000 });

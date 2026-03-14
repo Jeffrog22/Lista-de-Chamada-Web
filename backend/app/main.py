@@ -1520,31 +1520,90 @@ def _load_allowed_schedule_days(today: date) -> Dict[str, set[str]]:
 
     return allowed
 
-def _exclusion_key(item: Dict[str, Any]) -> tuple[str, str, str, str]:
-    nome = _normalize_text(item.get("nome") or item.get("Nome"))
+def _normalize_exclusion_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(item or {})
 
-    turma_codigo = _normalize_text(item.get("turmaCodigo") or item.get("TurmaCodigo") or "")
-    turma_label = _normalize_text(
-        item.get("turmaLabel")
-        or item.get("TurmaLabel")
-        or item.get("turma")
-        or item.get("Turma")
-        or ""
-    )
-    turma_key = turma_codigo or turma_label
+    for key in ["id", "student_uid", "studentUid", "nome", "Nome", "turma", "Turma", "turmaLabel", "TurmaLabel", "turmaCodigo", "TurmaCodigo", "professor", "Professor", "dataExclusao", "DataExclusao", "motivo_exclusao", "MotivoExclusao"]:
+        if key in normalized and normalized.get(key) is not None:
+            normalized[key] = str(normalized.get(key)).strip()
 
-    horario = _normalize_horario_key(item.get("horario") or item.get("Horario") or "")
-    professor = _normalize_text(item.get("professor") or item.get("Professor") or "")
-    return (nome, turma_key, horario, professor)
+    if normalized.get("horario") is not None:
+        normalized["horario"] = _normalize_horario_key(normalized.get("horario"))
+    if normalized.get("Horario") is not None:
+        normalized["Horario"] = _normalize_horario_key(normalized.get("Horario"))
 
-def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
+    return normalized
+
+
+def _exclusion_turma_set(item: Dict[str, Any]) -> set[str]:
+    values = {
+        _normalize_text(item.get("turma") or item.get("Turma") or ""),
+        _normalize_text(item.get("turmaLabel") or item.get("TurmaLabel") or ""),
+        _normalize_text(item.get("turmaCodigo") or item.get("TurmaCodigo") or ""),
+    }
+    return {value for value in values if value}
+
+
+def _exclusion_records_match(item: Dict[str, Any], payload_dict: Dict[str, Any]) -> bool:
     item_uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
-    payload_uid = str(payload.student_uid or "").strip()
+    payload_uid = str(payload_dict.get("student_uid") or payload_dict.get("studentUid") or "").strip()
     if item_uid and payload_uid and item_uid == payload_uid:
         return True
-    if payload.id and str(item.get("id")) == str(payload.id):
+
+    item_id = str(item.get("id") or "").strip()
+    payload_id = str(payload_dict.get("id") or "").strip()
+    if item_id and payload_id and item_id == payload_id:
         return True
-    return _exclusion_key(item) == _exclusion_key(payload.dict())
+
+    item_nome = _normalize_text(item.get("nome") or item.get("Nome") or "")
+    payload_nome = _normalize_text(payload_dict.get("nome") or payload_dict.get("Nome") or "")
+    if not item_nome or not payload_nome or item_nome != payload_nome:
+        return False
+
+    item_turmas = _exclusion_turma_set(item)
+    payload_turmas = _exclusion_turma_set(payload_dict)
+    turma_matches = not item_turmas or not payload_turmas or bool(item_turmas.intersection(payload_turmas))
+    if not turma_matches:
+        return False
+
+    item_horario = _normalize_horario_key(item.get("horario") or item.get("Horario") or "")
+    payload_horario = _normalize_horario_key(payload_dict.get("horario") or payload_dict.get("Horario") or "")
+    if item_horario and payload_horario and item_horario != payload_horario:
+        return False
+
+    item_professor = _normalize_text(item.get("professor") or item.get("Professor") or "")
+    payload_professor = _normalize_text(payload_dict.get("professor") or payload_dict.get("Professor") or "")
+    if item_professor and payload_professor and item_professor != payload_professor:
+        return False
+
+    return True
+
+
+def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cleaned: List[Dict[str, Any]] = []
+    for raw in items or []:
+        if not isinstance(raw, dict):
+            continue
+
+        item = _normalize_exclusion_item(raw)
+        uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
+        nome = _normalize_text(item.get("nome") or item.get("Nome") or "")
+        if not uid and not nome:
+            continue
+
+        existing_idx = next(
+            (idx for idx, existing in enumerate(cleaned) if _exclusion_records_match(existing, item)),
+            -1,
+        )
+        if existing_idx >= 0:
+            cleaned[existing_idx] = {**cleaned[existing_idx], **item}
+        else:
+            cleaned.append(item)
+
+    return cleaned
+
+def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
+    return _exclusion_records_match(_normalize_exclusion_item(item), _normalize_exclusion_item(payload.dict()))
 
 def _normalize_horario_key(value: Optional[str]) -> str:
     digits = re.sub(r"\D", "", str(value or ""))
@@ -2423,13 +2482,17 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
 @app.get("/exclusions")
 def list_exclusions():
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    return _load_json_list(file_path)
+    items = _load_json_list(file_path)
+    cleaned = _clean_exclusions_list(items)
+    if cleaned != items:
+        _save_json_list(file_path, cleaned)
+    return cleaned
 
 @app.post("/exclusions")
 def add_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _load_json_list(file_path)
-    payload = entry.dict()
+    items = _clean_exclusions_list(_load_json_list(file_path))
+    payload = _normalize_exclusion_item(entry.dict())
     if not payload.get("dataExclusao"):
         payload["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
 
@@ -2447,7 +2510,7 @@ def add_exclusion(entry: ExclusionEntry):
 @app.post("/exclusions/restore")
 def restore_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _load_json_list(file_path)
+    items = _clean_exclusions_list(_load_json_list(file_path))
     restored: Optional[Dict[str, Any]] = None
     remaining: List[Dict[str, Any]] = []
     for item in items:
@@ -2463,7 +2526,7 @@ def restore_exclusion(entry: ExclusionEntry):
 @app.post("/exclusions/delete")
 def delete_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _load_json_list(file_path)
+    items = _clean_exclusions_list(_load_json_list(file_path))
     remaining: List[Dict[str, Any]] = []
     deleted = False
     for item in items:

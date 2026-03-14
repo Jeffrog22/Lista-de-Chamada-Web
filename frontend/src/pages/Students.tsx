@@ -122,28 +122,93 @@ export const Students: React.FC = () => {
     return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|${birthKey}|${whatsappKey}`;
   };
 
-  const buildStudentClassKey = (student: Partial<Student>) => {
-    const uidKey = String(student.studentUid || "").trim();
-    if (uidKey) return `uid|${uidKey}`;
+  const exclusionUid = (entry: any) => String(entry?.student_uid || entry?.studentUid || "").trim();
 
-    const nameKey = normalizeText(student.nome || "");
-    const turmaKey = normalizeText(student.turmaLabel || student.turma || student.turmaCodigo || "");
-    const professorKey = normalizeText(student.professor || "");
-    const horarioKey = normalizeHorarioKey(student.horario || "");
-    return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|`;
+  const exclusionId = (entry: any) => String(entry?.id || "").trim();
+
+  const exclusionName = (entry: any) => normalizeText(entry?.nome || entry?.Nome || "");
+
+  const exclusionTurmaSet = (entry: any) => {
+    const values = [
+      entry?.turma,
+      entry?.Turma,
+      entry?.turmaLabel,
+      entry?.TurmaLabel,
+      entry?.turmaCodigo,
+      entry?.TurmaCodigo,
+      entry?.grupo,
+      entry?.Grupo,
+    ]
+      .map((value) => normalizeText(String(value || "")))
+      .filter(Boolean);
+    return new Set(values);
   };
 
-  const buildExclusionKey = (entry: any) => {
-    const uidKey = String(entry?.student_uid || entry?.studentUid || "").trim();
-    if (uidKey) return `uid|${uidKey}`;
+  const exclusionsMatch = (left: any, right: any) => {
+    const leftUid = exclusionUid(left);
+    const rightUid = exclusionUid(right);
+    if (leftUid && rightUid && leftUid === rightUid) return true;
 
-    const nameKey = normalizeText(entry?.nome || entry?.Nome || "");
-    const turmaKey = normalizeText(
-      entry?.turmaLabel || entry?.TurmaLabel || entry?.turma || entry?.Turma || entry?.turmaCodigo || entry?.TurmaCodigo || ""
-    );
-    const professorKey = normalizeText(entry?.professor || entry?.Professor || "");
-    const horarioKey = normalizeHorarioKey(entry?.horario || entry?.Horario || "");
-    return `${nameKey}|${turmaKey}|${horarioKey}|${professorKey}|`;
+    const leftId = exclusionId(left);
+    const rightId = exclusionId(right);
+    if (leftId && rightId && leftId === rightId) return true;
+
+    const leftName = exclusionName(left);
+    const rightName = exclusionName(right);
+    if (!leftName || !rightName || leftName !== rightName) return false;
+
+    const leftTurmas = exclusionTurmaSet(left);
+    const rightTurmas = exclusionTurmaSet(right);
+    const turmaMatches =
+      leftTurmas.size === 0 ||
+      rightTurmas.size === 0 ||
+      Array.from(leftTurmas).some((value) => rightTurmas.has(value));
+    if (!turmaMatches) return false;
+
+    const leftHorario = normalizeHorarioKey(left?.horario || left?.Horario || "");
+    const rightHorario = normalizeHorarioKey(right?.horario || right?.Horario || "");
+    if (leftHorario && rightHorario && leftHorario !== rightHorario) return false;
+
+    const leftProfessor = normalizeText(left?.professor || left?.Professor || "");
+    const rightProfessor = normalizeText(right?.professor || right?.Professor || "");
+    if (leftProfessor && rightProfessor && leftProfessor !== rightProfessor) return false;
+
+    return true;
+  };
+
+  const isStudentExcluded = (student: Student, records: any[]) => {
+    const comparable = {
+      id: student.id,
+      student_uid: student.studentUid || "",
+      nome: student.nome,
+      turma: student.turma,
+      turmaLabel: student.turmaLabel,
+      turmaCodigo: student.turmaCodigo,
+      horario: student.horario,
+      professor: student.professor,
+    };
+    return (records || []).some((record) => exclusionsMatch(record, comparable));
+  };
+
+  const sanitizeExcludedRecords = (records: any[]) => {
+    const source = Array.isArray(records) ? records : [];
+    const cleaned: any[] = [];
+    source.forEach((raw) => {
+      if (!raw || typeof raw !== "object") return;
+      const item = {
+        ...raw,
+        horario: normalizeHorarioKey(raw?.horario || raw?.Horario || ""),
+      };
+      if (!exclusionUid(item) && !exclusionName(item)) return;
+
+      const existingIndex = cleaned.findIndex((candidate) => exclusionsMatch(candidate, item));
+      if (existingIndex >= 0) {
+        cleaned[existingIndex] = { ...cleaned[existingIndex], ...item };
+      } else {
+        cleaned.push(item);
+      }
+    });
+    return cleaned;
   };
 
   const transferHistoryStorageKey = "studentTransferHistory";
@@ -353,7 +418,7 @@ export const Students: React.FC = () => {
     getExcludedStudents()
       .then((response) => {
         if (!isMounted) return;
-        const remote = Array.isArray(response?.data) ? response.data : [];
+        const remote = sanitizeExcludedRecords(Array.isArray(response?.data) ? response.data : []);
         if (remote.length > 0) {
           setExcludedRecords(remote);
           localStorage.setItem("excludedStudents", JSON.stringify(remote));
@@ -362,7 +427,9 @@ export const Students: React.FC = () => {
         try {
           const raw = localStorage.getItem("excludedStudents");
           const parsed = raw ? JSON.parse(raw) : [];
-          setExcludedRecords(Array.isArray(parsed) ? parsed : []);
+          const local = sanitizeExcludedRecords(Array.isArray(parsed) ? parsed : []);
+          setExcludedRecords(local);
+          localStorage.setItem("excludedStudents", JSON.stringify(local));
         } catch {
           setExcludedRecords([]);
         }
@@ -371,7 +438,9 @@ export const Students: React.FC = () => {
         try {
           const raw = localStorage.getItem("excludedStudents");
           const parsed = raw ? JSON.parse(raw) : [];
-          setExcludedRecords(Array.isArray(parsed) ? parsed : []);
+          const local = sanitizeExcludedRecords(Array.isArray(parsed) ? parsed : []);
+          setExcludedRecords(local);
+          localStorage.setItem("excludedStudents", JSON.stringify(local));
         } catch {
           setExcludedRecords([]);
         }
@@ -1069,16 +1138,16 @@ export const Students: React.FC = () => {
     });
 
     const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
-    const nextExcluded = Array.isArray(excludedStudents) ? [...excludedStudents] : [];
-    const nextKey = buildExclusionKey(exclusionPayload);
-    const existingIndex = nextExcluded.findIndex((item: any) => buildExclusionKey(item) === nextKey);
+    const nextExcluded = sanitizeExcludedRecords(Array.isArray(excludedStudents) ? [...excludedStudents] : []);
+    const existingIndex = nextExcluded.findIndex((item: any) => exclusionsMatch(item, exclusionPayload));
     if (existingIndex >= 0) {
       nextExcluded[existingIndex] = { ...nextExcluded[existingIndex], ...exclusionPayload };
     } else {
       nextExcluded.push(exclusionPayload);
     }
-    localStorage.setItem("excludedStudents", JSON.stringify(nextExcluded));
-    setExcludedRecords(nextExcluded);
+    const cleanedExcluded = sanitizeExcludedRecords(nextExcluded);
+    localStorage.setItem("excludedStudents", JSON.stringify(cleanedExcluded));
+    setExcludedRecords(cleanedExcluded);
 
     // simply remove student from state; persistence effect will clear storage
     setStudents((prev) => prev.filter((s) => s.id !== student.id));
@@ -1113,14 +1182,6 @@ export const Students: React.FC = () => {
   ).sort((a, b) => a.localeCompare(b));
   const nivelOptions = [...nivelOrder, ...nivelExtras];
 
-  const excludedKeySet = React.useMemo(() => {
-    return new Set(
-      excludedRecords
-        .map((item) => buildExclusionKey(item))
-        .filter((key) => key && !key.startsWith("|"))
-    );
-  }, [excludedRecords]);
-
   const filteredStudents = students.filter((s) => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch =
@@ -1140,7 +1201,7 @@ export const Students: React.FC = () => {
       !filters.professor || s.professor === filters.professor;
     const matchesCategoria =
       !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
-    const matchesExcluded = !excludedKeySet.has(buildStudentClassKey(s));
+    const matchesExcluded = !isStudentExcluded(s, excludedRecords);
     return (
       matchesSearch &&
       matchesNivel &&

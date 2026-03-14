@@ -200,8 +200,11 @@ export const Exclusions: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     const loadLocal = () => {
-      const local = readExcludedStudentsLocal();
-      if (local.length > 0) setStudents(local);
+      const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
+      if (local.length > 0) {
+        setStudents(local);
+        localStorage.setItem("excludedStudents", JSON.stringify(local));
+      }
     };
 
     getExcludedStudents()
@@ -209,8 +212,8 @@ export const Exclusions: React.FC = () => {
         if (!isMounted) return;
         const data = response.data;
         if (Array.isArray(data)) {
-          const local = readExcludedStudentsLocal();
-          const resolved = data.length > 0 ? (data as ExcludedStudent[]) : local;
+          const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
+          const resolved = data.length > 0 ? sanitizeExcludedStudents(data as ExcludedStudent[]) : local;
           setStudents(resolved);
           localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         } else {
@@ -262,6 +265,86 @@ export const Exclusions: React.FC = () => {
     if (digits.length === 3) return `0${digits}`;
     if (digits.length >= 4) return digits.slice(0, 4);
     return digits;
+  };
+
+  const getStudentUid = (student: ExcludedStudent) =>
+    String(student.student_uid || student.studentUid || "").trim();
+
+  const getStudentId = (student: ExcludedStudent) =>
+    String(student.id || "").trim();
+
+  const getStudentTurmaSet = (student: ExcludedStudent) => {
+    const values = [
+      student.turma,
+      student.Turma,
+      student.turmaLabel,
+      student.TurmaLabel,
+      student.turmaCodigo,
+      student.TurmaCodigo,
+      student.grupo,
+      student.Grupo,
+    ]
+      .map((value) => normalizeText(String(value || "")))
+      .filter(Boolean);
+    return new Set(values);
+  };
+
+  const exclusionsMatch = (left: ExcludedStudent, right: ExcludedStudent) => {
+    const leftUid = getStudentUid(left);
+    const rightUid = getStudentUid(right);
+    if (leftUid && rightUid && leftUid === rightUid) return true;
+
+    const leftId = getStudentId(left);
+    const rightId = getStudentId(right);
+    if (leftId && rightId && leftId === rightId) return true;
+
+    const leftName = normalizeText(resolveStudentName(left));
+    const rightName = normalizeText(resolveStudentName(right));
+    if (!leftName || !rightName || leftName !== rightName) return false;
+
+    const leftTurmas = getStudentTurmaSet(left);
+    const rightTurmas = getStudentTurmaSet(right);
+    const turmaMatches =
+      leftTurmas.size === 0 ||
+      rightTurmas.size === 0 ||
+      Array.from(leftTurmas).some((value) => rightTurmas.has(value));
+    if (!turmaMatches) return false;
+
+    const leftHorario = normalizeHorarioDigits(String(left.horario || left.Horario || ""));
+    const rightHorario = normalizeHorarioDigits(String(right.horario || right.Horario || ""));
+    if (leftHorario && rightHorario && leftHorario !== rightHorario) return false;
+
+    const leftProfessor = normalizeText(String(left.professor || left.Professor || ""));
+    const rightProfessor = normalizeText(String(right.professor || right.Professor || ""));
+    if (leftProfessor && rightProfessor && leftProfessor !== rightProfessor) return false;
+
+    return true;
+  };
+
+  const sanitizeExcludedStudents = (list: ExcludedStudent[]) => {
+    const source = Array.isArray(list) ? list : [];
+    const cleaned: ExcludedStudent[] = [];
+
+    source.forEach((raw) => {
+      if (!raw || typeof raw !== "object") return;
+      const item: ExcludedStudent = {
+        ...raw,
+        horario: normalizeHorarioDigits(String(raw.horario || raw.Horario || "")),
+      };
+
+      const hasUid = Boolean(getStudentUid(item));
+      const hasName = Boolean(normalizeText(resolveStudentName(item)));
+      if (!hasUid && !hasName) return;
+
+      const existingIndex = cleaned.findIndex((candidate) => exclusionsMatch(candidate, item));
+      if (existingIndex >= 0) {
+        cleaned[existingIndex] = { ...cleaned[existingIndex], ...item };
+      } else {
+        cleaned.push(item);
+      }
+    });
+
+    return cleaned;
   };
 
   const resolveClassFromTriple = (turma: string, horario: string, professor: string) => {
@@ -446,7 +529,7 @@ export const Exclusions: React.FC = () => {
     activeStudents.push(restoredStudent);
     localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
 
-    const newExcludedList = students.filter((s) => s !== editingStudent);
+    const newExcludedList = students.filter((item) => !exclusionsMatch(item, editingStudent));
     setStudents(newExcludedList);
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
 
@@ -472,7 +555,7 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
-    const newExcludedList = students.filter((s) => s !== student);
+    const newExcludedList = students.filter((item) => !exclusionsMatch(item, student));
     setStudents(newExcludedList);
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
   };
@@ -498,7 +581,7 @@ export const Exclusions: React.FC = () => {
 
     setStudents((prev) => {
       const next = prev.map((item) => {
-        if (item === student) {
+        if (exclusionsMatch(item, student)) {
           return { ...item, motivo_exclusao: normalized, MotivoExclusao: normalized };
         }
         return item;
@@ -556,7 +639,7 @@ export const Exclusions: React.FC = () => {
 
           {students.map((student, idx) => (
             <div
-              key={`${student.id || student.nome || student.Nome || "aluno"}-${idx}`}
+              key={`${getStudentUid(student) || getStudentId(student) || resolveStudentName(student) || "aluno"}-${idx}`}
               style={{
                 display: "grid",
                 gridTemplateColumns: "2fr 1fr 1fr 1.2fr 1.6fr 1fr 1.6fr",
@@ -580,7 +663,7 @@ export const Exclusions: React.FC = () => {
                   const value = e.target.value;
                   setStudents((prev) =>
                     prev.map((item) => {
-                      if (item === student) {
+                      if (exclusionsMatch(item, student)) {
                         return { ...item, motivo_exclusao: value, MotivoExclusao: value };
                       }
                       return item;
