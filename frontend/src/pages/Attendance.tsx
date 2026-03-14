@@ -2548,6 +2548,8 @@ export const Attendance: React.FC = () => {
       return;
     }
 
+    setShowDateModal(false);
+
     const effectiveLogType = typeof logTypeOverride === "string" ? logTypeOverride : poolData.logType;
     const suggestedDecision = getSuggestedDecision();
     const statusSugerido = suggestedDecision.status;
@@ -2694,7 +2696,6 @@ export const Attendance: React.FC = () => {
       console.error("pool-log save error", error);
       alert(detail ? `Erro ao salvar dados do clima: ${detail}` : "Erro ao salvar dados do clima. Tente novamente.");
     }
-    setShowDateModal(false);
   };
 
   // Cor do Slider de Cloro
@@ -2810,21 +2811,16 @@ export const Attendance: React.FC = () => {
       }
     };
 
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        triggerRefresh();
-      }
-    }, 30000);
-
     window.addEventListener("focus", triggerRefresh);
     window.addEventListener("pageshow", triggerRefresh);
+    window.addEventListener("hashchange", triggerRefresh);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("focus", triggerRefresh);
       window.removeEventListener("pageshow", triggerRefresh);
+      window.removeEventListener("hashchange", triggerRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.clearInterval(intervalId);
     };
   }, []);
 
