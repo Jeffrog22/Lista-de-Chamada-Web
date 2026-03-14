@@ -242,6 +242,7 @@ def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
         except Exception:
             payload = []
     payload.extend(items)
+    _backup_runtime_json(file_path)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
@@ -255,8 +256,33 @@ def _load_json_list(file_path: str) -> List[Dict[str, Any]]:
     except Exception:
         return []
 
+def _backup_runtime_json(file_path: str) -> None:
+    try:
+        if not os.path.exists(file_path):
+            return
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+
+        if not raw.strip():
+            return
+
+        archive_dir = os.path.join(DATA_DIR, "archive")
+        os.makedirs(archive_dir, exist_ok=True)
+
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        backup_path = os.path.join(archive_dir, f"{base_name}_backup_{ts}.json")
+
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(raw)
+    except Exception:
+        # best-effort only
+        return
+
 def _save_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
+    _backup_runtime_json(file_path)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
