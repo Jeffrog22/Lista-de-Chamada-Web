@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getStatistics, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -47,17 +47,6 @@ interface ReportClassLite {
   professor: string;
   hasLog?: boolean;
   alunos: ReportStudentLite[];
-}
-
-interface LevelHistoryLite {
-  nivel: string;
-  firstDate?: string;
-  lastDate?: string;
-}
-
-interface StudentStatisticsLite {
-  nome: string;
-  levels?: LevelHistoryLite[];
 }
 
 interface TransferLockInfo {
@@ -3018,42 +3007,8 @@ export const Attendance: React.FC = () => {
           });
         }
 
-        const statsResponse = await getStatistics();
-        const statsRows = Array.isArray(statsResponse?.data) ? (statsResponse.data as StudentStatisticsLite[]) : [];
         const selectedNivelNormalized = normalizeText(selectedClass.nivel || "");
         const transferLocks: Record<string, TransferLockInfo> = {};
-
-        if (selectedNivelNormalized) {
-          statsRows.forEach((row) => {
-            const studentKey = normalizeText(row?.nome || "");
-            if (!studentKey) return;
-
-            const levels = Array.isArray(row?.levels) ? row.levels : [];
-            const currentLevel = levels.find(
-              (level) => normalizeText(level?.nivel || "") === selectedNivelNormalized && !!level?.firstDate
-            );
-            if (!currentLevel?.firstDate) return;
-            const currentStartDate = currentLevel.firstDate;
-
-            const previousCandidates = levels
-              .filter(
-                (level) =>
-                  !!level?.lastDate &&
-                  !!level?.nivel &&
-                  normalizeText(level.nivel) !== selectedNivelNormalized &&
-                    level.lastDate < currentStartDate
-              )
-              .sort((a, b) => String(b.lastDate || "").localeCompare(String(a.lastDate || "")));
-
-            const previousLevel = previousCandidates[0];
-            if (!previousLevel?.nivel) return;
-
-            transferLocks[studentKey] = {
-              lockBeforeDate: currentStartDate,
-              fromNivel: previousLevel.nivel,
-            };
-          });
-        }
 
         const transferHistory = loadTransferHistory();
         const classTurmaNorm = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");

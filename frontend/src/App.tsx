@@ -102,7 +102,7 @@ export default function App() {
   };
 
   const importTimestampStorageKey = "last_import_at";
-  const transferCleanupMigrationKey = "transferCleanup_migration_20260314";
+  const transferCleanupMigrationKey = "transferCleanup_migration_20260314_v2";
 
   const readLastImportAtFallback = () => {
     try {
