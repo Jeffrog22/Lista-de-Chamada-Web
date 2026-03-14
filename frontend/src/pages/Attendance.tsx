@@ -2571,6 +2571,60 @@ export const Attendance: React.FC = () => {
       shouldTreatOccurrenceAsDay;
     const shouldAddJustificationNote = shouldMassJustify || isOccurrence;
     let nextAttendanceSnapshot = attendance;
+    const shouldClearCancelledLock = effectiveLogType === "aula" && statusSugerido === "normal";
+
+    if (shouldClearCancelledLock) {
+      const hasCancelledReason = attendance.some((student) =>
+        String(student.justifications?.[modalDate] || "").startsWith(CANCELLED_CLASS_REASON_PREFIX)
+      );
+
+      if (hasCancelledReason) {
+        nextAttendanceSnapshot = attendance.map((student) => {
+          const reason = String(student.justifications?.[modalDate] || "");
+          if (!reason.startsWith(CANCELLED_CLASS_REASON_PREFIX)) {
+            return student;
+          }
+
+          const nextJustifications = { ...(student.justifications || {}) };
+          delete nextJustifications[modalDate];
+
+          const nextAttendance = { ...(student.attendance || {}) };
+          if (nextAttendance[modalDate] === "Justificado") {
+            nextAttendance[modalDate] = "";
+          }
+
+          return {
+            ...student,
+            attendance: nextAttendance,
+            justifications: nextJustifications,
+          };
+        });
+
+        setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+        setAttendance(nextAttendanceSnapshot);
+
+        logPersistenceDebug("saveAttendanceLog:clear_cancelled_lock", {
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+        });
+
+        await saveAttendanceLog({
+          turmaCodigo: persistence.turmaCodigo,
+          turmaLabel: persistence.turmaLabel,
+          horario: persistence.horario,
+          professor: persistence.professor,
+          mes: monthKey,
+          registros: nextAttendanceSnapshot.map((item) => ({
+            aluno_nome: item.aluno,
+            attendance: item.attendance,
+            justifications: item.justifications || {},
+          })),
+        }).catch(() => undefined);
+      }
+    }
 
     if (shouldMassJustify || shouldAddJustificationNote) {
       // Aplicar justificativa em massa
