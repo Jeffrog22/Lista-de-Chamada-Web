@@ -145,7 +145,10 @@ const calendarPayload = {
   bankHours: [],
 };
 
-const installAppRoutes = async (page, capture = {}) => {
+const installAppRoutes = async (page, capture = {}, overrides = {}) => {
+  const reportsBody = overrides.reportPayload || reportPayload;
+  const bootstrapBody = overrides.bootstrapPayload || bootstrapPayload;
+
   await page.route('**/reports/excel-file', async (route) => {
     capture.excel = route.request().postDataJSON();
     await route.fulfill({
@@ -172,7 +175,7 @@ const installAppRoutes = async (page, capture = {}) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(reportPayload),
+      body: JSON.stringify(reportsBody),
     });
   });
 
@@ -192,7 +195,7 @@ const installAppRoutes = async (page, capture = {}) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(bootstrapPayload),
+      body: JSON.stringify(bootstrapBody),
     });
   });
 
@@ -290,4 +293,83 @@ test('reports exports send normalized selected class payload', async ({ page }) 
     { turma: 'Terça e Quinta', horario: '18:30', professor: 'Professor A' },
     { turma: 'Terça e Quinta', horario: '19:30', professor: 'Professor B' },
   ]);
+});
+
+test('reports summary uses bootstrap dias_semana fallback to avoid zero KPIs', async ({ page }) => {
+  const fallbackReportPayload = [
+    {
+      turma: 'INF-A',
+      horario: '18:30',
+      professor: 'Professor A',
+      nivel: 'Iniciante',
+      hasLog: true,
+      alunos: [
+        {
+          id: '1',
+          student_uid: 'uid-fallback-1',
+          nome: 'Aluno Fallback A',
+          presencas: 3,
+          faltas: 0,
+          justificativas: 0,
+          frequencia: 100,
+          historico: { '03': 'c', '05': 'c', '10': 'c' },
+        },
+      ],
+    },
+  ];
+
+  const fallbackBootstrapPayload = {
+    classes: [
+      {
+        id: 1,
+        grupo: 'INF-A',
+        codigo: 'INF-A',
+        turma_label: 'INF-A',
+        horario: '18:30',
+        professor: 'Professor A',
+        nivel: 'Iniciante',
+        capacidade: 20,
+        dias_semana: 'terça,quinta',
+      },
+    ],
+    students: [
+      {
+        id: 1,
+        class_id: 1,
+        nome: 'Aluno Fallback A',
+        whatsapp: '',
+        data_nascimento: '2012-01-01',
+        data_atestado: '',
+        categoria: 'Juvenil',
+        genero: 'Masculino',
+        parq: 'Não',
+        atestado: false,
+      },
+    ],
+  };
+
+  await installAppRoutes(page, {}, {
+    reportPayload: fallbackReportPayload,
+    bootstrapPayload: fallbackBootstrapPayload,
+  });
+
+  await page.goto('http://localhost:5173/#reports', { timeout: 30000 });
+  await expect(page.getByRole('heading', { name: 'Relatórios e Análises' })).toBeVisible({ timeout: 10000 });
+
+  const aproveitamentoCard = page.locator('.report-card').filter({ has: page.getByRole('heading', { name: 'Aproveitamento das aulas dadas' }) }).first();
+  const aproveitamentoValue = (await aproveitamentoCard.locator('strong').first().innerText()).replace('%', '').trim();
+  expect(Number(aproveitamentoValue)).toBeGreaterThan(0);
+
+  await aproveitamentoCard.getByRole('button', { name: 'Detalhes' }).click();
+
+  const aulasCard = page.locator('.report-card').filter({ has: page.getByRole('heading', { name: 'Aulas registradas x previstas' }) }).first();
+  const ratioText = (await aulasCard.locator('.reports-kpi-line span').first().innerText()).trim();
+  const [registradasRaw, previstasRaw] = ratioText.split('/');
+  const registradas = Number(registradasRaw);
+  const previstas = Number(previstasRaw);
+
+  expect(Number.isFinite(registradas)).toBeTruthy();
+  expect(Number.isFinite(previstas)).toBeTruthy();
+  expect(registradas).toBeGreaterThan(0);
+  expect(previstas).toBeGreaterThan(0);
 });

@@ -118,6 +118,7 @@ interface BootstrapClassLite {
   professor: string;
   nivel: string;
   capacidade: number;
+  diasSemana?: string;
 }
 
 interface CalendarEventForm {
@@ -192,6 +193,9 @@ const normalizeHorarioSelectionKey = (value: string) => {
 
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
   `${normalizeText(item.turma)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
+
+const bootstrapClassSelectionKey = (item: Pick<BootstrapClassLite, "turmaLabel" | "horario" | "professor">) =>
+  `${normalizeText(item.turmaLabel)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
 
 const normalizeText = (value: string) =>
   String(value || "")
@@ -347,6 +351,33 @@ const getSummaryScheduleGroup = (turmaLabel: string): "terca-quinta" | "quarta-s
 const weekdaysBySummaryGroup: Record<string, number[]> = {
   "terca-quinta": [2, 4],
   "quarta-sexta": [3, 5],
+};
+
+const getSummaryGroupFromWeekdays = (weekdays: number[]): "terca-quinta" | "quarta-sexta" | "outros" => {
+  const normalized = Array.from(new Set(weekdays)).sort((a, b) => a - b);
+  const signature = normalized.join(",");
+  if (signature === "2,4") return "terca-quinta";
+  if (signature === "3,5") return "quarta-sexta";
+  return "outros";
+};
+
+const parseWeekdaysFromDiasSemana = (value: string): number[] => {
+  const normalized = normalizeText(value).replace(/\s+/g, "");
+  if (!normalized) return [];
+
+  const isTq =
+    normalized.includes("tq") ||
+    (normalized.includes("terca") && normalized.includes("quinta")) ||
+    (normalized.includes("ter") && normalized.includes("qui"));
+
+  const isQs =
+    normalized.includes("qs") ||
+    (normalized.includes("quarta") && normalized.includes("sexta")) ||
+    (normalized.includes("qua") && normalized.includes("sex"));
+
+  if (isTq) return [2, 4];
+  if (isQs) return [3, 5];
+  return [];
 };
 
 const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedMonthIndex: number) => {
@@ -1098,17 +1129,51 @@ export const Reports: React.FC = () => {
   const [summaryTurmaToggle, setSummaryTurmaToggle] = useState<"terca-quinta" | "quarta-sexta">("terca-quinta");
   const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<string>("");
 
+  const bootstrapWeekdaysByKey = useMemo(() => {
+    const map = new Map<string, number[]>();
+    bootstrapClasses.forEach((cls) => {
+      const key = bootstrapClassSelectionKey(cls);
+      const weekdays = parseWeekdaysFromDiasSemana(cls.diasSemana || "");
+      if (weekdays.length > 0) {
+        map.set(key, weekdays);
+      }
+    });
+    return map;
+  }, [bootstrapClasses]);
+
+  const classScheduleMetaByKey = useMemo(() => {
+    const map = new Map<string, { group: "terca-quinta" | "quarta-sexta" | "outros"; weekdays: number[] }>();
+
+    classesData.forEach((cls) => {
+      const key = classSelectionKey(cls);
+      let group = getSummaryScheduleGroup(cls.turma);
+      let weekdays = weekdaysBySummaryGroup[group] || [];
+
+      if (weekdays.length === 0) {
+        const fallbackWeekdays = bootstrapWeekdaysByKey.get(key) || [];
+        if (fallbackWeekdays.length > 0) {
+          weekdays = fallbackWeekdays;
+          group = getSummaryGroupFromWeekdays(fallbackWeekdays);
+        }
+      }
+
+      map.set(key, { group, weekdays });
+    });
+
+    return map;
+  }, [classesData, bootstrapWeekdaysByKey]);
+
   const summaryProfessorOptions = useMemo(() => {
     const options = Array.from(
       new Set(
         classesData
-          .filter((cls) => getSummaryScheduleGroup(cls.turma) === summaryTurmaToggle)
+          .filter((cls) => classScheduleMetaByKey.get(classSelectionKey(cls))?.group === summaryTurmaToggle)
           .map((cls) => String(cls.professor || "").trim())
           .filter(Boolean)
       )
     );
     return options.sort((a, b) => a.localeCompare(b));
-  }, [classesData, summaryTurmaToggle]);
+  }, [classScheduleMetaByKey, classesData, summaryTurmaToggle]);
 
   useEffect(() => {
     if (summaryProfessorOptions.length === 0) {
@@ -1134,6 +1199,7 @@ export const Reports: React.FC = () => {
             professor: string;
             nivel: string;
             capacidade: number;
+            dias_semana?: string;
           }>;
           students: Array<{
             id: number;
@@ -1179,6 +1245,7 @@ export const Reports: React.FC = () => {
           professor: cls.professor || "",
           nivel: cls.nivel || "",
           capacidade: Number(cls.capacidade || 0),
+          diasSemana: String(cls.dias_semana || ""),
         }));
 
         setStudentsSnapshot(mapped);
@@ -1595,10 +1662,10 @@ export const Reports: React.FC = () => {
       };
     }
 
-    const selectedWeekdays = weekdaysBySummaryGroup[summaryTurmaToggle] || [];
     const endKey = toDateKey(effectiveEnd);
     const filteredClasses = classesData.filter((cls) => {
-      if (getSummaryScheduleGroup(cls.turma) !== summaryTurmaToggle) return false;
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group !== summaryTurmaToggle) return false;
       if (!summaryProfessorToggle) return true;
       return normalizeText(cls.professor) === normalizeText(summaryProfessorToggle);
     });
@@ -1608,10 +1675,11 @@ export const Reports: React.FC = () => {
     filteredClasses.forEach((cls) => {
       const horarioKey = formatHorario(cls.horario || "") || "Sem horário";
       const current = byHorarioMap.get(horarioKey) || { previstas: 0, registradas: 0 };
+      const weekdays = classScheduleMetaByKey.get(classSelectionKey(cls))?.weekdays || [];
 
       const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
         const date = new Date(`${dateKey}T00:00:00`);
-        return selectedWeekdays.includes(date.getDay());
+        return weekdays.includes(date.getDay());
       }).length;
 
       const recordedDays = new Set<string>();
@@ -1627,7 +1695,7 @@ export const Reports: React.FC = () => {
           const isRetroactiveInSelectedMonth =
             parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
           if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
-          if (!selectedWeekdays.includes(parsed.getDay())) return;
+          if (!weekdays.includes(parsed.getDay())) return;
           recordedDays.add(parsedKey);
         });
       });
@@ -1650,7 +1718,15 @@ export const Reports: React.FC = () => {
       totalPrevistas: byHorario.reduce((acc, item) => acc + item.previstas, 0),
       totalRegistradas: byHorario.reduce((acc, item) => acc + item.registradas, 0),
     };
-  }, [classesData, plannedClassDaysUntilCurrent, plannedClassDaysUntilCurrentSet, selectedMonthLimits, summaryProfessorToggle, summaryTurmaToggle]);
+  }, [
+    classScheduleMetaByKey,
+    classesData,
+    plannedClassDaysUntilCurrent,
+    plannedClassDaysUntilCurrentSet,
+    selectedMonthLimits,
+    summaryProfessorToggle,
+    summaryTurmaToggle,
+  ]);
 
   const classTotalsUntilCurrent = useMemo(() => {
     const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
@@ -1661,8 +1737,7 @@ export const Reports: React.FC = () => {
     let dadasTotal = 0;
 
     classesData.forEach((cls) => {
-      const scheduleGroup = getSummaryScheduleGroup(cls.turma);
-      const weekdays = weekdaysBySummaryGroup[scheduleGroup] || [];
+      const weekdays = classScheduleMetaByKey.get(classSelectionKey(cls))?.weekdays || [];
       if (weekdays.length === 0) return;
 
       const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
@@ -1693,7 +1768,13 @@ export const Reports: React.FC = () => {
     });
 
     return { previstas: previstasTotal, dadas: dadasTotal };
-  }, [classesData, plannedClassDaysUntilCurrent, plannedClassDaysUntilCurrentSet, selectedMonthLimits]);
+  }, [
+    classScheduleMetaByKey,
+    classesData,
+    plannedClassDaysUntilCurrent,
+    plannedClassDaysUntilCurrentSet,
+    selectedMonthLimits,
+  ]);
 
   const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
   const totalCancelamentosElegiveis = useMemo(() => {
@@ -1724,8 +1805,7 @@ export const Reports: React.FC = () => {
     let canceledClassLessons = 0;
 
     classesData.forEach((cls) => {
-      const scheduleGroup = getSummaryScheduleGroup(cls.turma);
-      const weekdays = weekdaysBySummaryGroup[scheduleGroup] || [];
+      const weekdays = classScheduleMetaByKey.get(classSelectionKey(cls))?.weekdays || [];
       if (weekdays.length === 0) return;
 
       plannedClassDaysUntilCurrent.forEach((dateKey) => {
@@ -1738,7 +1818,14 @@ export const Reports: React.FC = () => {
     });
 
     return canceledClassLessons;
-  }, [calendarEvents, classesData, plannedClassDaysUntilCurrent, selectedMonth, selectedMonthLimits]);
+  }, [
+    calendarEvents,
+    classScheduleMetaByKey,
+    classesData,
+    plannedClassDaysUntilCurrent,
+    selectedMonth,
+    selectedMonthLimits,
+  ]);
 
   const totalAulasDadas = classTotalsUntilCurrent.dadas;
   const totalAulasPrevistas = classTotalsUntilCurrent.previstas;
