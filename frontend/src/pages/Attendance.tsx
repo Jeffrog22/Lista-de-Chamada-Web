@@ -161,13 +161,16 @@ const WEATHER_JUSTIFICATION_KEYWORDS = [
 
 const normalizeSensation = (value: string) => {
   const raw = String(value || "").trim().toLowerCase();
+  const folded = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   if (!raw) return "";
-  if (raw === "agradavel") return "Agradável";
-  if (raw === "abafado") return "Abafado";
-  if (raw === "calor") return "Calor";
-  if (raw === "seco") return "Seco";
-  if (raw === "vento") return "Vento";
-  if (raw === "frio") return "Frio";
+  if (folded === "agradavel") return "Agradável";
+  if (folded === "abafado") return "Abafado";
+  if (folded === "calor") return "Calor";
+  if (folded === "seco") return "Seco";
+  if (folded === "vento") return "Vento";
+  if (folded === "frio") return "Frio";
   return "";
 };
 
