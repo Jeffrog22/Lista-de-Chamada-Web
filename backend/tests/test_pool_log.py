@@ -91,7 +91,7 @@ def test_pool_log_defaults_temp_piscina(client: TestClient, tmp_path: Path):
     assert fetched["tempPiscina"] == "28"
 
 
-def test_pool_log_daywide_latest_applicable_record(client: TestClient):
+def test_pool_log_daywide_baseline_with_professor_override_priority(client: TestClient):
     morning = _build_payload(
         {
             "data": "2026-03-10",
@@ -120,7 +120,7 @@ def test_pool_log_daywide_latest_applicable_record(client: TestClient):
     assert client.post("/pool-log", json=morning).status_code == 200
     assert client.post("/pool-log", json=afternoon).status_code == 200
 
-    resp_10h = client.get(
+    resp_default_10h = client.get(
         "/pool-log",
         params={
             "date": "2026-03-10",
@@ -130,10 +130,11 @@ def test_pool_log_daywide_latest_applicable_record(client: TestClient):
             "professor": "Outro Prof",
         },
     )
-    assert resp_10h.status_code == 200
-    assert resp_10h.json()["clima1"] == "Nublado"
+    assert resp_default_10h.status_code == 200
+    assert resp_default_10h.json()["clima1"] == "Nublado"
+    assert resp_default_10h.json()["professor"] == "Daniela"
 
-    resp_16h = client.get(
+    resp_default_16h = client.get(
         "/pool-log",
         params={
             "date": "2026-03-10",
@@ -143,9 +144,23 @@ def test_pool_log_daywide_latest_applicable_record(client: TestClient):
             "professor": "Outro Prof",
         },
     )
-    assert resp_16h.status_code == 200
-    assert resp_16h.json()["clima1"] == "Chuva"
-    assert resp_16h.json()["horario"] == "13:00"
+    assert resp_default_16h.status_code == 200
+    assert resp_default_16h.json()["clima1"] == "Nublado"
+    assert resp_default_16h.json()["horario"] == "06:00"
+
+    resp_prof_override = client.get(
+        "/pool-log",
+        params={
+            "date": "2026-03-10",
+            "turmaCodigo": "QUALQUER",
+            "turmaLabel": "Outro Grupo",
+            "horario": "16:00",
+            "professor": "Jefferson",
+        },
+    )
+    assert resp_prof_override.status_code == 200
+    assert resp_prof_override.json()["clima1"] == "Chuva"
+    assert resp_prof_override.json()["horario"] == "13:00"
 
 
 def test_pool_log_noop_when_same_day_state_repeats(client: TestClient, tmp_path: Path):

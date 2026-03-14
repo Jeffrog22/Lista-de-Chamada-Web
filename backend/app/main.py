@@ -628,7 +628,37 @@ def _pool_log_meaningful_signature(row: Dict[str, Any]) -> tuple:
         "" if row.get("Cloro (ppm)", None) is None else _normalize_excel_string(row.get("Cloro (ppm)", None)),
     )
 
-def _select_latest_pool_log_for_day(df: pd.DataFrame, date_value: str, requested_horario: str) -> Optional[Dict[str, Any]]:
+def _select_latest_pool_log_from_rows(rows: pd.DataFrame, requested_horario: str) -> Optional[Dict[str, Any]]:
+    if rows.empty:
+        return None
+
+    requested_minutes = _horario_to_minutes(requested_horario)
+    selected: Optional[Dict[str, Any]] = None
+    selected_minutes = -1
+    selected_index = -1
+
+    for row_index, row in rows.iterrows():
+        row_minutes = _horario_to_minutes(_normalize_excel_string(row.get("Horario", "")))
+        if requested_minutes is not None and row_minutes is not None and row_minutes > requested_minutes:
+            continue
+        current_minutes = row_minutes if row_minutes is not None else -1
+        if current_minutes > selected_minutes or (current_minutes == selected_minutes and int(row_index) >= selected_index):
+            selected = row.to_dict()
+            selected_minutes = current_minutes
+            selected_index = int(row_index)
+
+    if selected is not None:
+        return selected
+
+    return rows.iloc[-1].to_dict()
+
+
+def _select_latest_pool_log_for_day(
+    df: pd.DataFrame,
+    date_value: str,
+    requested_horario: str,
+    requested_professor: str = "",
+) -> Optional[Dict[str, Any]]:
     if df.empty or "Data" not in df.columns:
         return None
 
@@ -640,29 +670,20 @@ def _select_latest_pool_log_for_day(df: pd.DataFrame, date_value: str, requested
     if day_rows.empty:
         return None
 
-    requested_minutes = _horario_to_minutes(requested_horario)
-    selected: Optional[Dict[str, Any]] = None
-    selected_minutes = -1
-    selected_index = -1
+    baseline_row = day_rows.iloc[0].to_dict()
 
-    for row_index, row in day_rows.iterrows():
-        row_minutes = _horario_to_minutes(_normalize_excel_string(row.get("Horario", "")))
-        if requested_minutes is not None:
-            if row_minutes is None or row_minutes > requested_minutes:
-                continue
-        current_minutes = row_minutes if row_minutes is not None else -1
-        if current_minutes > selected_minutes or (current_minutes == selected_minutes and int(row_index) >= selected_index):
-            selected = row.to_dict()
-            selected_minutes = current_minutes
-            selected_index = int(row_index)
+    professor_key = _normalize_text_fold(_normalize_excel_string(requested_professor))
+    if professor_key:
+        professor_rows = day_rows[
+            day_rows["Professor"].astype(str).map(lambda value: _normalize_text_fold(_normalize_excel_string(value))) == professor_key
+        ]
+        selected_professor_row = _select_latest_pool_log_from_rows(professor_rows, requested_horario)
+        if selected_professor_row is not None:
+            return selected_professor_row
 
-    if selected is not None:
-        return selected
-
-    if requested_minutes is None:
-        return day_rows.iloc[-1].to_dict()
-
-    return None
+    # Regra diária: replica o primeiro registro do dia para todas as aulas/professores,
+    # exceto quando houver override específico do professor.
+    return baseline_row
 
 class ImportResult(BaseModel):
     units_created: int
@@ -753,6 +774,7 @@ class ImportStudentUpsertPayload(BaseModel):
     genero: Optional[str] = ""
     parq: Optional[str] = ""
     atestado: bool = False
+    movement_type: str = "correction"
 
 
 class ImportStudentBulkAllocatePayload(BaseModel):
@@ -931,7 +953,7 @@ def append_pool_log(entry: PoolLogEntryModel):
             "Cloro (ppm)": cloro_value,
         }
 
-        latest_for_day = _select_latest_pool_log_for_day(df, entry.data, entry.horario)
+        latest_for_day = _select_latest_pool_log_for_day(df, entry.data, entry.horario, entry.professor)
         if latest_for_day and _pool_log_meaningful_signature(latest_for_day) == _pool_log_meaningful_signature(row):
             return {"ok": True, "action": "noop", "file": file_path}
 
@@ -965,7 +987,7 @@ def get_pool_log(
         if "Data" not in df.columns:
             return Response(status_code=204)
 
-        selected_row = _select_latest_pool_log_for_day(df, date, horario or "")
+        selected_row = _select_latest_pool_log_for_day(df, date, horario or "", professor or "")
         if selected_row is None:
             return Response(status_code=204)
 
@@ -1170,6 +1192,17 @@ def _upsert_transfer_override_for_student(student: models.ImportStudent, target_
         items.append(payload)
 
     _save_transfer_overrides(items)
+
+
+def _remove_transfer_override_for_student(student: models.ImportStudent) -> None:
+    identity_key = _student_identity_key(student.nome, student.data_nascimento, student.whatsapp)
+    if not identity_key:
+        return
+
+    items = _load_transfer_overrides()
+    filtered = [item for item in items if str(item.get("key") or "").strip() != identity_key]
+    if len(filtered) != len(items):
+        _save_transfer_overrides(filtered)
 
 
 def _find_class_from_transfer_override(session: Session, override: Dict[str, Any]) -> Optional[models.ImportClass]:
@@ -3309,8 +3342,18 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
     target_student.parq = str(payload.parq or "").strip()
     target_student.atestado = bool(payload.atestado)
 
+    movement_type = str(payload.movement_type or "correction").strip().lower()
+    is_transfer = movement_type == "transfer"
+    previous_class = session.get(models.ImportClass, previous_class_id) if previous_class_id else None
+    previous_level = _normalize_text(previous_class.nivel) if previous_class else ""
+    target_level = _normalize_text(target_class.nivel) if target_class else ""
+    level_changed = bool(previous_level and target_level and previous_level != target_level)
+
     if target_class is not None and previous_class_id != target_class_id:
-        _upsert_transfer_override_for_student(target_student, target_class)
+        if level_changed or is_transfer:
+            _upsert_transfer_override_for_student(target_student, target_class)
+        else:
+            _remove_transfer_override_for_student(target_student)
 
     session.add(target_student)
     _dedupe_import_students(session)

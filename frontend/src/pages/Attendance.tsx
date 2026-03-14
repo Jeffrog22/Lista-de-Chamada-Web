@@ -485,7 +485,7 @@ export const Attendance: React.FC = () => {
 
   const extractHorarioTokens = (value?: string) => {
     if (!value) return [];
-    return value
+    return String(value)
       .split(/[;,]/)
       .map((token) => normalizeHorarioDigits(token.trim()))
       .filter(Boolean);
@@ -2116,6 +2116,7 @@ export const Attendance: React.FC = () => {
     setModalDate(date);
     setModalStep("select");
     setClimaPrefillApplied(false);
+    const isCurrentDate = date === todayDateKey;
     
     // Resetar dados
     setPoolData(prev => ({
@@ -2214,7 +2215,6 @@ export const Attendance: React.FC = () => {
       const inferredCondition = String(data.clima1 || "").trim();
       const inferredConditionLabel = normalizeWeatherConditionLabel(inferredCondition, "");
       const normalizedTemp = normalizeNumberInput(data.tempExterna);
-      const fallbackSensation = getFallbackSensationByTemp(normalizedTemp);
 
       const cloroValue = data.cloroPpm;
       const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
@@ -2225,7 +2225,7 @@ export const Attendance: React.FC = () => {
         tempPiscina: normalizeNumberInput(data.tempPiscina),
         cloro: cloroEnabled ? cloroValue : 1.5,
         cloroEnabled,
-        selectedIcons: icons.length ? icons : [fallbackSensation],
+        selectedIcons: icons,
         weatherCondition: inferredConditionLabel,
         weatherConditionCode: "",
         incidentType: data.nota === "ocorrencia" ? data.tipoOcorrencia : "",
@@ -2253,7 +2253,7 @@ export const Attendance: React.FC = () => {
       setPoolData(prev => ({
         ...prev,
         tempExterna: normalizeNumberInput(climaCache.tempExterna),
-        selectedIcons: normalizeSensationList(climaCache.selectedIcons || []),
+        selectedIcons: isCurrentDate ? [] : normalizeSensationList(climaCache.selectedIcons || []),
         weatherCondition: normalizeWeatherConditionLabel(
           String(climaCache.weatherCondition || climaCache.apiCondition || ""),
           String(climaCache.apiConditionCode || "")
@@ -2272,7 +2272,7 @@ export const Attendance: React.FC = () => {
       setPoolData(prev => ({
         ...prev,
         tempExterna: normalizeNumberInput(fallbackCache.tempExterna),
-        selectedIcons: normalizeSensationList(fallbackCache.selectedIcons || []),
+        selectedIcons: isCurrentDate ? [] : normalizeSensationList(fallbackCache.selectedIcons || []),
         weatherCondition: normalizeWeatherConditionLabel(
           String(fallbackCache.weatherCondition || fallbackCache.apiCondition || ""),
           String(fallbackCache.apiConditionCode || "")
@@ -2356,7 +2356,7 @@ export const Attendance: React.FC = () => {
     setPoolData(prev => ({
       ...prev,
       tempExterna: normalizeNumberInput(apiData.temp),
-      selectedIcons: normalizeSensationList(autoIcons),
+      selectedIcons: isCurrentDate ? [] : normalizeSensationList(autoIcons),
       weatherCondition: apiConditionLabel,
       weatherConditionCode: apiConditionCode,
     }));
@@ -2566,31 +2566,48 @@ export const Attendance: React.FC = () => {
     if (shouldMassJustify || shouldAddJustificationNote) {
       // Aplicar justificativa em massa
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+      const changedEntries: Array<{
+        aluno_nome: string;
+        data: string;
+        motivo: string;
+        turmaCodigo: string;
+        turmaLabel: string;
+        horario: string;
+        professor: string;
+      }> = [];
       nextAttendanceSnapshot = attendance.map((student) => {
+        const currentStatus = String(student.attendance?.[modalDate] || "");
         const nextJustifications = { ...(student.justifications || {}) };
-        if (shouldMassJustify) {
+        if (shouldMassJustify && currentStatus === "") {
           nextJustifications[modalDate] = reasonLabel;
-        }
-        if (shouldAddJustificationNote) {
+          changedEntries.push({
+            aluno_nome: student.aluno,
+            data: modalDate,
+            motivo: reasonLabel,
+            turmaCodigo: persistence.turmaCodigo,
+            turmaLabel: persistence.turmaLabel,
+            horario: persistence.horario,
+            professor: persistence.professor,
+          });
+        } else if (shouldAddJustificationNote && currentStatus === "") {
           nextJustifications[modalDate] = reasonLabel;
+          changedEntries.push({
+            aluno_nome: student.aluno,
+            data: modalDate,
+            motivo: reasonLabel,
+            turmaCodigo: persistence.turmaCodigo,
+            turmaLabel: persistence.turmaLabel,
+            horario: persistence.horario,
+            professor: persistence.professor,
+          });
         }
         return {
           ...student,
-          attendance: shouldMassJustify ? { ...student.attendance, [modalDate]: "Justificado" } : student.attendance,
+          attendance: shouldMassJustify && currentStatus === "" ? { ...student.attendance, [modalDate]: "Justificado" } : student.attendance,
           justifications: nextJustifications,
         };
       });
       setAttendance(nextAttendanceSnapshot);
-
-      const entries = attendance.map((student) => ({
-        aluno_nome: student.aluno,
-        data: modalDate,
-        motivo: reasonLabel,
-        turmaCodigo: persistence.turmaCodigo,
-        turmaLabel: persistence.turmaLabel,
-        horario: persistence.horario,
-        professor: persistence.professor,
-      }));
 
       logPersistenceDebug("saveJustificationLog:modal_mass_justification", {
         turmaCodigo: persistence.turmaCodigo,
@@ -2599,7 +2616,9 @@ export const Attendance: React.FC = () => {
         professor: persistence.professor,
         mes: monthKey,
       });
-      await saveJustificationLog(entries).catch(() => undefined);
+      if (changedEntries.length > 0) {
+        await saveJustificationLog(changedEntries).catch(() => undefined);
+      }
 
       logPersistenceDebug("saveAttendanceLog:modal_mass_justification", {
         turmaCodigo: persistence.turmaCodigo,

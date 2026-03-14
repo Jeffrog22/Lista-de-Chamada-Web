@@ -488,6 +488,7 @@ export const Students: React.FC = () => {
   const modalContentRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(true);
+  const [editMovementType, setEditMovementType] = useState<"correction" | "transfer">("correction");
   const [minAgeError, setMinAgeError] = useState<string>("");
   const [showExcludeReasonModal, setShowExcludeReasonModal] = useState(false);
   const [studentPendingExclusion, setStudentPendingExclusion] = useState<Student | null>(null);
@@ -782,6 +783,7 @@ export const Students: React.FC = () => {
   const handleAddClick = () => {
     setEditingId(null);
     setIsEditing(true);
+    setEditMovementType("correction");
     setMinAgeError("");
     const sticky = localStorage.getItem("studentStickyData");
     const parsed = sticky ? JSON.parse(sticky) : {};
@@ -807,6 +809,7 @@ export const Students: React.FC = () => {
   const handleEditClick = (student: Student) => {
     setEditingId(student.id);
     setIsEditing(false);
+    setEditMovementType("correction");
     setMinAgeError("");
     const normalizedBirth = maskDateInput(student.dataNascimento || "");
     const normalizedAtestado = maskDateInput(student.dataAtestado || "");
@@ -834,7 +837,11 @@ export const Students: React.FC = () => {
     setShowModal(true);
   };
 
-  const persistStudent = async (student: Student, isNew: boolean): Promise<boolean> => {
+  const persistStudent = async (
+    student: Student,
+    isNew: boolean,
+    movementType: "correction" | "transfer" = "correction"
+  ): Promise<boolean> => {
     try {
       const payload = {
         nome: student.nome,
@@ -856,7 +863,10 @@ export const Students: React.FC = () => {
       } else {
         const numericId = Number(student.id);
         if (Number.isFinite(numericId)) {
-          await updateImportStudent(student.id, payload);
+          await updateImportStudent(student.id, {
+            ...payload,
+            movement_type: movementType,
+          });
         }
       }
       return true;
@@ -946,7 +956,22 @@ export const Students: React.FC = () => {
           effectiveDate: new Date().toISOString().slice(0, 10),
         });
       } else if (changedClass) {
-        clearTransferHistoryForNames([studentData.nome]);
+        if (editMovementType === "transfer") {
+          saveTransferHistory({
+            nome: studentData.nome,
+            fromNivel: previousStudent.nivel || "",
+            toNivel: studentData.nivel || "",
+            fromTurma: previousStudent.turmaLabel || previousStudent.turma || "",
+            toTurma: studentData.turmaLabel || studentData.turma || "",
+            fromHorario: previousStudent.horario || "",
+            toHorario: studentData.horario || "",
+            fromProfessor: previousStudent.professor || "",
+            toProfessor: studentData.professor || "",
+            effectiveDate: new Date().toISOString().slice(0, 10),
+          });
+        } else {
+          clearTransferHistoryForNames([studentData.nome]);
+        }
       }
     }
 
@@ -965,7 +990,7 @@ export const Students: React.FC = () => {
     if (!editingId) {
       persisted = await persistStudent(studentData, true);
     } else if (!studentId.startsWith("local-")) {
-      persisted = await persistStudent(studentData, false);
+      persisted = await persistStudent(studentData, false, editMovementType);
     }
 
     if (persisted) {
@@ -1901,6 +1926,40 @@ export const Students: React.FC = () => {
                 {editingId ? "Aluno" : "Adicionar Novo Aluno"}
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {editingId && isEditing && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      onClick={() => setEditMovementType("correction")}
+                      style={{
+                        border: "none",
+                        borderRadius: "999px",
+                        padding: "6px 10px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: editMovementType === "correction" ? "#ea580c" : "#fed7aa",
+                        color: editMovementType === "correction" ? "#fff" : "#9a3412",
+                      }}
+                    >
+                      Correção
+                    </button>
+                    <button
+                      onClick={() => setEditMovementType("transfer")}
+                      style={{
+                        border: "none",
+                        borderRadius: "999px",
+                        padding: "6px 10px",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: editMovementType === "transfer" ? "#2563eb" : "#dbeafe",
+                        color: editMovementType === "transfer" ? "#fff" : "#1d4ed8",
+                      }}
+                    >
+                      Transferência
+                    </button>
+                  </div>
+                )}
                 {editingId && !isEditing && (
                   <button
                     onClick={() => setIsEditing(true)}
