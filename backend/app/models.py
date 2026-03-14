@@ -2,7 +2,7 @@ from typing import Optional
 from datetime import date, datetime
 from sqlmodel import SQLModel, Field
 from sqlalchemy import UniqueConstraint
-from pydantic import validator
+from pydantic import field_validator
 
 def _normalize_horario(value: Optional[str]) -> Optional[str]:
     if value is None:
@@ -39,7 +39,8 @@ class Student(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: Optional[datetime] = None
 
-    @validator("horario", pre=True)
+    @field_validator("horario", mode="before")
+    @classmethod
     def validate_horario(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_horario(value)
 
@@ -52,7 +53,8 @@ class ClassModel(SQLModel, table=True):
     nivel: Optional[str] = None
     capacidade_maxima: Optional[int] = None
 
-    @validator("horario", pre=True)
+    @field_validator("horario", mode="before")
+    @classmethod
     def validate_horario(cls, value: Optional[str]) -> Optional[str]:
         return _normalize_horario(value)
 

@@ -9,8 +9,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/smoke.spec.js --reporter=line",
     "test:e2e:attendance": "playwright test tests/attendance.spec.js --reporter=line",
-    "test:e2e:exclusions": "playwright test tests/exclusions.spec.js --reporter=line"
+    "test:e2e:exclusions": "playwright test tests/exclusions.spec.js --reporter=line",
+    "test:e2e:reports": "playwright test tests/reports.spec.js --reporter=line"
   },
   "dependencies": {
     "axios": "^1.13.2",

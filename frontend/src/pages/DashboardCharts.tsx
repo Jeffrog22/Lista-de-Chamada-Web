@@ -6,6 +6,7 @@ import './DashboardCharts.css';
 
 interface ReportStudent {
   id: string;
+  studentUid?: string;
   nome: string;
   presencas: number;
   faltas: number;
@@ -19,6 +20,7 @@ interface ReportClass {
   horario: string;
   professor: string;
   nivel: string;
+  hasLog?: boolean;
   alunos: ReportStudent[];
 }
 
@@ -29,14 +31,21 @@ const normalizeReportPayload = (payload: unknown): ReportClass[] => {
     const alunosRaw = Array.isArray(record.alunos) ? (record.alunos as unknown[]) : [];
     const alunos: ReportStudent[] = alunosRaw.map((student) => {
       const st = (student || {}) as Record<string, unknown>;
+      const historicoRaw = st.historico && typeof st.historico === 'object' ? (st.historico as Record<string, unknown>) : {};
+      const historico = Object.fromEntries(
+        Object.entries(historicoRaw)
+          .map(([day, status]) => [String(day || '').trim(), String(status || '').trim().toLowerCase()])
+          .filter(([day, status]) => Boolean(day) && ['c', 'f', 'j', ''].includes(status))
+      ) as { [date: string]: string };
       return {
         id: String(st.id || ''),
+        studentUid: st.student_uid ? String(st.student_uid) : st.studentUid ? String(st.studentUid) : undefined,
         nome: String(st.nome || ''),
         presencas: Number(st.presencas || 0),
         faltas: Number(st.faltas || 0),
         justificativas: Number(st.justificativas || 0),
         frequencia: Number(st.frequencia || 0),
-        historico: (st.historico && typeof st.historico === 'object' ? st.historico : {}) as { [date: string]: string },
+        historico,
       };
     });
     return {
@@ -44,6 +53,7 @@ const normalizeReportPayload = (payload: unknown): ReportClass[] => {
       horario: String(record.horario || ''),
       professor: String(record.professor || '-'),
       nivel: String(record.nivel || '-'),
+      hasLog: Boolean(record.hasLog),
       alunos,
     };
   });

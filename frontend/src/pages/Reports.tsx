@@ -52,6 +52,7 @@ class ReportsErrorBoundary extends React.Component<
 
 interface StudentStats {
   id: string;
+  studentUid?: string;
   nome: string;
   presencas: number;
   faltas: number;
@@ -66,6 +67,7 @@ interface ClassStats {
   horario: string;
   professor: string;
   nivel: string;
+  hasLog?: boolean;
   alunos: StudentStats[];
 }
 
@@ -181,8 +183,15 @@ if (!(pdfjsLib as any).GlobalWorkerOptions?.workerSrc) {
   ).toString();
 }
 
+const normalizeHorarioSelectionKey = (value: string) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 3) return `0${digits}`;
+  if (digits.length >= 4) return digits.slice(0, 4);
+  return digits;
+};
+
 const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
-  `${item.turma}||${item.horario}||${item.professor}`;
+  `${normalizeText(item.turma)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
 
 const normalizeText = (value: string) =>
   String(value || "")
@@ -371,14 +380,21 @@ const normalizeReportsData = (payload: unknown): ClassStats[] => {
     const alunosRaw = Array.isArray(record.alunos) ? (record.alunos as unknown[]) : [];
     const alunos: StudentStats[] = alunosRaw.map((student) => {
       const st = (student || {}) as Record<string, unknown>;
+      const historicoRaw = st.historico && typeof st.historico === "object" ? (st.historico as Record<string, unknown>) : {};
+      const historico = Object.fromEntries(
+        Object.entries(historicoRaw)
+          .map(([day, status]) => [String(day || "").trim(), String(status || "").trim().toLowerCase()])
+          .filter(([day, status]) => Boolean(day) && ["c", "f", "j", ""].includes(status))
+      ) as Record<string, string>;
       return {
         id: String(st.id || ""),
+        studentUid: st.student_uid ? String(st.student_uid) : st.studentUid ? String(st.studentUid) : undefined,
         nome: String(st.nome || ""),
         presencas: Number(st.presencas || 0),
         faltas: Number(st.faltas || 0),
         justificativas: Number(st.justificativas || 0),
         frequencia: Number(st.frequencia || 0),
-        historico: (st.historico && typeof st.historico === "object" ? st.historico : {}) as Record<string, string>,
+        historico,
         anotacoes: st.anotacoes ? String(st.anotacoes) : undefined,
       };
     });
@@ -388,6 +404,7 @@ const normalizeReportsData = (payload: unknown): ClassStats[] => {
       horario: String(record.horario || ""),
       professor: String(record.professor || ""),
       nivel: String(record.nivel || ""),
+      hasLog: Boolean(record.hasLog),
       alunos,
     };
   });

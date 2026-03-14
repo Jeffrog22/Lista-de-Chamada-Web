@@ -3,6 +3,7 @@ from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, migrate_db, get_session
 from app import crud, models
 from typing import List, Optional, Dict, Any
+from contextlib import asynccontextmanager
 import os
 import json
 import re
@@ -13,7 +14,7 @@ import unicodedata
 import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
-from pydantic import BaseModel, conint, Field
+from pydantic import BaseModel, Field, ConfigDict
 import csv
 from io import StringIO, BytesIO
 from copy import copy
@@ -34,7 +35,15 @@ try:
 except Exception:
     REPORTLAB_AVAILABLE = False
 
-app = FastAPI(title="Lista-de-Chamada - API")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    create_db_and_tables()
+    migrate_db()
+    os.makedirs(DATA_DIR, exist_ok=True)
+    yield
+
+
+app = FastAPI(title="Lista-de-Chamada - API", lifespan=lifespan)
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -64,12 +73,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
-    migrate_db()
-    os.makedirs(DATA_DIR, exist_ok=True)
 
 @app.get("/health")
 def health():
@@ -131,11 +134,11 @@ class ExclusionEntry(BaseModel):
     dataExclusao: Optional[str] = None
     motivo_exclusao: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 class ReportStudent(BaseModel):
     id: str
+    student_uid: Optional[str] = None
     nome: str
     presencas: int
     faltas: int
@@ -774,7 +777,7 @@ class ImportClassOut(BaseModel):
     professor: str
     nivel: str
     faixa_etaria: str
-    capacidade: conint(ge=0)
+    capacidade: int = Field(ge=0)
     dias_semana: str
 
 class ImportStudentOut(BaseModel):
@@ -1587,8 +1590,9 @@ def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
         item = _normalize_exclusion_item(raw)
         uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
+        item_id = str(item.get("id") or "").strip()
         nome = _normalize_text(item.get("nome") or item.get("Nome") or "")
-        if not uid and not nome:
+        if not uid and not item_id and not nome:
             continue
 
         existing_idx = next(
@@ -1935,6 +1939,40 @@ def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> 
     if ex_professor and cls_professor and ex_professor != cls_professor:
         return False
     return True
+
+
+def _build_report_student_identity(
+    student: models.ImportStudent,
+    cls: models.ImportClass,
+    student_uid: str = "",
+) -> Dict[str, Any]:
+    turma_codigo = str(cls.codigo or "").strip()
+    turma_label = str(cls.turma_label or cls.codigo or "").strip()
+    return {
+        "id": str(student.id or "").strip(),
+        "student_uid": str(student_uid or "").strip(),
+        "nome": str(student.nome or "").strip(),
+        "turma": turma_label,
+        "turmaLabel": turma_label,
+        "turmaCodigo": turma_codigo,
+        "grupo": turma_codigo,
+        "horario": str(cls.horario or "").strip(),
+        "professor": str(cls.professor or "").strip(),
+    }
+
+
+def _is_student_excluded_for_report(
+    student: models.ImportStudent,
+    cls: models.ImportClass,
+    exclusions: List[Dict[str, Any]],
+    student_uid: str = "",
+) -> bool:
+    student_payload = _build_report_student_identity(student, cls, student_uid=student_uid)
+    return any(
+        _exclusion_matches_class(entry, cls)
+        and _exclusion_records_match(entry, student_payload)
+        for entry in exclusions
+    )
 
 def _map_attendance_value(value: str) -> str:
     normalized = _normalize_text(value)
@@ -2664,7 +2702,9 @@ def delete_academic_calendar_event(event_id: str):
 def get_reports(month: Optional[str] = None, session: Session = Depends(get_session)) -> List[ReportClass]:
     classes = session.exec(select(models.ImportClass)).all()
     students = session.exec(select(models.ImportStudent)).all()
-    excluded_items = _load_json_list(os.path.join(DATA_DIR, "excludedStudents.json"))
+    excluded_items = _clean_exclusions_list(_load_json_list(os.path.join(DATA_DIR, "excludedStudents.json")))
+    uid_registry = _load_student_uid_registry()
+    uid_registry_changed = False
 
     students_by_class: Dict[int, List[models.ImportStudent]] = {}
     for student in students:
@@ -2704,23 +2744,30 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
             if log_entry:
                 break
 
-        excluded_names = {
-            _normalize_text(entry.get("nome") or entry.get("Nome") or "")
-            for entry in excluded_items
-            if _normalize_text(entry.get("nome") or entry.get("Nome") or "") and _exclusion_matches_class(entry, cls)
-        }
+        class_roster = students_by_class.get(cls.id, [])
+        name_to_student_meta: Dict[str, Dict[str, str]] = {}
+        excluded_names = set()
 
-        name_to_id = {
-            _normalize_text(s.nome): str(s.id)
-            for s in students_by_class.get(cls.id, [])
-        }
+        for student in class_roster:
+            student_uid, changed = _ensure_student_uid_for_student(student, registry=uid_registry)
+            uid_registry_changed = uid_registry_changed or changed
+            normalized_name = _normalize_text(student.nome)
+            if normalized_name and normalized_name not in name_to_student_meta:
+                name_to_student_meta[normalized_name] = {
+                    "id": str(student.id),
+                    "student_uid": student_uid,
+                }
+            if _is_student_excluded_for_report(student, cls, excluded_items, student_uid=student_uid):
+                excluded_names.add(normalized_name)
+
         class_students: List[ReportStudent] = []
 
         if log_entry:
             registros = log_entry.get("registros") or []
             for record in registros:
                 nome = str(record.get("aluno_nome") or "").strip()
-                if _normalize_text(nome) in excluded_names:
+                normalized_name = _normalize_text(nome)
+                if normalized_name in excluded_names:
                     continue
                 attendance = record.get("attendance") or {}
                 presencas = 0
@@ -2741,9 +2788,11 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
 
                 total = presencas + faltas + justificativas
                 frequencia = round(((presencas + justificativas) / total) * 100, 1) if total else 0.0
+                student_meta = name_to_student_meta.get(normalized_name, {})
                 class_students.append(
                     ReportStudent(
-                        id=name_to_id.get(_normalize_text(nome), nome or "0"),
+                        id=student_meta.get("id") or nome or "0",
+                        student_uid=student_meta.get("student_uid") or None,
                         nome=_to_proper_case(nome),
                         presencas=presencas,
                         faltas=faltas,
@@ -2753,12 +2802,15 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                     )
                 )
         else:
-            for student in students_by_class.get(cls.id, []):
-                if _normalize_text(student.nome) in excluded_names:
+            for student in class_roster:
+                normalized_name = _normalize_text(student.nome)
+                if normalized_name in excluded_names:
                     continue
+                student_meta = name_to_student_meta.get(normalized_name, {})
                 class_students.append(
                     ReportStudent(
                         id=str(student.id),
+                        student_uid=student_meta.get("student_uid") or None,
                         nome=_to_proper_case(student.nome),
                         presencas=0,
                         faltas=0,
@@ -2781,6 +2833,8 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
         )
 
     report.sort(key=lambda c: (c.turma, c.horario))
+    if uid_registry_changed:
+        _save_student_uid_registry(uid_registry)
     return report
 
 @app.post("/reports")

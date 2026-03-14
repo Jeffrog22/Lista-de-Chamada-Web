@@ -29,3 +29,25 @@ Sempre que quiser verificar se o template oficial `data/templates/import-data.te
 
 Esse comando também é útil para garantir que a base persistente reflita o conteúdo do CSV sempre que ele for alterado.
 
+## QA completo em um comando
+
+Para executar a validação principal (backend + E2E smoke + E2E relatórios) de uma vez, rode na raiz do projeto:
+
+1. `powershell -ExecutionPolicy Bypass -File .\scripts\qa_all.ps1`
+2. (Windows / clique duplo) `.\scripts\qa_all.bat`
+
+O script para na primeira falha e exibe a etapa que quebrou.
+
+## CI (GitHub Actions)
+
+O pipeline de QA está em [.github/workflows/qa.yml](.github/workflows/qa.yml) e roda automaticamente em push/PR para `master`/`main`.
+
+Ele é dividido em jobs paralelos (`backend` e `build_frontend`), com o job `e2e` executando após ambos concluírem com sucesso:
+
+- build do frontend (`npm run build`)
+- testes backend (`pytest`)
+- E2E smoke (`npm run test:e2e:smoke`)
+- E2E relatórios (`npm run test:e2e:reports`)
+
+Se algum E2E falhar no CI, os artifacts do Playwright (`frontend/test-results` e `frontend/playwright-report`) são anexados automaticamente para facilitar diagnóstico.
+
