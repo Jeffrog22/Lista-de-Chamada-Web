@@ -6,7 +6,7 @@ import { Reports } from "./pages/Reports";
 import { Vacancies } from "./pages/Vacancies";
 import { Exclusions } from "./pages/Exclusions";
 import { Login } from "./pages/Login";
-import { getBootstrap, getImportDataStatus, getMaintenanceDiagnostics, importDataFile } from "./api";
+import { clearTransferOverrides, getBootstrap, getImportDataStatus, getMaintenanceDiagnostics, importDataFile } from "./api";
 import { mapBootstrapForStorage } from "./utils/bootstrapMapping";
 import "./App.simple.css";
 
@@ -102,6 +102,7 @@ export default function App() {
   };
 
   const importTimestampStorageKey = "last_import_at";
+  const transferCleanupMigrationKey = "transferCleanup_migration_20260314";
 
   const readLastImportAtFallback = () => {
     try {
@@ -132,6 +133,22 @@ export default function App() {
 
   useEffect(() => {
     purgeFebruaryLocalCache();
+
+    const runTransferCleanupMigration = async () => {
+      try {
+        if (localStorage.getItem(transferCleanupMigrationKey) === "1") return;
+
+        localStorage.removeItem("studentTransferHistory");
+        const response = await clearTransferOverrides();
+        if (response?.data?.ok) {
+          localStorage.setItem(transferCleanupMigrationKey, "1");
+        }
+      } catch {
+        // retry on next app load
+      }
+    };
+
+    runTransferCleanupMigration();
 
     try {
       const searchParams = new URLSearchParams(window.location.search);

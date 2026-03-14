@@ -570,6 +570,9 @@ export const getImportDataStatus = () =>
 export const getMaintenanceDiagnostics = () =>
   API.get("/maintenance/diagnostics");
 
+export const clearTransferOverrides = () =>
+  API.post("/maintenance/clear-transfer-overrides", {}).catch(() => ({ data: { ok: false, removed: 0 } }));
+
 // Login
 export const login = (username: string, password: string) =>
   API.post("/token", new URLSearchParams({ username, password }), {

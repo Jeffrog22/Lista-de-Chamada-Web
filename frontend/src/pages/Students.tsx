@@ -241,7 +241,6 @@ export const Students: React.FC = () => {
   };
   const [students, setStudents] = useState<Student[]>([]);
   const [allocationTarget, setAllocationTarget] = useState<AllocationTarget | null>(null);
-  const [allocationMovementType, setAllocationMovementType] = useState<"correction" | "transfer">("correction");
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [isAllocatingBulk, setIsAllocatingBulk] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -474,11 +473,6 @@ export const Students: React.FC = () => {
 
   useEffect(() => {
     setSelectedPendingIds([]);
-  }, [allocationTarget]);
-
-  useEffect(() => {
-    if (!allocationTarget) return;
-    setAllocationMovementType("correction");
   }, [allocationTarget]);
 
   const [sortKey, setSortKey] = useState<    "nome" | "nivel" | "idade" | "categoria" | "turma" | "horario" | "professor" | null
@@ -943,18 +937,22 @@ export const Students: React.FC = () => {
         normalizeText(previousStudent.professor || "") !== normalizeText(studentData.professor || "");
 
       if (changedNivel) {
-        saveTransferHistory({
-          nome: studentData.nome,
-          fromNivel: previousStudent.nivel || "",
-          toNivel: studentData.nivel || "",
-          fromTurma: previousStudent.turmaLabel || previousStudent.turma || "",
-          toTurma: studentData.turmaLabel || studentData.turma || "",
-          fromHorario: previousStudent.horario || "",
-          toHorario: studentData.horario || "",
-          fromProfessor: previousStudent.professor || "",
-          toProfessor: studentData.professor || "",
-          effectiveDate: new Date().toISOString().slice(0, 10),
-        });
+        if (editMovementType === "transfer") {
+          saveTransferHistory({
+            nome: studentData.nome,
+            fromNivel: previousStudent.nivel || "",
+            toNivel: studentData.nivel || "",
+            fromTurma: previousStudent.turmaLabel || previousStudent.turma || "",
+            toTurma: studentData.turmaLabel || studentData.turma || "",
+            fromHorario: previousStudent.horario || "",
+            toHorario: studentData.horario || "",
+            fromProfessor: previousStudent.professor || "",
+            toProfessor: studentData.professor || "",
+            effectiveDate: new Date().toISOString().slice(0, 10),
+          });
+        } else {
+          clearTransferHistoryForNames([studentData.nome]);
+        }
       } else if (changedClass) {
         if (editMovementType === "transfer") {
           saveTransferHistory({
@@ -1281,16 +1279,15 @@ export const Students: React.FC = () => {
 
     try {
       setIsAllocatingBulk(true);
+      const movementType: "correction" = "correction";
       await bulkAllocateImportStudents({
         student_ids: numericIds,
         turma: allocationTarget.turma,
         horario: allocationTarget.horario,
         professor: allocationTarget.professor,
-        movement_type: allocationMovementType,
+        movement_type: movementType,
       });
-      if (allocationMovementType === "correction") {
-        clearTransferHistoryForNames(selectedStudents.map((student) => student.nome));
-      }
+      clearTransferHistoryForNames(selectedStudents.map((student) => student.nome));
       await reloadBootstrapData();
       setSelectedPendingIds([]);
       setAllocationTarget(null);
@@ -1377,41 +1374,21 @@ export const Students: React.FC = () => {
               Selecione alunos pendentes para admitir nesta turma.
             </div>
             <div style={{ marginTop: "8px", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "12px", color: "#7c2d12", fontWeight: 700 }}>Tipo:</span>
-              <button
-                type="button"
-                onClick={() => setAllocationMovementType("correction")}
+              <span style={{ fontSize: "12px", color: "#7c2d12", fontWeight: 700 }}>Tipo configurado:</span>
+              <span
                 style={{
-                  border: "none",
                   borderRadius: "999px",
                   padding: "4px 10px",
-                  cursor: "pointer",
                   fontWeight: 700,
                   fontSize: "12px",
-                  background: allocationMovementType === "correction" ? "#ea580c" : "#fed7aa",
-                  color: allocationMovementType === "correction" ? "#fff" : "#9a3412",
+                  background: "#ea580c",
+                  color: "#fff",
                 }}
               >
                 Correção
-              </button>
-              <button
-                type="button"
-                onClick={() => setAllocationMovementType("transfer")}
-                style={{
-                  border: "none",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  fontSize: "12px",
-                  background: allocationMovementType === "transfer" ? "#2563eb" : "#dbeafe",
-                  color: allocationMovementType === "transfer" ? "#fff" : "#1d4ed8",
-                }}
-              >
-                Transferência
-              </button>
+              </span>
               <span style={{ fontSize: "11px", color: "#9a3412" }}>
-                Correção não bloqueia histórico retroativo.
+                Alocação de pendentes sempre usa correção (sem bloqueio retroativo).
               </span>
             </div>
           </div>

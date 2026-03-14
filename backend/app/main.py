@@ -1728,6 +1728,18 @@ def _purge_month_data(
     }
 
 
+@app.post("/maintenance/clear-transfer-overrides")
+def clear_transfer_overrides():
+    overrides = _load_transfer_overrides()
+    removed = len(overrides)
+    if removed > 0:
+        _save_transfer_overrides([])
+    return {
+        "ok": True,
+        "removed": removed,
+    }
+
+
 @app.post("/maintenance/purge-month-data")
 def purge_month_data(payload: MaintenancePurgeMonthPayload):
     return _purge_month_data(
@@ -3415,13 +3427,8 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
 
     movement_type = str(payload.movement_type or "correction").strip().lower()
     is_transfer = movement_type == "transfer"
-    previous_class = session.get(models.ImportClass, previous_class_id) if previous_class_id else None
-    previous_level = _normalize_text(previous_class.nivel) if previous_class else ""
-    target_level = _normalize_text(target_class.nivel) if target_class else ""
-    level_changed = bool(previous_level and target_level and previous_level != target_level)
-
     if target_class is not None and previous_class_id != target_class_id:
-        if level_changed or is_transfer:
+        if is_transfer:
             _upsert_transfer_override_for_student(target_student, target_class)
         else:
             _remove_transfer_override_for_student(target_student)
@@ -3482,6 +3489,8 @@ def bulk_allocate_import_students(
         target_student.class_id = target_class.id
         if is_transfer and previous_class_id != target_class.id:
             _upsert_transfer_override_for_student(target_student, target_class)
+        else:
+            _remove_transfer_override_for_student(target_student)
         session.add(target_student)
         updated += 1
 
