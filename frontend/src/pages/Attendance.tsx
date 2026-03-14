@@ -2247,7 +2247,6 @@ export const Attendance: React.FC = () => {
           : reason;
 
         await applyCalendarClosureJustification(date, reasonLabel);
-        return;
       }
 
       setClimaPrefillApplied(true);
