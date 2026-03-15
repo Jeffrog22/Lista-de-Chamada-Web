@@ -3089,26 +3089,37 @@ export const Attendance: React.FC = () => {
           );
         }
 
-        const canTrustBackendSnapshot = Boolean(matchedClass?.hasLog) || !storedHasAnyMark;
+        const backendCandidateByName = new Map<
+          string,
+          { attendance: Record<string, "Presente" | "Falta" | "Justificado" | ""> }
+        >();
+
+        (matchedClass?.alunos || []).forEach((student) => {
+          const studentKey = normalizeText(student.nome || "");
+          if (!studentKey) return;
+          if (isExcludedByIdentity(student.nome || "")) return;
+          const attendanceMap = (student.historico || {}) as Record<string, string>;
+          const mappedAttendance = Object.entries(attendanceMap).reduce(
+            (acc, [dayKey, status]) => {
+              const day = String(dayKey || "").padStart(2, "0");
+              const dateKey = `${monthKey}-${day}`;
+              if (newDates.includes(dateKey)) {
+                acc[dateKey] = mapAttendanceValue(String(status || ""));
+              }
+              return acc;
+            },
+            {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
+          );
+          backendCandidateByName.set(studentKey, { attendance: mappedAttendance });
+        });
+
+        const backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
+          Object.values(entry.attendance || {}).some((value) => Boolean(value))
+        );
+        const canTrustBackendSnapshot = backendHasAnyMark || !storedHasAnyMark;
+
         if (canTrustBackendSnapshot) {
-          (matchedClass?.alunos || []).forEach((student) => {
-            const studentKey = normalizeText(student.nome || "");
-            if (!studentKey) return;
-            if (isExcludedByIdentity(student.nome || "")) return;
-            const attendanceMap = (student.historico || {}) as Record<string, string>;
-            const mappedAttendance = Object.entries(attendanceMap).reduce(
-              (acc, [dayKey, status]) => {
-                const day = String(dayKey || "").padStart(2, "0");
-                const dateKey = `${monthKey}-${day}`;
-                if (newDates.includes(dateKey)) {
-                  acc[dateKey] = mapAttendanceValue(String(status || ""));
-                }
-                return acc;
-              },
-              {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
-            );
-            backendByName.set(studentKey, { attendance: mappedAttendance });
-          });
+          backendCandidateByName.forEach((value, key) => backendByName.set(key, value));
         }
 
         const selectedNivelNormalized = normalizeText(selectedClass.nivel || "");

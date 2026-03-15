@@ -241,9 +241,9 @@ def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
             with open(file_path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
             if not isinstance(payload, list):
-                payload = []
-        except Exception:
-            payload = []
+                raise RuntimeError(f"Arquivo JSON inválido para append: {file_path} (esperado array)")
+        except Exception as exc:
+            raise RuntimeError(f"Falha ao ler JSON existente antes do append: {file_path}") from exc
     payload.extend(items)
     _backup_runtime_json(file_path)
     with open(file_path, "w", encoding="utf-8") as f:
@@ -1087,16 +1087,27 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 existing_justifications = existing.get("justifications") if isinstance(existing.get("justifications"), dict) else {}
                 incoming_justifications = incoming.get("justifications") if isinstance(incoming.get("justifications"), dict) else {}
 
+                sanitized_incoming_attendance = {
+                    str(date_key): str(value)
+                    for date_key, value in incoming_attendance.items()
+                    if str(date_key or "").strip() and str(value or "").strip() != ""
+                }
+                sanitized_incoming_justifications = {
+                    str(date_key): str(value)
+                    for date_key, value in incoming_justifications.items()
+                    if str(date_key or "").strip() and str(value or "").strip() != ""
+                }
+
                 return {
                     **existing,
                     **incoming,
                     "attendance": {
                         **existing_attendance,
-                        **incoming_attendance,
+                        **sanitized_incoming_attendance,
                     },
                     "justifications": {
                         **existing_justifications,
-                        **incoming_justifications,
+                        **sanitized_incoming_justifications,
                     },
                 }
 
