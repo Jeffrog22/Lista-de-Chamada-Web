@@ -1150,10 +1150,27 @@ export const Reports: React.FC = () => {
       let weekdays = weekdaysBySummaryGroup[group] || [];
 
       if (weekdays.length === 0) {
-        const fallbackWeekdays = bootstrapWeekdaysByKey.get(key) || [];
-        if (fallbackWeekdays.length > 0) {
-          weekdays = fallbackWeekdays;
-          group = getSummaryGroupFromWeekdays(fallbackWeekdays);
+        // Tentativa 1: chave exata bootstrap
+        const exactFallback = bootstrapWeekdaysByKey.get(key) || [];
+        if (exactFallback.length > 0) {
+          weekdays = exactFallback;
+          group = getSummaryGroupFromWeekdays(exactFallback);
+        } else {
+          // Tentativa 2: correspondência fuzzy por horario+professor (turmas sem dia no nome)
+          const clsHorarioNorm = normalizeHorarioSelectionKey(cls.horario || "");
+          const clsProfNorm = normalizeText(cls.professor || "");
+          const matched = bootstrapClasses.find((bc) => {
+            const bcHorarioNorm = normalizeHorarioSelectionKey(bc.horario || "");
+            const bcProfNorm = normalizeText(bc.professor || "");
+            return bcHorarioNorm === clsHorarioNorm && bcProfNorm === clsProfNorm;
+          });
+          if (matched) {
+            const fuzzyWeekdays = parseWeekdaysFromDiasSemana(matched.diasSemana || "");
+            if (fuzzyWeekdays.length > 0) {
+              weekdays = fuzzyWeekdays;
+              group = getSummaryGroupFromWeekdays(fuzzyWeekdays);
+            }
+          }
         }
       }
 
@@ -1161,7 +1178,7 @@ export const Reports: React.FC = () => {
     });
 
     return map;
-  }, [classesData, bootstrapWeekdaysByKey]);
+  }, [classesData, bootstrapWeekdaysByKey, bootstrapClasses]);
 
   const summaryProfessorOptions = useMemo(() => {
     const options = Array.from(
@@ -1175,15 +1192,43 @@ export const Reports: React.FC = () => {
     return options.sort((a, b) => a.localeCompare(b));
   }, [classScheduleMetaByKey, classesData, summaryTurmaToggle]);
 
+  // Auto-seleciona o grupo TQ/QS com mais registros ao carregar dados
+  useEffect(() => {
+    if (classesData.length === 0) return;
+    const groupLogCount = new Map<string, number>([["terca-quinta", 0], ["quarta-sexta", 0]]);
+    classesData.forEach((cls) => {
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group === "outros") return;
+      if (cls.hasLog) groupLogCount.set(meta.group, (groupLogCount.get(meta.group) || 0) + 1);
+    });
+    const tqC = groupLogCount.get("terca-quinta") || 0;
+    const qsC = groupLogCount.get("quarta-sexta") || 0;
+    if (qsC > tqC) setSummaryTurmaToggle("quarta-sexta");
+    else setSummaryTurmaToggle("terca-quinta");
+  }, [classesData, classScheduleMetaByKey]);
+
+  // Auto-seleciona professor com mais aulas registradas (não o primeiro alfabético)
   useEffect(() => {
     if (summaryProfessorOptions.length === 0) {
       setSummaryProfessorToggle("");
       return;
     }
-    if (!summaryProfessorToggle || !summaryProfessorOptions.includes(summaryProfessorToggle)) {
-      setSummaryProfessorToggle(summaryProfessorOptions[0]);
-    }
-  }, [summaryProfessorOptions, summaryProfessorToggle]);
+    if (summaryProfessorToggle && summaryProfessorOptions.includes(summaryProfessorToggle)) return;
+    // Conta classes com hasLog por professor
+    const logCount = new Map<string, number>();
+    summaryProfessorOptions.forEach((p) => logCount.set(p, 0));
+    classesData.forEach((cls) => {
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group !== summaryTurmaToggle) return;
+      if (cls.hasLog && logCount.has(cls.professor)) {
+        logCount.set(cls.professor, (logCount.get(cls.professor) || 0) + 1);
+      }
+    });
+    let best = summaryProfessorOptions[0];
+    let bestN = -1;
+    logCount.forEach((n, p) => { if (n > bestN) { bestN = n; best = p; } });
+    setSummaryProfessorToggle(best);
+  }, [summaryProfessorOptions, summaryProfessorToggle, classesData, classScheduleMetaByKey, summaryTurmaToggle]);
 
   const refreshVacanciesSnapshot = (isMounted?: () => boolean) => {
     getBootstrap()
@@ -1731,63 +1776,6 @@ export const Reports: React.FC = () => {
     summaryTurmaToggle,
   ]);
 
-  const classTotalsUntilCurrent = useMemo(() => {
-    const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
-    if (!effectiveEnd) return { previstas: 0, dadas: 0 };
-    const endKey = toDateKey(effectiveEnd);
-
-    let previstasTotal = 0;
-    let dadasTotal = 0;
-
-    classesData.forEach((cls) => {
-      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
-      if (!meta || meta.group !== summaryTurmaToggle) return;
-      if (summaryProfessorToggle && normalizeText(cls.professor) !== normalizeText(summaryProfessorToggle)) return;
-
-      const weekdays = meta.weekdays;
-      if (weekdays.length === 0) return;
-
-      const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
-        const date = new Date(`${dateKey}T00:00:00`);
-        return weekdays.includes(date.getDay());
-      }).length;
-
-      const recordedDays = new Set<string>();
-      cls.alunos.forEach((aluno) => {
-        Object.entries(aluno.historico || {}).forEach(([rawDay, status]) => {
-          const normalizedStatus = String(status || "").toLowerCase();
-          if (!["c", "f", "j"].includes(normalizedStatus)) return;
-          const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
-          if (!parsed) return;
-          const parsedKey = toDateKey(parsed);
-          if (parsedKey > endKey) return;
-          const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
-          const isRetroactiveInSelectedMonth =
-            parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
-          if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
-          if (isDateClosedForAttendance(parsedKey, calendarSettings, calendarEvents)) return;
-          if (!weekdays.includes(parsed.getDay())) return;
-          recordedDays.add(parsedKey);
-        });
-      });
-
-      previstasTotal += previstas;
-      dadasTotal += recordedDays.size;
-    });
-
-    return { previstas: previstasTotal, dadas: dadasTotal };
-  }, [
-    calendarEvents,
-    calendarSettings,
-    classScheduleMetaByKey,
-    classesData,
-    plannedClassDaysUntilCurrent,
-    plannedClassDaysUntilCurrentSet,
-    selectedMonthLimits,
-    summaryProfessorToggle,
-    summaryTurmaToggle,
-  ]);
-
   const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
   const totalCancelamentosElegiveis = useMemo(() => {
     const { effectiveEnd } = selectedMonthLimits;
@@ -1818,8 +1806,7 @@ export const Reports: React.FC = () => {
 
     classesData.forEach((cls) => {
       const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
-      if (!meta || meta.group !== summaryTurmaToggle) return;
-      if (summaryProfessorToggle && normalizeText(cls.professor) !== normalizeText(summaryProfessorToggle)) return;
+      if (!meta || meta.group === "outros") return;
 
       const weekdays = meta.weekdays;
       if (weekdays.length === 0) return;
@@ -1841,14 +1828,52 @@ export const Reports: React.FC = () => {
     plannedClassDaysUntilCurrent,
     selectedMonth,
     selectedMonthLimits,
-    summaryProfessorToggle,
-    summaryTurmaToggle,
   ]);
 
-  const hasAttendanceRecordsInSummarySelection = summaryLessonsByHorario.totalRegistradas > 0;
+  // Aproveitamento global — considera TODAS as turmas/professores, sem filtro de toggle
+  const globalClassTotalsUntilCurrent = useMemo(() => {
+    const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
+    if (!effectiveEnd) return { previstas: 0, dadas: 0 };
+    const endKey = toDateKey(effectiveEnd);
+    let previstasTotal = 0;
+    let dadasTotal = 0;
+    classesData.forEach((cls) => {
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group === "outros") return;
+      const weekdays = meta.weekdays;
+      if (weekdays.length === 0) return;
+      const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
+        const date = new Date(`${dateKey}T00:00:00`);
+        return weekdays.includes(date.getDay());
+      }).length;
+      const recordedDays = new Set<string>();
+      cls.alunos.forEach((aluno) => {
+        Object.entries(aluno.historico || {}).forEach(([rawDay, status]) => {
+          const normalizedStatus = String(status || "").toLowerCase();
+          if (!["c", "f", "j"].includes(normalizedStatus)) return;
+          const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
+          if (!parsed) return;
+          const parsedKey = toDateKey(parsed);
+          if (parsedKey > endKey) return;
+          const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
+          const isRetroactive = parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
+          if (!isPlannedDay && !isRetroactive) return;
+          if (isDateClosedForAttendance(parsedKey, calendarSettings, calendarEvents)) return;
+          if (!weekdays.includes(parsed.getDay())) return;
+          recordedDays.add(parsedKey);
+        });
+      });
+      previstasTotal += previstas;
+      dadasTotal += recordedDays.size;
+    });
+    return { previstas: previstasTotal, dadas: dadasTotal };
+  }, [
+    calendarEvents, calendarSettings, classScheduleMetaByKey, classesData,
+    plannedClassDaysUntilCurrent, plannedClassDaysUntilCurrentSet, selectedMonthLimits,
+  ]);
 
-  const totalAulasDadas = classTotalsUntilCurrent.dadas;
-  const totalAulasPrevistas = classTotalsUntilCurrent.previstas;
+  const totalAulasDadas = globalClassTotalsUntilCurrent.dadas;
+  const totalAulasPrevistas = globalClassTotalsUntilCurrent.previstas;
   const totalAulasPrevistasValidas = Math.max(0, totalAulasPrevistas - totalCancelamentosElegiveis);
   const aproveitamentoAulas =
     totalAulasPrevistasValidas > 0
@@ -2335,11 +2360,6 @@ export const Reports: React.FC = () => {
                 <div className="vagas-footer">
                   Cancelamentos elegíveis: {totalCancelamentosElegiveis} | Previstas válidas: {totalAulasPrevistasValidas} | Dadas: {totalAulasDadas}
                 </div>
-                {!hasAttendanceRecordsInSummarySelection && totalAulasPrevistasValidas > 0 && (
-                  <div className="vagas-footer">
-                    Nenhuma chamada registrada para o filtro atual no mês selecionado.
-                  </div>
-                )}
                 <div className="reports-kpi-actions">
                   <button
                     type="button"
