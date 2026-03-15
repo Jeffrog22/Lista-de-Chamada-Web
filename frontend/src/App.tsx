@@ -72,8 +72,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [teacherName, setTeacherName] = useState<string>("");
   const [teacherUnit, setTeacherUnit] = useState<string>("");
-  const [quickTeacherOptions, setQuickTeacherOptions] = useState<string[]>([]);
-  const [quickTeacherSelected, setQuickTeacherSelected] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
@@ -214,44 +212,7 @@ export default function App() {
         setMaintenanceDiag(null);
       });
 
-    try {
-      const classesRaw = localStorage.getItem("activeClasses");
-      const classes = classesRaw ? JSON.parse(classesRaw) : [];
-      const teachers = Array.from(
-        new Set(
-          (Array.isArray(classes) ? classes : [])
-            .map((cls: any) => String(cls?.Professor || "").trim())
-            .filter(Boolean)
-        )
-      ) as string[];
-      teachers.sort((a, b) => a.localeCompare(b, "pt-BR"));
-      setQuickTeacherOptions(teachers);
-      if (!teacherName && teachers.length > 0) {
-        setQuickTeacherSelected(teachers[0]);
-      }
-    } catch {
-      // ignore
-    }
   }, []);
-
-  const handleQuickTeacherApply = () => {
-    const nextTeacher = String(quickTeacherSelected || "").trim();
-    if (!nextTeacher) return;
-
-    const nextProfile = {
-      name: nextTeacher,
-      unit: teacherUnit || "Bela Vista",
-      email: "",
-      whatsapp: "",
-    };
-
-    try {
-      localStorage.setItem("teacherProfile", JSON.stringify(nextProfile));
-    } catch {
-      // ignore
-    }
-    setTeacherName(nextTeacher);
-  };
 
   const formatImportDate = (value?: string | null) => {
     if (!value) return "-";
@@ -495,23 +456,6 @@ export default function App() {
             <span className="diag-badge" title="Diagnóstico de integridade do backend">
               diag b:{maintenanceDiag?.bootstrap?.students ?? "-"} c:{maintenanceDiag?.bootstrap?.classes ?? "-"} fev:{(maintenanceDiag?.feb2026?.attendance ?? 0) + (maintenanceDiag?.feb2026?.justifications ?? 0) + (maintenanceDiag?.feb2026?.exclusions ?? 0)}
             </span>
-          )}
-          {quickTeacherOptions.length > 0 && (
-            <>
-              <select
-                value={quickTeacherSelected}
-                onChange={(e) => setQuickTeacherSelected(e.target.value)}
-                className="quick-teacher-select"
-                title="Login rápido de professor"
-              >
-                {quickTeacherOptions.map((teacher) => (
-                  <option key={teacher} value={teacher}>{teacher}</option>
-                ))}
-              </select>
-              <button className="logout-button" onClick={handleQuickTeacherApply}>
-                Entrar Professor
-              </button>
-            </>
           )}
           <input
             ref={fileInputRef}

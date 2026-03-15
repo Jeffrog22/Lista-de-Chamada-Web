@@ -1737,7 +1737,11 @@ export const Reports: React.FC = () => {
     let dadasTotal = 0;
 
     classesData.forEach((cls) => {
-      const weekdays = classScheduleMetaByKey.get(classSelectionKey(cls))?.weekdays || [];
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group !== summaryTurmaToggle) return;
+      if (summaryProfessorToggle && normalizeText(cls.professor) !== normalizeText(summaryProfessorToggle)) return;
+
+      const weekdays = meta.weekdays;
       if (weekdays.length === 0) return;
 
       const previstas = plannedClassDaysUntilCurrent.filter((dateKey) => {
@@ -1774,6 +1778,8 @@ export const Reports: React.FC = () => {
     plannedClassDaysUntilCurrent,
     plannedClassDaysUntilCurrentSet,
     selectedMonthLimits,
+    summaryProfessorToggle,
+    summaryTurmaToggle,
   ]);
 
   const climateCancellationKeywords = ["climaticas", "cloro", "ocorrencia", "feriado", "ponte"];
@@ -1805,7 +1811,11 @@ export const Reports: React.FC = () => {
     let canceledClassLessons = 0;
 
     classesData.forEach((cls) => {
-      const weekdays = classScheduleMetaByKey.get(classSelectionKey(cls))?.weekdays || [];
+      const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
+      if (!meta || meta.group !== summaryTurmaToggle) return;
+      if (summaryProfessorToggle && normalizeText(cls.professor) !== normalizeText(summaryProfessorToggle)) return;
+
+      const weekdays = meta.weekdays;
       if (weekdays.length === 0) return;
 
       plannedClassDaysUntilCurrent.forEach((dateKey) => {
@@ -1825,7 +1835,11 @@ export const Reports: React.FC = () => {
     plannedClassDaysUntilCurrent,
     selectedMonth,
     selectedMonthLimits,
+    summaryProfessorToggle,
+    summaryTurmaToggle,
   ]);
+
+  const hasAttendanceRecordsInSummarySelection = summaryLessonsByHorario.totalRegistradas > 0;
 
   const totalAulasDadas = classTotalsUntilCurrent.dadas;
   const totalAulasPrevistas = classTotalsUntilCurrent.previstas;
@@ -2315,6 +2329,11 @@ export const Reports: React.FC = () => {
                 <div className="vagas-footer">
                   Cancelamentos elegíveis: {totalCancelamentosElegiveis} | Previstas válidas: {totalAulasPrevistasValidas} | Dadas: {totalAulasDadas}
                 </div>
+                {!hasAttendanceRecordsInSummarySelection && totalAulasPrevistasValidas > 0 && (
+                  <div className="vagas-footer">
+                    Nenhuma chamada registrada para o filtro atual no mês selecionado.
+                  </div>
+                )}
                 <div className="reports-kpi-actions">
                   <button
                     type="button"

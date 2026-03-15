@@ -2852,7 +2852,7 @@ export const Attendance: React.FC = () => {
     return `${months[monthIndex]}/${year}`;
   })();
 
-  const selectedDaysKey = selectedClass.diasSemana.join("|");
+  const selectedDaysKey = resolvedDiasSemana.join("|");
 
   useEffect(() => {
     const triggerRefresh = () => {
@@ -2896,7 +2896,7 @@ export const Attendance: React.FC = () => {
         professor: selectedClass.professor || selectedProfessor,
       });
 
-      const newDates = generateDates(selectedClass.diasSemana, monthKey).map((d) => d.split(" ")[0]);
+      const newDates = generateDates(resolvedDiasSemana, monthKey).map((d) => d.split(" ")[0]);
       const storedRecords = loadAttendanceStorage();
       const excludedList = (() => {
         try {
@@ -2944,6 +2944,60 @@ export const Attendance: React.FC = () => {
           .map((exclusion) => normalizeText(exclusion?.nome || exclusion?.Nome || ""))
           .filter(Boolean)
       );
+
+      const excludedIdsForSelectedClass = new Set(
+        excludedList
+          .filter((exclusion) => exclusionMatchesSelectedClass(exclusion))
+          .map((exclusion) => String(exclusion?.id || "").trim())
+          .filter(Boolean)
+      );
+
+      const excludedUidsForSelectedClass = new Set(
+        excludedList
+          .filter((exclusion) => exclusionMatchesSelectedClass(exclusion))
+          .map((exclusion) => String(exclusion?.student_uid || exclusion?.studentUid || "").trim())
+          .filter(Boolean)
+      );
+
+      const activeMetaByName = new Map<string, ActiveStudentMeta>();
+      const selectedTurmaRef = normalizeText(selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "");
+      const selectedTurmaCodigoRef = normalizeText(selectedClass.turmaCodigo || "");
+      const selectedHorarioRef = normalizeHorarioDigits(selectedClass.horario || selectedHorario || "");
+      const selectedProfessorRef = normalizeText(selectedClass.professor || selectedProfessor || "");
+
+      activeStudentsMeta.forEach((student) => {
+        const studentName = normalizeText(student.nome || "");
+        if (!studentName) return;
+
+        const studentTurma = normalizeText(student.turma || "");
+        const studentTurmaCodigo = normalizeText(student.turmaCodigo || student.grupo || "");
+        const studentHorario = normalizeHorarioDigits(student.horario || "");
+        const studentProfessor = normalizeText(student.professor || "");
+
+        const turmaMatches =
+          (!selectedTurmaRef && !selectedTurmaCodigoRef) ||
+          studentTurma === selectedTurmaRef ||
+          studentTurmaCodigo === selectedTurmaRef ||
+          studentTurma === selectedTurmaCodigoRef ||
+          studentTurmaCodigo === selectedTurmaCodigoRef;
+        const horarioMatches = !selectedHorarioRef || !studentHorario || studentHorario === selectedHorarioRef;
+        const professorMatches = !selectedProfessorRef || !studentProfessor || studentProfessor === selectedProfessorRef;
+
+        if (turmaMatches && horarioMatches && professorMatches) {
+          activeMetaByName.set(studentName, student);
+        }
+      });
+
+      const isExcludedByIdentity = (alunoNome: string) => {
+        const nameKey = normalizeText(alunoNome || "");
+        const studentMeta = activeMetaByName.get(nameKey);
+        const studentId = String((studentMeta as any)?.id || "").trim();
+        const studentUid = String((studentMeta as any)?.studentUid || (studentMeta as any)?.student_uid || "").trim();
+
+        if (studentUid && excludedUidsForSelectedClass.has(studentUid)) return true;
+        if (studentId && excludedIdsForSelectedClass.has(studentId)) return true;
+        return excludedNamesForSelectedClass.has(nameKey);
+      };
 
       const storedHasAnyMark = (storedRecords || []).some((item) =>
         Object.values(item?.attendance || {}).some((value) => Boolean(value))
@@ -3040,7 +3094,7 @@ export const Attendance: React.FC = () => {
           (matchedClass?.alunos || []).forEach((student) => {
             const studentKey = normalizeText(student.nome || "");
             if (!studentKey) return;
-            if (excludedNamesForSelectedClass.has(studentKey)) return;
+            if (isExcludedByIdentity(student.nome || "")) return;
             const attendanceMap = (student.historico || {}) as Record<string, string>;
             const mappedAttendance = Object.entries(attendanceMap).reduce(
               (acc, [dayKey, status]) => {
@@ -3120,7 +3174,7 @@ export const Attendance: React.FC = () => {
 
       setAttendance(
         classStudents
-          .filter((aluno) => !excludedNamesForSelectedClass.has(normalizeText(aluno || "")))
+          .filter((aluno) => !isExcludedByIdentity(aluno || ""))
           .map((aluno, idx) => {
           const base = newDates.reduce(
             (acc, date) => {
@@ -3165,7 +3219,7 @@ export const Attendance: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor, hydrationRefreshSeq]);
+  }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor, hydrationRefreshSeq, resolvedDiasSemana, activeStudentsMeta]);
 
   useEffect(() => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;

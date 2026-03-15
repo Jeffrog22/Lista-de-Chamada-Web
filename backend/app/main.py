@@ -1080,10 +1080,31 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 if key:
                     merged[key] = dict(record)
 
+            def _merge_student_record(existing: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+                existing_attendance = existing.get("attendance") if isinstance(existing.get("attendance"), dict) else {}
+                incoming_attendance = incoming.get("attendance") if isinstance(incoming.get("attendance"), dict) else {}
+
+                existing_justifications = existing.get("justifications") if isinstance(existing.get("justifications"), dict) else {}
+                incoming_justifications = incoming.get("justifications") if isinstance(incoming.get("justifications"), dict) else {}
+
+                return {
+                    **existing,
+                    **incoming,
+                    "attendance": {
+                        **existing_attendance,
+                        **incoming_attendance,
+                    },
+                    "justifications": {
+                        **existing_justifications,
+                        **incoming_justifications,
+                    },
+                }
+
             for record in incoming_registros:
                 key = _student_key(record)
                 if key:
-                    merged[key] = dict(record)
+                    existing = merged.get(key) or {}
+                    merged[key] = _merge_student_record(existing, dict(record))
 
             item["registros"] = list(merged.values())
 
