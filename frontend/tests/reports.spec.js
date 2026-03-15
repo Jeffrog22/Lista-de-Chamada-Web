@@ -373,3 +373,112 @@ test('reports summary uses bootstrap dias_semana fallback to avoid zero KPIs', a
   expect(registradas).toBeGreaterThan(0);
   expect(previstas).toBeGreaterThan(0);
 });
+
+test('reports summary ignores attendance recorded on calendar-closed day', async ({ page }) => {
+  const holidayReportPayload = [
+    {
+      turma: 'Terça e Quinta',
+      horario: '08:00',
+      professor: 'Daniela',
+      nivel: 'Nível 4 A',
+      hasLog: true,
+      alunos: [
+        {
+          id: '1',
+          student_uid: 'uid-holiday-1',
+          nome: 'Aluno Carnaval',
+          presencas: 8,
+          faltas: 0,
+          justificativas: 0,
+          frequencia: 100,
+          historico: {
+            '03': 'c',
+            '05': 'c',
+            '10': 'c',
+            '12': 'c',
+            '17': 'c',
+            '19': 'c',
+            '24': 'c',
+            '26': 'c',
+          },
+        },
+      ],
+    },
+  ];
+
+  const holidayBootstrapPayload = {
+    classes: [
+      {
+        id: 1,
+        grupo: 'dtq01',
+        codigo: 'dtq01',
+        turma_label: 'Terça e Quinta',
+        horario: '08:00',
+        professor: 'Daniela',
+        nivel: 'Nível 4 A',
+        capacidade: 20,
+        dias_semana: 'terça,quinta',
+      },
+    ],
+    students: [
+      {
+        id: 1,
+        class_id: 1,
+        nome: 'Aluno Carnaval',
+        whatsapp: '',
+        data_nascimento: '2012-01-01',
+        data_atestado: '',
+        categoria: 'Juvenil',
+        genero: 'Masculino',
+        parq: 'Não',
+        atestado: false,
+      },
+    ],
+  };
+
+  const holidayCalendarPayload = {
+    settings: {
+      schoolYear: 2026,
+      inicioAulas: '2026-02-03',
+      feriasInvernoInicio: '2026-07-01',
+      feriasInvernoFim: '2026-07-31',
+      terminoAulas: '2026-12-31',
+    },
+    events: [
+      {
+        id: 'holiday-1',
+        date: '2026-02-17',
+        type: 'feriado',
+        allDay: true,
+        startTime: '',
+        endTime: '',
+        description: 'Carnaval',
+      },
+    ],
+    bankHours: [],
+  };
+
+  await installAppRoutes(page, {}, {
+    reportPayload: holidayReportPayload,
+    bootstrapPayload: holidayBootstrapPayload,
+  });
+
+  await page.route('**/academic-calendar?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(holidayCalendarPayload),
+    });
+  });
+
+  await page.goto('http://localhost:5173/#reports', { timeout: 30000 });
+  await expect(page.getByRole('heading', { name: 'Relatórios e Análises' })).toBeVisible({ timeout: 10000 });
+
+  await page.getByRole('button', { name: 'Mês anterior' }).click();
+
+  const aproveitamentoCard = page.locator('.report-card').filter({ has: page.getByRole('heading', { name: 'Aproveitamento das aulas dadas' }) }).first();
+  await aproveitamentoCard.getByRole('button', { name: 'Detalhes' }).click();
+
+  const aulasCard = page.locator('.report-card').filter({ has: page.getByRole('heading', { name: 'Aulas registradas x previstas' }) }).first();
+  await expect(aulasCard.locator('.reports-kpi-line span').first()).toHaveText('7/7');
+});

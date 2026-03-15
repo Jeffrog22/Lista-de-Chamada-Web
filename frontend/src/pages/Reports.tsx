@@ -1695,6 +1695,7 @@ export const Reports: React.FC = () => {
           const isRetroactiveInSelectedMonth =
             parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
           if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
+          if (isDateClosedForAttendance(parsedKey, calendarSettings, calendarEvents)) return;
           if (!weekdays.includes(parsed.getDay())) return;
           recordedDays.add(parsedKey);
         });
@@ -1719,6 +1720,8 @@ export const Reports: React.FC = () => {
       totalRegistradas: byHorario.reduce((acc, item) => acc + item.registradas, 0),
     };
   }, [
+    calendarEvents,
+    calendarSettings,
     classScheduleMetaByKey,
     classesData,
     plannedClassDaysUntilCurrent,
@@ -1762,6 +1765,7 @@ export const Reports: React.FC = () => {
           const isRetroactiveInSelectedMonth =
             parsed.getFullYear() === year && parsed.getMonth() === monthIndex;
           if (!isPlannedDay && !isRetroactiveInSelectedMonth) return;
+          if (isDateClosedForAttendance(parsedKey, calendarSettings, calendarEvents)) return;
           if (!weekdays.includes(parsed.getDay())) return;
           recordedDays.add(parsedKey);
         });
@@ -1773,6 +1777,8 @@ export const Reports: React.FC = () => {
 
     return { previstas: previstasTotal, dadas: dadasTotal };
   }, [
+    calendarEvents,
+    calendarSettings,
     classScheduleMetaByKey,
     classesData,
     plannedClassDaysUntilCurrent,
