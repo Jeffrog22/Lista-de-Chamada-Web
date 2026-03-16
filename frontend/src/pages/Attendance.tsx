@@ -3207,14 +3207,13 @@ export const Attendance: React.FC = () => {
                 ...(backend?.attendance || {}),
               };
 
-              if (!backend) {
-                const storedAttendance = stored?.attendance || {};
-                Object.entries(storedAttendance).forEach(([date, value]) => {
-                  if (value && !merged[date]) {
-                    merged[date] = value;
-                  }
-                });
-              }
+              const storedAttendance = stored?.attendance || {};
+              Object.entries(storedAttendance).forEach(([date, value]) => {
+                if (!newDates.includes(date)) return;
+                if (value && !merged[date]) {
+                  merged[date] = value;
+                }
+              });
 
               return merged;
             })(),

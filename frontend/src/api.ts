@@ -477,7 +477,39 @@ export const saveAttendanceLog = (data: any) =>
       mes: payload?.mes || "",
     });
     return API.post("/attendance-log", payload)
-      .then((response) => {
+      .then(async (response) => {
+        const staleSnapshot = Boolean(response?.data?.skipped && response?.data?.reason === "stale_snapshot");
+        if (staleSnapshot) {
+          const retryPayload = {
+            ...payload,
+            clientSavedAt: new Date().toISOString(),
+          };
+          try {
+            const retryResponse = await API.post("/attendance-log", retryPayload);
+            removePendingAttendanceLog(retryPayload);
+            logPersistenceDebug("save:retry_ok", {
+              turmaCodigo: retryPayload?.turmaCodigo || "",
+              turmaLabel: retryPayload?.turmaLabel || "",
+              horario: retryPayload?.horario || "",
+              professor: retryPayload?.professor || "",
+              mes: retryPayload?.mes || "",
+              pending: readPendingAttendanceLogs().length,
+            });
+            return retryResponse;
+          } catch {
+            const queued = upsertPendingAttendanceLog(retryPayload);
+            logPersistenceDebug("save:retry_queued", {
+              turmaCodigo: retryPayload?.turmaCodigo || "",
+              turmaLabel: retryPayload?.turmaLabel || "",
+              horario: retryPayload?.horario || "",
+              professor: retryPayload?.professor || "",
+              mes: retryPayload?.mes || "",
+              pending: queued.length,
+            });
+            return { data: { ok: true, fallback: true, queued: true, pending: queued.length } };
+          }
+        }
+
         removePendingAttendanceLog(payload);
         logPersistenceDebug("save:ok", {
           turmaCodigo: payload?.turmaCodigo || "",

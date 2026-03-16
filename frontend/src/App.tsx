@@ -24,47 +24,6 @@ const getViewFromHash = (hash: string): ViewType => {
   return (candidates.find((view) => view === normalized) || "main");
 };
 
-const purgeFebruaryLocalCache = () => {
-  const month = "2026-02";
-  const keysToRemove = [
-    "pendingAttendanceLogs",
-    "attendanceRetroModeEnabled",
-    "attendanceReferenceMonth",
-    "attendanceSelection",
-    "attendanceTargetTurma",
-    "attendanceDateShortcut",
-  ];
-
-  keysToRemove.forEach((key) => {
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      // ignore
-    }
-  });
-
-  try {
-    const allKeys: string[] = [];
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = localStorage.key(i);
-      if (key) allKeys.push(key);
-    }
-
-    allKeys.forEach((key) => {
-      const shouldRemove =
-        key.startsWith("attendance:") && key.includes(`|${month}`)
-        || key.startsWith("climaCache:") && key.includes(month)
-        || key.startsWith("reportsClimaCache:") && key.includes(month);
-
-      if (shouldRemove) {
-        localStorage.removeItem(key);
-      }
-    });
-  } catch {
-    // ignore
-  }
-};
-
 export default function App() {
   const appVersion = (typeof __APP_VERSION__ === "string" && __APP_VERSION__.trim()) ? __APP_VERSION__.trim() : "v.local";
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
@@ -130,8 +89,6 @@ export default function App() {
   };
 
   useEffect(() => {
-    purgeFebruaryLocalCache();
-
     const runTransferCleanupMigration = async () => {
       try {
         if (localStorage.getItem(transferCleanupMigrationKey) === "1") return;
