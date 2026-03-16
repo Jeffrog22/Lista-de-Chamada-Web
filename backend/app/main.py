@@ -149,6 +149,7 @@ class ReportStudent(BaseModel):
 
 class ReportClass(BaseModel):
     turma: str
+    turmaCodigo: str = ""
     horario: str
     professor: str
     nivel: str
@@ -2856,6 +2857,7 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
         report.append(
             ReportClass(
                 turma=turma_label or turma_key,
+                turmaCodigo=cls.codigo or "",
                 horario=cls.horario or "",
                 professor=cls.professor or "",
                 nivel=cls.nivel or "",

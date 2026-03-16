@@ -1390,6 +1390,7 @@ export const Reports: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
+    setClassesData([]);
     getReports({ month: selectedMonth })
       .then((response) => {
         if (!isMounted) return;

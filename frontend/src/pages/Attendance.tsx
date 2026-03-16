@@ -43,6 +43,7 @@ interface ReportStudentLite {
 
 interface ReportClassLite {
   turma: string;
+  turmaCodigo?: string;
   horario: string;
   professor: string;
   hasLog?: boolean;
@@ -1584,6 +1585,17 @@ export const Attendance: React.FC = () => {
   const dateDates = availableDates.map((d) => d.split(" ")[0]); // Pega apenas a data (YYYY-MM-DD)
 
   const monthKey = useMemo(() => effectiveMonthKey, [effectiveMonthKey]);
+  const visibleMonthKey = retroModeEnabled ? referenceMonth : currentMonthKey;
+  const selectedDateMonthKey = String(selectedDate || "").slice(0, 7);
+  const syncMonthMismatchMessage = useMemo(() => {
+    if (monthKey !== visibleMonthKey) {
+      return `Inconsistência: Mês do log (${monthKey}) diferente do mês visível (${visibleMonthKey}).`;
+    }
+    if (selectedDateMonthKey && selectedDateMonthKey !== monthKey) {
+      return `Inconsistência: data selecionada (${selectedDate}) fora do mês do log (${monthKey}).`;
+    }
+    return "";
+  }, [monthKey, visibleMonthKey, selectedDateMonthKey, selectedDate]);
 
   useEffect(() => {
     if (dateDates.length === 0) return;
@@ -3091,7 +3103,9 @@ export const Attendance: React.FC = () => {
 
         const matchedClass = reports
           .map((item) => {
-            const turmaMatches = turmaCandidates.includes(normalizeText(item.turma || ""));
+            const turmaMatches =
+              turmaCandidates.includes(normalizeText(item.turma || "")) ||
+              turmaCandidates.includes(normalizeText(item.turmaCodigo || ""));
             if (!turmaMatches) return { item, score: -1 };
 
             const itemHorarioRaw = String(item.horario || "").trim();
@@ -3585,6 +3599,20 @@ export const Attendance: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (monthKey !== visibleMonthKey) {
+      alert(
+        `Bloqueado: Mês do log (${monthKey}) diferente do mês visível (${visibleMonthKey}).\nAjuste o período antes de salvar.`
+      );
+      return;
+    }
+
+    if (selectedDateMonthKey && selectedDateMonthKey !== monthKey) {
+      alert(
+        `Bloqueado: data selecionada (${selectedDate}) não pertence ao mês do log (${monthKey}).\nSelecione uma data do mês atual da chamada.`
+      );
+      return;
+    }
+
     if (monthKey !== currentMonthKey) {
       const proceed = window.confirm(
         `Você está salvando no mês ${currentMonthFormatted} (retroativo). Deseja continuar?`
@@ -3877,6 +3905,23 @@ export const Attendance: React.FC = () => {
             }}
           >
             Atenção: lançamento retroativo ativo ({currentMonthFormatted}).
+          </div>
+        )}
+        {syncMonthMismatchMessage && (
+          <div
+            style={{
+              width: "100%",
+              marginTop: "4px",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #fca5a5",
+              background: "#fef2f2",
+              color: "#991b1b",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+          >
+            ⚠ {syncMonthMismatchMessage}
           </div>
         )}
         {hydrationReadInfo && (
