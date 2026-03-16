@@ -293,6 +293,13 @@ const removePendingAttendanceLog = (payload: any) => {
   return items;
 };
 
+export const getPendingAttendanceScopeStatus = (payload: any) => {
+  const key = getAttendanceLogQueueKey(payload);
+  const items = readPendingAttendanceLogs();
+  const pending = items.filter((item) => getAttendanceLogQueueKey(item) === key).length;
+  return { pending };
+};
+
 export const flushPendingAttendanceLogs = async () => {
   const queue = readPendingAttendanceLogs();
   logPersistenceDebug("flush:start", { queued: queue.length });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPendingAttendanceScopeStatus, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -1711,7 +1711,78 @@ export const Attendance: React.FC = () => {
     studentCount: number;
     updatedAt: string;
   } | null>(null);
+  const [syncIndicator, setSyncIndicator] = useState<{
+    status: "checking" | "confirmed" | "pending" | "error";
+    detail: string;
+    updatedAt: string;
+  } | null>(null);
   const lastHydrationReadAlertRef = useRef<string>("");
+
+  const refreshSyncIndicator = useCallback(async () => {
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) {
+      setSyncIndicator(null);
+      return;
+    }
+
+    const scope = {
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
+      mes: monthKey,
+    };
+
+    setSyncIndicator((prev) => ({
+      status: "checking",
+      detail: prev?.detail || "Verificando sincronização...",
+      updatedAt: new Date().toLocaleTimeString("pt-BR"),
+    }));
+
+    try {
+      const pendingInfo = getPendingAttendanceScopeStatus(scope);
+      const pendingCount = Number(pendingInfo?.pending || 0);
+      const probe = await forceAttendanceSync(scope).catch(() => ({ data: { hasLog: false } }));
+      const hasRemoteLog = Boolean(probe?.data?.hasLog);
+      const serverSavedAt = String(probe?.data?.saved_at || "").trim();
+
+      if (pendingCount > 0) {
+        setSyncIndicator({
+          status: "pending",
+          detail: `Pendente: ${pendingCount} item(ns) na fila local para esta turma/mês.`,
+          updatedAt: new Date().toLocaleTimeString("pt-BR"),
+        });
+        return;
+      }
+
+      if (hasRemoteLog) {
+        setSyncIndicator({
+          status: "confirmed",
+          detail: serverSavedAt
+            ? `Confirmado no servidor (${serverSavedAt}).`
+            : "Confirmado no servidor.",
+          updatedAt: new Date().toLocaleTimeString("pt-BR"),
+        });
+        return;
+      }
+
+      setSyncIndicator({
+        status: "pending",
+        detail: "Sem log confirmado no servidor para esta turma/mês.",
+        updatedAt: new Date().toLocaleTimeString("pt-BR"),
+      });
+    } catch {
+      setSyncIndicator({
+        status: "error",
+        detail: "Não foi possível verificar sync agora.",
+        updatedAt: new Date().toLocaleTimeString("pt-BR"),
+      });
+    }
+  }, [monthKey, resolvePersistenceContext]);
+
+  useEffect(() => {
+    refreshSyncIndicator();
+  }, [refreshSyncIndicator, hydrationRefreshSeq, selectedTurma, selectedHorario, selectedProfessor, monthKey]);
 
   const getTransferLockForDate = useCallback(
     (studentName: string, dateKey: string): TransferLockInfo | null => {
@@ -3354,11 +3425,10 @@ export const Attendance: React.FC = () => {
   };
 
   // Função de Exclusão: Ativada quando o aluno tem 3 ou mais faltas
-  const excluirAluno = (id: number) => {
+  const excluirAluno = async (id: number) => {
     if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
       const student = attendance.find((item) => item.id === id);
       if (student) {
-        const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
         const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
         const turmaKey = selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "";
         const horarioKey = selectedClass.horario || selectedHorario || "";
@@ -3395,19 +3465,16 @@ export const Attendance: React.FC = () => {
           motivo_exclusao: "Falta",
         };
 
-        addExclusion(payload).catch(() => {
+        await addExclusion(payload).catch(() => {
           alert("Falha ao enviar exclusão ao backend. Tente novamente.");
         });
 
-        const payloadUid = String(payload.student_uid || payload.studentUid || "").trim();
-        const exists = excludedStudents.some((s: any) => {
-          const sUid = String(s?.student_uid || s?.studentUid || "").trim();
-          if (payloadUid && sUid && payloadUid === sUid) return true;
-          return s.id === payload.id;
-        });
-        if (!exists) {
-          excludedStudents.push(payload);
-          localStorage.setItem("excludedStudents", JSON.stringify(excludedStudents));
+        try {
+          const exclusionResp = await getExcludedStudents();
+          const resolved = Array.isArray(exclusionResp?.data) ? exclusionResp.data : [];
+          localStorage.setItem("excludedStudents", JSON.stringify(resolved));
+        } catch {
+          // mantém cache local sem bloquear fluxo
         }
       }
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
@@ -3517,7 +3584,7 @@ export const Attendance: React.FC = () => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (monthKey !== currentMonthKey) {
       const proceed = window.confirm(
         `Você está salvando no mês ${currentMonthFormatted} (retroativo). Deseja continuar?`
@@ -3552,19 +3619,33 @@ export const Attendance: React.FC = () => {
       mes: payload.mes,
     });
 
-    saveAttendanceLog(payload)
-      .then((resp: any) => {
-        const reference = `\nRef: ${payload.mes} | ${payload.turmaCodigo || payload.turmaLabel} | ${payload.horario} | ${payload.professor}`;
-        if (resp?.data?.queued) {
-          alert(`Sem conexão no momento. Chamada salva localmente e pendente de sincronização.${reference}`);
-          return;
-        }
-        const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
-        alert(`Chamada salva com sucesso!${reference}${file}`);
-      })
-      .catch(() => {
-        alert("Erro ao salvar chamada. Tente novamente.");
-      });
+    try {
+      const resp: any = await saveAttendanceLog(payload);
+      const reference = `\nRef: ${payload.mes} | ${payload.turmaCodigo || payload.turmaLabel} | ${payload.horario} | ${payload.professor}`;
+      if (resp?.data?.queued) {
+        alert(`Sem conexão no momento. Chamada salva localmente e pendente de sincronização.${reference}`);
+        return;
+      }
+
+      const probe = await forceAttendanceSync({
+        turmaCodigo: payload.turmaCodigo,
+        turmaLabel: payload.turmaLabel,
+        horario: payload.horario,
+        professor: payload.professor,
+        mes: payload.mes,
+      }).catch(() => ({ data: { hasLog: false } }));
+
+      const hasRemoteLog = Boolean(probe?.data?.hasLog);
+      const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
+      if (hasRemoteLog) {
+        alert(`Chamada salva com sucesso e confirmada no servidor.${reference}${file}`);
+      } else {
+        alert(`Chamada salva, mas ainda não confirmada no servidor.${reference}\nToque em Sincronizar agora para forçar envio.`);
+      }
+      setHydrationRefreshSeq((prev) => prev + 1);
+    } catch {
+      alert("Erro ao salvar chamada. Tente novamente.");
+    }
   };
 
   const handleForceSyncNow = async () => {
@@ -3817,6 +3898,70 @@ export const Attendance: React.FC = () => {
             <strong>Ref seleção:</strong> {hydrationReadInfo.ref}
             <br />
             <strong>Snapshot:</strong> {hydrationReadInfo.snapshot}
+          </div>
+        )}
+        {syncIndicator && (
+          <div
+            style={{
+              width: "100%",
+              marginTop: "4px",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border:
+                syncIndicator.status === "confirmed"
+                  ? "1px solid #86efac"
+                  : syncIndicator.status === "pending"
+                    ? "1px solid #fcd34d"
+                    : syncIndicator.status === "error"
+                      ? "1px solid #fca5a5"
+                      : "1px solid #cbd5e1",
+              background:
+                syncIndicator.status === "confirmed"
+                  ? "#f0fdf4"
+                  : syncIndicator.status === "pending"
+                    ? "#fffbeb"
+                    : syncIndicator.status === "error"
+                      ? "#fef2f2"
+                      : "#f8fafc",
+              color:
+                syncIndicator.status === "confirmed"
+                  ? "#166534"
+                  : syncIndicator.status === "pending"
+                    ? "#92400e"
+                    : syncIndicator.status === "error"
+                      ? "#991b1b"
+                      : "#334155",
+              fontSize: "12px",
+              fontWeight: 700,
+              lineHeight: 1.4,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+              <div>
+                <strong>
+                  Sync: {syncIndicator.status === "confirmed" ? "confirmado" : syncIndicator.status === "checking" ? "verificando" : syncIndicator.status === "error" ? "erro" : "pendente"}
+                </strong>
+                {" "}· {syncIndicator.detail} · {syncIndicator.updatedAt}
+              </div>
+              <button
+                type="button"
+                onClick={handleForceSyncNow}
+                disabled={isManualSyncing || syncIndicator.status === "checking"}
+                style={{
+                  border: "none",
+                  borderRadius: "8px",
+                  background: isManualSyncing || syncIndicator.status === "checking" ? "#94a3b8" : "#334155",
+                  color: "#fff",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  padding: "8px 12px",
+                  cursor: isManualSyncing || syncIndicator.status === "checking" ? "not-allowed" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isManualSyncing ? "⏳ Sincronizando..." : "🔄 Sincronizar agora"}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -4242,23 +4387,6 @@ export const Attendance: React.FC = () => {
             </div>
           )}
         </div>
-        <button
-          onClick={handleForceSyncNow}
-          disabled={isManualSyncing}
-          style={{
-            background: isManualSyncing ? "#94a3b8" : "#334155",
-            color: "white",
-            border: "none",
-            padding: "10px 18px",
-            borderRadius: "8px",
-            cursor: isManualSyncing ? "not-allowed" : "pointer",
-            fontWeight: 600,
-            fontSize: "14px",
-            opacity: isManualSyncing ? 0.85 : 1,
-          }}
-        >
-          {isManualSyncing ? "⏳ Sincronizando..." : "🔄 Forçar Sync Agora"}
-        </button>
         <button
           onClick={handleSave}
           style={{
