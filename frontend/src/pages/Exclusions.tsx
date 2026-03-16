@@ -529,7 +529,8 @@ export const Exclusions: React.FC = () => {
     activeStudents.push(restoredStudent);
     localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
 
-    const newExcludedList = students.filter((item) => !exclusionsMatch(item, editingStudent));
+    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
+    const newExcludedList = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
     setStudents(newExcludedList);
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
 
@@ -555,7 +556,8 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
-    const newExcludedList = students.filter((item) => !exclusionsMatch(item, student));
+    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
+    const newExcludedList = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
     setStudents(newExcludedList);
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
   };
@@ -579,16 +581,10 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
-    setStudents((prev) => {
-      const next = prev.map((item) => {
-        if (exclusionsMatch(item, student)) {
-          return { ...item, motivo_exclusao: normalized, MotivoExclusao: normalized };
-        }
-        return item;
-      });
-      localStorage.setItem("excludedStudents", JSON.stringify(next));
-      return next;
-    });
+    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
+    const next = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
+    setStudents(next);
+    localStorage.setItem("excludedStudents", JSON.stringify(next));
   };
 
   const effectiveTurmaOptions =

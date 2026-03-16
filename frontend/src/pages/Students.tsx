@@ -1137,17 +1137,13 @@ export const Students: React.FC = () => {
       alert("Falha ao enviar exclusão ao backend. Tente novamente.");
     });
 
-    const excludedStudents = JSON.parse(localStorage.getItem("excludedStudents") || "[]");
-    const nextExcluded = sanitizeExcludedRecords(Array.isArray(excludedStudents) ? [...excludedStudents] : []);
-    const existingIndex = nextExcluded.findIndex((item: any) => exclusionsMatch(item, exclusionPayload));
-    if (existingIndex >= 0) {
-      nextExcluded[existingIndex] = { ...nextExcluded[existingIndex], ...exclusionPayload };
-    } else {
-      nextExcluded.push(exclusionPayload);
-    }
-    const cleanedExcluded = sanitizeExcludedRecords(nextExcluded);
-    localStorage.setItem("excludedStudents", JSON.stringify(cleanedExcluded));
-    setExcludedRecords(cleanedExcluded);
+    getExcludedStudents()
+      .then((response) => {
+        const synced = sanitizeExcludedRecords(Array.isArray(response?.data) ? response.data : []);
+        setExcludedRecords(synced);
+        localStorage.setItem("excludedStudents", JSON.stringify(synced));
+      })
+      .catch(() => undefined);
 
     // simply remove student from state; persistence effect will clear storage
     setStudents((prev) => prev.filter((s) => s.id !== student.id));
