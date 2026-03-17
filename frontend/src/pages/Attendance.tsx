@@ -1652,6 +1652,8 @@ export const Attendance: React.FC = () => {
   const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
+  const [hasUnsavedLocalChanges, setHasUnsavedLocalChanges] = useState(false);
+  const hasUnsavedLocalChangesRef = useRef(false);
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
     const byWidth = window.innerWidth <= 768;
     const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
@@ -1664,6 +1666,10 @@ export const Attendance: React.FC = () => {
       return sortDir === "asc" ? res : -res;
     });
   }, [attendance, sortDir]);
+
+  useEffect(() => {
+    hasUnsavedLocalChangesRef.current = hasUnsavedLocalChanges;
+  }, [hasUnsavedLocalChanges]);
 
   useEffect(() => {
     const compactQuery = window.matchMedia("(max-width: 768px)");
@@ -2939,6 +2945,7 @@ export const Attendance: React.FC = () => {
 
   useEffect(() => {
     const triggerRefresh = () => {
+      if (hasUnsavedLocalChangesRef.current) return;
       setHydrationRefreshSeq((prev) => prev + 1);
     };
 
@@ -3265,6 +3272,17 @@ export const Attendance: React.FC = () => {
 
       if (!isMounted || requestId !== hydrationRequestIdRef.current) return;
 
+      if (hasUnsavedLocalChanges && hydratedStorageKey === storageKey) {
+        logPersistenceDebug("hydrate:skipped_local_dirty", {
+          turmaCodigo: selectedClass.turmaCodigo || "",
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+          horario: selectedClass.horario || selectedHorario || "",
+          professor: selectedClass.professor || selectedProfessor || "",
+          mes: monthKey,
+        });
+        return;
+      }
+
       // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
       setHistory([]);
 
@@ -3348,6 +3366,7 @@ export const Attendance: React.FC = () => {
 
     // Salva o estado atual no histórico antes de modificar
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHasUnsavedLocalChanges(true);
 
     setAttendance((prev) => {
       const newAttendance = prev.map((item) => {
@@ -3372,6 +3391,7 @@ export const Attendance: React.FC = () => {
     if (history.length > 0) {
       setAttendance(JSON.parse(JSON.stringify(history[0])));
       setHistory((h) => h.slice(1));
+      setHasUnsavedLocalChanges(true);
     }
   };
 
@@ -3399,6 +3419,7 @@ export const Attendance: React.FC = () => {
 
   const handleClearAll = () => {
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHasUnsavedLocalChanges(true);
 
     setAttendance((prev) =>
       prev.map((item) => ({
@@ -3418,6 +3439,7 @@ export const Attendance: React.FC = () => {
     if (!selectedDate) return;
 
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHasUnsavedLocalChanges(true);
     setAttendance((prev) =>
       prev.map((item) => ({
         ...item,
@@ -3492,6 +3514,7 @@ export const Attendance: React.FC = () => {
         }
       }
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+      setHasUnsavedLocalChanges(true);
       setAttendance((prev) => prev.filter((student) => student.id !== id));
     }
   };
@@ -3547,6 +3570,7 @@ export const Attendance: React.FC = () => {
     }
 
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHasUnsavedLocalChanges(true);
     setAttendance((prev) =>
       prev.map((item) => {
         if (item.id === justificationStudentId) {
@@ -3666,6 +3690,7 @@ export const Attendance: React.FC = () => {
       const hasRemoteLog = Boolean(probe?.data?.hasLog);
       const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
       if (hasRemoteLog) {
+        setHasUnsavedLocalChanges(false);
         alert(`Chamada salva com sucesso e confirmada no servidor.${reference}${file}`);
       } else {
         alert(`Chamada salva, mas ainda não confirmada no servidor.${reference}\nToque em Sincronizar agora para forçar envio.`);
@@ -3688,13 +3713,16 @@ export const Attendance: React.FC = () => {
     setIsManualSyncing(true);
     try {
       await flushPendingAttendanceLogs().catch(() => ({ flushed: 0, pending: 0 }));
-      await forceAttendanceSync({
+      const syncResp: any = await forceAttendanceSync({
         turmaCodigo: persistence.turmaCodigo,
         turmaLabel: persistence.turmaLabel,
         horario: persistence.horario,
         professor: persistence.professor,
         mes: monthKey,
       });
+      if (syncResp?.data?.hasLog) {
+        setHasUnsavedLocalChanges(false);
+      }
       setHydrationRefreshSeq((prev) => prev + 1);
     } finally {
       setIsManualSyncing(false);
