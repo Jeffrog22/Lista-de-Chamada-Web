@@ -33,6 +33,7 @@ def create_db_and_tables():
         ImportUnit,
         ImportClass,
         ImportStudent,
+        AttendanceLog,
     )
     from sqlmodel import SQLModel
     SQLModel.metadata.create_all(engine)

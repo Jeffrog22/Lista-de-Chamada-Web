@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Fo
 from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, migrate_db, get_session
 from app import crud, models
+from app.models import AttendanceLog
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import os
@@ -1121,6 +1122,49 @@ def append_attendance_log(payload: AttendanceLogPayload):
             item["registros"] = list(merged.values())
 
         item["saved_at"] = pd.Timestamp.utcnow().isoformat()
+
+        # Gravar no Supabase/PostgreSQL (persistência permanente)
+        try:
+            from app.database import engine as _db_engine
+            from sqlmodel import Session as _DBSession
+            _turma_codigo_key = str(item.get("turmaCodigo") or "").strip()
+            _horario_key = str(item.get("horario") or "").strip()
+            _professor_key = str(item.get("professor") or "").strip()
+            _mes_key = str(item.get("mes") or "").strip()
+            _registros_to_store = item.get("registros") or []
+            with _DBSession(_db_engine) as _db:
+                _existing = _db.exec(
+                    select(AttendanceLog).where(
+                        AttendanceLog.turma_codigo == _turma_codigo_key,
+                        AttendanceLog.horario == _horario_key,
+                        AttendanceLog.professor == _professor_key,
+                        AttendanceLog.mes == _mes_key,
+                    )
+                ).first()
+                if _existing:
+                    _existing.turma_label = str(item.get("turmaLabel") or "").strip()
+                    _existing.saved_at = item["saved_at"]
+                    _existing.client_saved_at = str(item.get("clientSavedAt") or "")
+                    _existing.source = item.get("source")
+                    _existing.registros_json = json.dumps(_registros_to_store, ensure_ascii=False)
+                    _db.add(_existing)
+                else:
+                    _log_row = AttendanceLog(
+                        turma_codigo=_turma_codigo_key,
+                        turma_label=str(item.get("turmaLabel") or "").strip(),
+                        horario=_horario_key,
+                        professor=_professor_key,
+                        mes=_mes_key,
+                        saved_at=item["saved_at"],
+                        client_saved_at=str(item.get("clientSavedAt") or ""),
+                        source=item.get("source"),
+                        registros_json=json.dumps(_registros_to_store, ensure_ascii=False),
+                    )
+                    _db.add(_log_row)
+                _db.commit()
+        except Exception:
+            pass  # falha no DB não impede o salvamento em JSON
+
         _append_json_list(file_path, [item])
         return {"ok": True, "file": file_path}
     except Exception as exc:
@@ -2531,6 +2575,46 @@ def _attendance_log_lookup_keys(item: Dict[str, Any]) -> List[str]:
     return keys
 
 def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    # DB-first: lê do Supabase/PostgreSQL
+    try:
+        from app.database import engine as _db_engine
+        from sqlmodel import Session as _DBSession
+        with _DBSession(_db_engine) as _db:
+            stmt = select(AttendanceLog)
+            if month:
+                stmt = stmt.where(AttendanceLog.mes == month)
+            rows = _db.exec(stmt).all()
+            if rows:
+                latest: Dict[str, Dict[str, Any]] = {}
+                for row in rows:
+                    try:
+                        registros = json.loads(row.registros_json or "[]")
+                    except Exception:
+                        registros = []
+                    item = {
+                        "turmaCodigo": row.turma_codigo,
+                        "turmaLabel": row.turma_label,
+                        "horario": row.horario,
+                        "professor": row.professor,
+                        "mes": row.mes,
+                        "saved_at": row.saved_at,
+                        "source": row.source,
+                        "registros": registros,
+                    }
+                    keys = _attendance_log_lookup_keys(item)
+                    saved_at_val = _saved_at_sort_key(row.saved_at)
+                    for key in keys:
+                        if key not in latest:
+                            latest[key] = item
+                            continue
+                        existing_saved = _saved_at_sort_key(latest[key].get("saved_at"))
+                        if saved_at_val > existing_saved:
+                            latest[key] = item
+                return latest
+    except Exception:
+        pass
+
+    # Fallback: lê do JSON (dados históricos)
     file_path = os.path.join(DATA_DIR, "baseChamada.json")
     items = _load_json_list(file_path)
     latest: Dict[str, Dict[str, Any]] = {}

@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import date, datetime
 from sqlmodel import SQLModel, Field
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, Column, Text
 from pydantic import field_validator
 
 def _normalize_horario(value: Optional[str]) -> Optional[str]:
@@ -137,3 +137,17 @@ class ImportStudent(SQLModel, table=True):
     genero: str = ""
     parq: str = ""
     atestado: bool = False
+
+
+class AttendanceLog(SQLModel, table=True):
+    __tablename__ = "attendance_logs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    turma_codigo: str = Field(default="", index=True)
+    turma_label: str = Field(default="")
+    horario: str = Field(default="", index=True)
+    professor: str = Field(default="", index=True)
+    mes: str = Field(default="", index=True)
+    saved_at: str = Field(default="")
+    client_saved_at: Optional[str] = Field(default=None)
+    source: Optional[str] = Field(default=None)
+    registros_json: str = Field(default="[]", sa_column=Column(Text))
