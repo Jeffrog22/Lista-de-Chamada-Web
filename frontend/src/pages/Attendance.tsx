@@ -1672,6 +1672,10 @@ export const Attendance: React.FC = () => {
   }, [hasUnsavedLocalChanges]);
 
   useEffect(() => {
+    setHasUnsavedLocalChanges(false);
+  }, [storageKey]);
+
+  useEffect(() => {
     const compactQuery = window.matchMedia("(max-width: 768px)");
     const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
 
@@ -3272,7 +3276,7 @@ export const Attendance: React.FC = () => {
 
       if (!isMounted || requestId !== hydrationRequestIdRef.current) return;
 
-      if (hasUnsavedLocalChanges && hydratedStorageKey === storageKey) {
+      if (hasUnsavedLocalChanges) {
         logPersistenceDebug("hydrate:skipped_local_dirty", {
           turmaCodigo: selectedClass.turmaCodigo || "",
           turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
@@ -3495,6 +3499,11 @@ export const Attendance: React.FC = () => {
             parQ: "",
             atestado: false,
           }),
+          turma: turmaKey,
+          turmaLabel: selectedClass.turmaLabel || selectedTurma || turmaKey,
+          turmaCodigo: selectedClass.turmaCodigo || "",
+          horario: horarioKey,
+          professor: professorKey,
           grupo: selectedClass.turmaCodigo || "",
           student_uid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
           dataExclusao: new Date().toLocaleDateString("pt-BR"),
