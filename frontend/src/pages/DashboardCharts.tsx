@@ -185,9 +185,22 @@ const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedM
   return null;
 };
 
-const DashboardCharts: React.FC = () => {
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [month, setMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
+interface DashboardChartsProps {
+  externalClassesData?: ReportClass[];
+  externalCalendarSettings?: AcademicCalendarSettings | null;
+  externalCalendarEvents?: AcademicCalendarEvent[];
+  externalSelectedMonth?: string;
+}
+
+const DashboardCharts: React.FC<DashboardChartsProps> = ({
+  externalClassesData,
+  externalCalendarSettings,
+  externalCalendarEvents,
+  externalSelectedMonth,
+}) => {
+  const isControlled = externalSelectedMonth !== undefined;
+  const [localYear, setLocalYear] = useState(new Date().getFullYear().toString());
+  const [localMonth, setLocalMonth] = useState((new Date().getMonth() + 1).toString().padStart(2, '0'));
   const [dateScope, setDateScope] = useState<'mensal' | 'ate-hoje'>('mensal');
 
   const [classSummaries, setClassSummaries] = useState<ClassSummary[]>([]);
@@ -200,72 +213,83 @@ const DashboardCharts: React.FC = () => {
   const [occurrenceProfessor, setOccurrenceProfessor] = useState<string>('');
   const [occurrenceGroup, setOccurrenceGroup] = useState<'terca-quinta' | 'quarta-sexta'>('terca-quinta');
 
+  const year = isControlled ? externalSelectedMonth!.split('-')[0] : localYear;
+  const month = isControlled ? externalSelectedMonth!.split('-')[1] : localMonth;
   const selectedMonth = `${year}-${month}`;
 
   useEffect(() => {
+    const process = (data: ReportClass[]) => {
+      setHasData(data.length > 0);
+      setReportClasses(data);
+
+      const summaries: ClassSummary[] = data.map((classItem) => {
+        const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
+        const ausentes = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
+        const justificados = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
+        const total = presentes + ausentes + justificados;
+        const daySet = new Set<string>();
+        const historicoEntries: Array<{ day: string; status: string }> = [];
+        classItem.alunos.forEach((student) => {
+          Object.entries(student.historico || {}).forEach(([day, status]) => {
+            if (day) daySet.add(day);
+            historicoEntries.push({ day, status: String(status || '') });
+          });
+        });
+        const frequencia = total > 0 ? Number((((presentes + justificados) / total) * 100).toFixed(1)) : 0;
+        return {
+          turma: classItem.turma || '-',
+          horario: formatHorario(classItem.horario || '-'),
+          professor: classItem.professor || '-',
+          nivel: classItem.nivel || '-',
+          presentes,
+          ausentes,
+          justificados,
+          total,
+          frequencia,
+          dayKeys: Array.from(daySet),
+          historicoEntries,
+        };
+      });
+
+      const studentMap = new Map<string, Omit<StudentAggregate, 'frequencia' | 'total'>>();
+      data.forEach((classItem) => {
+        classItem.alunos.forEach((student) => {
+          const key = normalize(student.nome || '');
+          const current = studentMap.get(key) || {
+            name: student.nome || '-',
+            presencas: 0,
+            faltas: 0,
+            justificativas: 0,
+          };
+          current.presencas += student.presencas || 0;
+          current.faltas += student.faltas || 0;
+          current.justificativas += student.justificativas || 0;
+          studentMap.set(key, current);
+        });
+      });
+      const studentsAgg: StudentAggregate[] = Array.from(studentMap.values()).map((item) => {
+        const total = item.presencas + item.faltas + item.justificativas;
+        const frequencia = total > 0 ? Number((((item.presencas + item.justificativas) / total) * 100).toFixed(1)) : 0;
+        return { ...item, total, frequencia };
+      });
+
+      setClassSummaries(summaries);
+      setStudentsAggregated(studentsAgg);
+    };
+
+    if (isControlled) {
+      process(normalizeReportPayload(externalClassesData ?? []));
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
     setLoading(true);
 
     getReports({ month: selectedMonth })
       .then((response) => {
         if (!isMounted) return;
-        const data = normalizeReportPayload(response.data);
-        setHasData(data.length > 0);
-        setReportClasses(data);
-
-        const summaries: ClassSummary[] = data.map((classItem) => {
-          const presentes = classItem.alunos.reduce((acc, student) => acc + (student.presencas || 0), 0);
-          const ausentes = classItem.alunos.reduce((acc, student) => acc + (student.faltas || 0), 0);
-          const justificados = classItem.alunos.reduce((acc, student) => acc + (student.justificativas || 0), 0);
-          const total = presentes + ausentes + justificados;
-          const daySet = new Set<string>();
-          const historicoEntries: Array<{ day: string; status: string }> = [];
-          classItem.alunos.forEach((student) => {
-            Object.entries(student.historico || {}).forEach(([day, status]) => {
-              if (day) daySet.add(day);
-              historicoEntries.push({ day, status: String(status || '') });
-            });
-          });
-          const frequencia = total > 0 ? Number((((presentes + justificados) / total) * 100).toFixed(1)) : 0;
-          return {
-            turma: classItem.turma || '-',
-            horario: formatHorario(classItem.horario || '-'),
-            professor: classItem.professor || '-',
-            nivel: classItem.nivel || '-',
-            presentes,
-            ausentes,
-            justificados,
-            total,
-            frequencia,
-            dayKeys: Array.from(daySet),
-            historicoEntries,
-          };
-        });
-
-        const studentMap = new Map<string, Omit<StudentAggregate, 'frequencia' | 'total'>>();
-        data.forEach((classItem) => {
-          classItem.alunos.forEach((student) => {
-            const key = normalize(student.nome || '');
-            const current = studentMap.get(key) || {
-              name: student.nome || '-',
-              presencas: 0,
-              faltas: 0,
-              justificativas: 0,
-            };
-            current.presencas += student.presencas || 0;
-            current.faltas += student.faltas || 0;
-            current.justificativas += student.justificativas || 0;
-            studentMap.set(key, current);
-          });
-        });
-        const studentsAgg: StudentAggregate[] = Array.from(studentMap.values()).map((item) => {
-          const total = item.presencas + item.faltas + item.justificativas;
-          const frequencia = total > 0 ? Number((((item.presencas + item.justificativas) / total) * 100).toFixed(1)) : 0;
-          return { ...item, total, frequencia };
-        });
-
-        setClassSummaries(summaries);
-        setStudentsAggregated(studentsAgg);
+        process(normalizeReportPayload(response.data));
       })
       .catch(() => {
         if (!isMounted) return;
@@ -281,9 +305,15 @@ const DashboardCharts: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedMonth]);
+  }, [isControlled, externalClassesData, selectedMonth]);
 
   useEffect(() => {
+    if (isControlled) {
+      setCalendarSettings(externalCalendarSettings ?? null);
+      setCalendarEvents(externalCalendarEvents ?? []);
+      return;
+    }
+
     let isMounted = true;
     getAcademicCalendar({ month: selectedMonth })
       .then((response) => {
@@ -304,7 +334,7 @@ const DashboardCharts: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [selectedMonth]);
+  }, [isControlled, externalCalendarSettings, externalCalendarEvents, selectedMonth]);
 
   const occurrenceProfessors = useMemo(() => {
     return Array.from(new Set(classSummaries.map((item) => item.professor).filter(Boolean))).sort();
@@ -613,18 +643,22 @@ const DashboardCharts: React.FC = () => {
       <div className="charts-filter-bar">
         <h3>📊 Indicadores de Frequência</h3>
         <div className="filters">
-          <select value={month} onChange={(e) => setMonth(e.target.value)} className="chart-select">
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
-                {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
-              </option>
-            ))}
-          </select>
-          <select value={year} onChange={(e) => setYear(e.target.value)} className="chart-select">
-            {yearOptions.map((yearValue) => (
-              <option key={yearValue} value={yearValue}>{yearValue}</option>
-            ))}
-          </select>
+          {!isControlled && (
+            <>
+              <select value={month} onChange={(e) => setLocalMonth(e.target.value)} className="chart-select">
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
+                    {new Date(0, i).toLocaleString('pt-BR', { month: 'long' })}
+                  </option>
+                ))}
+              </select>
+              <select value={year} onChange={(e) => setLocalYear(e.target.value)} className="chart-select">
+                {yearOptions.map((yearValue) => (
+                  <option key={yearValue} value={yearValue}>{yearValue}</option>
+                ))}
+              </select>
+            </>
+          )}
           <button
             type="button"
             className={`chart-scope-btn ${dateScope === 'ate-hoje' ? 'active' : ''}`}

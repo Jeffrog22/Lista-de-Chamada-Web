@@ -2826,7 +2826,12 @@ export const Reports: React.FC = () => {
         <div className="reports-section">
           <ReportsErrorBoundary>
             <Suspense fallback={<div className="reports-section placeholder">Carregando gráficos...</div>}>
-              <DashboardCharts />
+              <DashboardCharts
+                externalClassesData={classesData}
+                externalCalendarSettings={calendarSettings}
+                externalCalendarEvents={calendarEvents}
+                externalSelectedMonth={selectedMonth}
+              />
             </Suspense>
           </ReportsErrorBoundary>
         </div>
