@@ -3276,7 +3276,7 @@ export const Attendance: React.FC = () => {
 
       if (!isMounted || requestId !== hydrationRequestIdRef.current) return;
 
-      if (hasUnsavedLocalChanges) {
+      if (hasUnsavedLocalChangesRef.current) {
         logPersistenceDebug("hydrate:skipped_local_dirty", {
           turmaCodigo: selectedClass.turmaCodigo || "",
           turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
@@ -3698,13 +3698,16 @@ export const Attendance: React.FC = () => {
 
       const hasRemoteLog = Boolean(probe?.data?.hasLog);
       const file = resp?.data?.file ? `\nArquivo: ${resp.data.file}` : "";
+      setHasUnsavedLocalChanges(false);
       if (hasRemoteLog) {
-        setHasUnsavedLocalChanges(false);
         alert(`Chamada salva com sucesso e confirmada no servidor.${reference}${file}`);
       } else {
         alert(`Chamada salva, mas ainda não confirmada no servidor.${reference}\nToque em Sincronizar agora para forçar envio.`);
       }
-      setHydrationRefreshSeq((prev) => prev + 1);
+      // Só hidrata se não há mais mudanças locais
+      if (!hasUnsavedLocalChangesRef.current) {
+        setHydrationRefreshSeq((prev) => prev + 1);
+      }
     } catch {
       alert("Erro ao salvar chamada. Tente novamente.");
     }
@@ -3732,7 +3735,10 @@ export const Attendance: React.FC = () => {
       if (syncResp?.data?.hasLog) {
         setHasUnsavedLocalChanges(false);
       }
-      setHydrationRefreshSeq((prev) => prev + 1);
+      // Só hidrata se não há mudanças locais não salvas
+      if (!hasUnsavedLocalChangesRef.current) {
+        setHydrationRefreshSeq((prev) => prev + 1);
+      }
     } finally {
       setIsManualSyncing(false);
     }
