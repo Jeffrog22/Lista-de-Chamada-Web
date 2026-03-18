@@ -699,6 +699,18 @@ def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
     return mask
 
 def _pool_log_row_as_response(row: Dict[str, Any]) -> Dict[str, Any]:
+    raw_cloro = row.get("Cloro (ppm)", None)
+    cloro_value = None
+    if raw_cloro is not None:
+        raw_cloro_str = str(raw_cloro).strip().replace(",", ".")
+        if raw_cloro_str and raw_cloro_str != "-":
+            try:
+                parsed_cloro = float(raw_cloro_str)
+                if math.isfinite(parsed_cloro):
+                    cloro_value = parsed_cloro
+            except Exception:
+                pass
+
     return {
         "data": _normalize_date_key(row.get("Data", "")),
         "turmaCodigo": _normalize_excel_string(row.get("TurmaCodigo", "")),
@@ -712,7 +724,7 @@ def _pool_log_row_as_response(row: Dict[str, Any]) -> Dict[str, Any]:
         "tipoOcorrencia": _normalize_excel_string(row.get("Tipo_ocorrencia", "")),
         "tempExterna": _format_temperature_output(row.get("Temp. (C)", None), ""),
         "tempPiscina": _format_temperature_output(row.get("Piscina (C)", None), "28"),
-        "cloroPpm": row.get("Cloro (ppm)", None),
+        "cloroPpm": cloro_value,
     }
 
 def _pool_log_meaningful_signature(row: Dict[str, Any]) -> tuple:
@@ -1049,6 +1061,16 @@ def append_pool_log(entry: PoolLogEntryModel):
             from sqlmodel import Session as _DBSession
 
             with _DBSession(_db_engine) as _db:
+                cloro_raw = row.get("Cloro (ppm)", None)
+                cloro_value = None
+                if cloro_raw is not None:
+                    try:
+                        parsed = float(str(cloro_raw).replace(",", ".").strip())
+                        if math.isfinite(parsed):
+                            cloro_value = parsed
+                    except Exception:
+                        cloro_value = None
+
                 _db.add(PoolLog(
                     data=_normalize_date_key(row.get("Data", "")),
                     turma_codigo=str(row.get("TurmaCodigo", "") or "").strip(),
@@ -1062,7 +1084,7 @@ def append_pool_log(entry: PoolLogEntryModel):
                     tipo_ocorrencia=str(row.get("Tipo_ocorrencia", "") or "").strip(),
                     temp_externa=str(row.get("Temp. (C)", "") or "").strip(),
                     temp_piscina=str(row.get("Piscina (C)", "") or "").strip(),
-                    cloro_ppm=None if row.get("Cloro (ppm)", None) is None else str(row.get("Cloro (ppm)")),
+                    cloro_ppm=cloro_value,
                     saved_at=pd.Timestamp.utcnow().isoformat(),
                 ))
                 _db.commit()

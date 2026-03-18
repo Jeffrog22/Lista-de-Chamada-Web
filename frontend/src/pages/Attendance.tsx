@@ -2353,8 +2353,9 @@ export const Attendance: React.FC = () => {
       const inferredConditionLabel = normalizeWeatherConditionLabel(inferredCondition, "");
       const normalizedTemp = normalizeNumberInput(data.tempExterna);
 
-      const cloroValue = data.cloroPpm;
-      const cloroEnabled = typeof cloroValue === "number" && Number.isFinite(cloroValue);
+      const cloroRaw = data.cloroPpm as unknown;
+      const cloroValue = typeof cloroRaw === "number" ? cloroRaw : Number.NaN;
+      const cloroEnabled = Number.isFinite(cloroValue);
       const modalLogType: ModalLogType = data.nota === "ocorrencia" ? "ocorrencia" : "aula";
       setPoolData(prev => ({
         ...prev,
