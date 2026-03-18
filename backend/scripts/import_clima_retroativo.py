@@ -175,7 +175,10 @@ def _coerce_cloro_or_zero(raw_value: Any) -> float | int:
 
 def _load_pool_log(file_path: str) -> pd.DataFrame:
     if os.path.exists(file_path):
-        df = pd.read_excel(file_path)
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path, sep=";", encoding="utf-8-sig", dtype=str)
+        else:
+            df = pd.read_excel(file_path)
     else:
         df = pd.DataFrame(columns=POOL_LOG_COLUMNS)
 
@@ -267,7 +270,10 @@ def import_retro(
         stats.kept_rows += 1
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df_out.to_excel(output_path, index=False)
+    if output_path.endswith('.csv'):
+        df_out.to_csv(output_path, index=False, sep=";", encoding="utf-8-sig")
+    else:
+        df_out.to_excel(output_path, index=False)
     return stats
 
 
@@ -284,8 +290,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "logPiscina.xlsx"),
-        help="Caminho do arquivo logPiscina.xlsx",
+        default=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "logPiscina.csv"),
+        help="Caminho do arquivo logPiscina.csv",
     )
 
     args = parser.parse_args()
