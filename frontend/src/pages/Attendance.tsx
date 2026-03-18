@@ -2251,16 +2251,17 @@ export const Attendance: React.FC = () => {
     setModalStep("select");
     setClimaPrefillApplied(false);
     const isCurrentDate = date === todayDateKey;
+    const isSameDateSelection = modalDate === date;
     
     // Resetar dados
     setPoolData(prev => ({
       ...prev,
       tempPiscina: DEFAULT_POOL_TEMP,
-      cloro: 1.5,
-      cloroEnabled: true,
-      selectedIcons: [],
-      weatherCondition: "",
-      weatherConditionCode: "",
+      cloro: isSameDateSelection ? prev.cloro : 1.5,
+      cloroEnabled: isSameDateSelection ? prev.cloroEnabled : true,
+      selectedIcons: isSameDateSelection ? prev.selectedIcons : [],
+      weatherCondition: isSameDateSelection ? prev.weatherCondition : "",
+      weatherConditionCode: isSameDateSelection ? prev.weatherConditionCode : "",
       incidentType: "",
       incidentNote: "",
       incidentImpact: "aula",
