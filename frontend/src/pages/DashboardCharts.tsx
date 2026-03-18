@@ -616,14 +616,14 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
                 <span>{total}</span>
               </div>
               <div className="native-occurrence-track">
-                <div className="native-occurrence-presente" style={{ width: `${presenteW}%` }}>
-                  {item.presente > 0 && presenteW > 8 && <span className="occurrence-segment-label">{item.presente}</span>}
+                <div className="native-occurrence-presente" style={{ width: `${presenteW}%` }} title={item.presente > 0 ? `Presente: ${item.presente}` : undefined}>
+                  {item.presente > 0 && (presenteW > 8 ? <span className="occurrence-segment-label">{item.presente}</span> : <span className="occurrence-segment-label" style={{ fontSize: '10px' }}>{item.presente}</span>)}
                 </div>
-                <div className="native-occurrence-ausente" style={{ width: `${ausenteW}%` }}>
-                  {item.ausente > 0 && ausenteW > 8 && <span className="occurrence-segment-label">{item.ausente}</span>}
+                <div className="native-occurrence-ausente" style={{ width: `${ausenteW}%` }} title={item.ausente > 0 ? `Ausente: ${item.ausente}` : undefined}>
+                  {item.ausente > 0 && (ausenteW > 8 ? <span className="occurrence-segment-label">{item.ausente}</span> : <span className="occurrence-segment-label" style={{ fontSize: '10px' }}>{item.ausente}</span>)}
                 </div>
-                <div className="native-occurrence-justificado" style={{ width: `${justificadoW}%` }}>
-                  {item.justificado > 0 && justificadoW > 8 && <span className="occurrence-segment-label">{item.justificado}</span>}
+                <div className="native-occurrence-justificado" style={{ width: `${justificadoW}%` }} title={item.justificado > 0 ? `Justificado: ${item.justificado}` : undefined}>
+                  {item.justificado > 0 && (justificadoW > 8 ? <span className="occurrence-segment-label">{item.justificado}</span> : <span className="occurrence-segment-label" style={{ fontSize: '10px' }}>{item.justificado}</span>)}
                 </div>
               </div>
             </div>
