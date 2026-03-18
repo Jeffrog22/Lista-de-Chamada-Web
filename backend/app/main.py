@@ -1040,7 +1040,10 @@ def append_pool_log(entry: PoolLogEntryModel):
             return {"ok": True, "action": "noop", "file": file_path}
 
         action = "created"
+        db_saved = False
+        db_error = None
 
+        # Tentar salvar no banco PostgreSQL
         try:
             from app.database import engine as _db_engine
             from sqlmodel import Session as _DBSession
@@ -1063,9 +1066,12 @@ def append_pool_log(entry: PoolLogEntryModel):
                     saved_at=pd.Timestamp.utcnow().isoformat(),
                 ))
                 _db.commit()
-        except Exception:
-            pass
+                db_saved = True
+        except Exception as e:
+            db_error = str(e)
+            print(f"[WARN] pool-log DB save failed: {db_error}")
 
+        # Tentar salvar no Excel (sempre tenta, mesmo se banco falhar)
         try:
             excel_df = _load_pool_log(file_path)
             excel_df = pd.concat([excel_df, pd.DataFrame([row])], ignore_index=True)
@@ -1073,7 +1079,11 @@ def append_pool_log(entry: PoolLogEntryModel):
         except PermissionError:
             raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para salvar.")
 
-        return {"ok": True, "action": action, "file": file_path}
+        # Se banco falhou, tentar avisar ao cliente
+        if not db_saved and db_error:
+            print(f"[WARN] Pool-log salvo em Excel mas falhou no banco: {db_error}")
+
+        return {"ok": True, "action": action, "file": file_path, "db_saved": db_saved}
     except HTTPException:
         raise
     except Exception as exc:
