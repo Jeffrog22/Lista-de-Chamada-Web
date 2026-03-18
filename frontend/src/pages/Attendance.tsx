@@ -111,6 +111,8 @@ interface PoolLogEntry {
 type ClimaCache = {
   tempExterna: string;
   selectedIcons: string[];
+  cloro?: number;
+  cloroEnabled?: boolean;
   apiTemp?: string;
   apiCondition?: string;
   apiConditionCode?: string;
@@ -1928,6 +1930,7 @@ export const Attendance: React.FC = () => {
   const [modalDate, setModalDate] = useState(""); // Data selecionada (YYYY-MM-DD)
   const [modalStep, setModalStep] = useState<"select" | "aula" | "ocorrencia">("select");
   const [climaPrefillApplied, setClimaPrefillApplied] = useState(false);
+  const [showClimateEditor, setShowClimateEditor] = useState(false);
   const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState<boolean>(() => {
@@ -2250,7 +2253,9 @@ export const Attendance: React.FC = () => {
     setModalDate(date);
     setModalStep("select");
     setClimaPrefillApplied(false);
+    setShowClimateEditor(false);
     const isCurrentDate = date === todayDateKey;
+    const isRetroDate = date < todayDateKey;
     const isSameDateSelection = modalDate === date;
     
     // Resetar dados
@@ -2372,6 +2377,8 @@ export const Attendance: React.FC = () => {
         logType: modalLogType,
       }));
 
+      const hasLoggedClimateData = Boolean(normalizedTemp || inferredConditionLabel);
+
       if (statusFromLog === "cancelada" || statusFromLog === "justificada") {
         const reason = inferredCondition || "Condições Climáticas";
         const reasonLabel = statusFromLog === "cancelada"
@@ -2381,16 +2388,20 @@ export const Attendance: React.FC = () => {
         await applyCalendarClosureJustification(date, reasonLabel);
       }
 
-      setClimaPrefillApplied(true);
-
       if (modalLogType === "ocorrencia") {
+        setClimaPrefillApplied(true);
         setModalStep("ocorrencia");
+        setShowDateModal(true);
+        return;
       } else {
         setModalStep("aula");
       }
 
-      setShowDateModal(true);
-      return;
+      if (hasLoggedClimateData) {
+        setClimaPrefillApplied(true);
+        setShowDateModal(true);
+        return;
+      }
     } catch {
       // Continua com prefill via cache/API; evita fallback de outra turma no mesmo dia.
     }
@@ -2398,23 +2409,32 @@ export const Attendance: React.FC = () => {
     // Intentional any cast so we can read cached fields without the compiler narrowing the result to never
     const climaCache = getClimaCache(date) as any;
     if (climaCache) {
+      const cacheConditionLabel = normalizeWeatherConditionLabel(
+        String(climaCache.weatherCondition || climaCache.apiCondition || ""),
+        String(climaCache.apiConditionCode || "")
+      );
+      const cacheTemp = normalizeNumberInput(climaCache.tempExterna);
+      const cacheHasClimateData = Boolean(cacheConditionLabel || cacheTemp);
+
       setPoolData(prev => ({
         ...prev,
-        tempExterna: normalizeNumberInput(climaCache.tempExterna),
+        tempExterna: cacheTemp,
         selectedIcons: isCurrentDate ? [] : normalizeSensationList(climaCache.selectedIcons || []),
-        weatherCondition: normalizeWeatherConditionLabel(
-          String(climaCache.weatherCondition || climaCache.apiCondition || ""),
-          String(climaCache.apiConditionCode || "")
-        ),
+        weatherCondition: cacheConditionLabel,
         weatherConditionCode: String(climaCache.apiConditionCode || ""),
-        cloro: prev.cloro,
+        cloro: typeof climaCache.cloro === "number" && Number.isFinite(climaCache.cloro) ? climaCache.cloro : prev.cloro,
+        cloroEnabled: typeof climaCache.cloroEnabled === "boolean" ? climaCache.cloroEnabled : prev.cloroEnabled,
       }));
-      setClimaPrefillApplied(true);
-      setShowDateModal(true);
-      return;
+
+      if (cacheHasClimateData) {
+        setClimaPrefillApplied(true);
+        setShowDateModal(true);
+        if (isRetroDate) {
+          return;
+        }
+      }
     }
 
-    const isRetroDate = date < todayDateKey;
     const fallbackDate = localStorage.getItem(lastClimaCacheDateKey);
     const fallbackCache = !isRetroDate && fallbackDate && fallbackDate !== date ? getClimaCache(fallbackDate) : null;
     if (fallbackCache) {
@@ -2427,7 +2447,8 @@ export const Attendance: React.FC = () => {
           String(fallbackCache.apiConditionCode || "")
         ),
         weatherConditionCode: String(fallbackCache.apiConditionCode || ""),
-        cloro: prev.cloro,
+        cloro: typeof fallbackCache.cloro === "number" && Number.isFinite(fallbackCache.cloro) ? fallbackCache.cloro : prev.cloro,
+        cloroEnabled: typeof fallbackCache.cloroEnabled === "boolean" ? fallbackCache.cloroEnabled : prev.cloroEnabled,
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
@@ -2458,6 +2479,8 @@ export const Attendance: React.FC = () => {
         setClimaCache(date, {
           tempExterna: retroTemp,
           selectedIcons: normalizeSensationList(retroIcons),
+          cloro: poolData.cloro,
+          cloroEnabled: poolData.cloroEnabled,
           apiTemp: String(retroApi.temp || ""),
           apiCondition: String(retroApi.condition || ""),
           apiConditionCode: retroConditionCode,
@@ -2487,6 +2510,8 @@ export const Attendance: React.FC = () => {
           setClimaCache(date, {
             tempExterna: climaCache.tempExterna,
             selectedIcons: normalizeSensationList(climaCache.selectedIcons || []),
+            cloro: typeof climaCache.cloro === "number" && Number.isFinite(climaCache.cloro) ? climaCache.cloro : poolData.cloro,
+            cloroEnabled: typeof climaCache.cloroEnabled === "boolean" ? climaCache.cloroEnabled : poolData.cloroEnabled,
             apiTemp,
             apiCondition,
             apiConditionCode,
@@ -2499,6 +2524,7 @@ export const Attendance: React.FC = () => {
           weatherConditionCode: apiConditionCode,
           cloro: prev.cloro,
         }));
+        setClimaPrefillApplied(true);
         setShowDateModal(true);
         return;
       }
@@ -2516,6 +2542,8 @@ export const Attendance: React.FC = () => {
     setClimaCache(date, {
       tempExterna: normalizeNumberInput(apiData.temp),
       selectedIcons: normalizeSensationList(autoIcons),
+      cloro: poolData.cloro,
+      cloroEnabled: poolData.cloroEnabled,
       apiTemp,
       apiCondition,
       apiConditionCode,
@@ -2654,6 +2682,8 @@ export const Attendance: React.FC = () => {
           String(cache.apiConditionCode || "")
         ),
         weatherConditionCode: String(cache.apiConditionCode || ""),
+        cloro: typeof cache.cloro === "number" && Number.isFinite(cache.cloro) ? cache.cloro : prev.cloro,
+        cloroEnabled: typeof cache.cloroEnabled === "boolean" ? cache.cloroEnabled : prev.cloroEnabled,
       }));
     }
     setClimaPrefillApplied(true);
@@ -2874,6 +2904,8 @@ export const Attendance: React.FC = () => {
         setClimaCache(modalDate, {
           tempExterna: normalizeNumberInput(poolData.tempExterna),
           selectedIcons: normalizeSensationList(poolData.selectedIcons),
+          cloro: Number.isFinite(poolData.cloro) ? poolData.cloro : (existingCache?.cloro ?? 1.5),
+          cloroEnabled: !cloroLocked,
           apiTemp: existingCache?.apiTemp,
           apiCondition: existingCache?.apiCondition,
           apiConditionCode: poolData.weatherConditionCode || existingCache?.apiConditionCode,
@@ -4752,7 +4784,7 @@ export const Attendance: React.FC = () => {
                 {modalDate.split("-").reverse().join("/")}
                 {modalStep !== "select" && !!modalLogTypeLabel && <span style={{ fontSize: "14px", color: "#666", marginLeft: "10px" }}>({modalLogTypeLabel})</span>}
               </h3>
-              <button onClick={() => setShowDateModal(false)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
+              <button onClick={() => { setShowClimateEditor(false); setShowDateModal(false); }} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer" }}>✕</button>
             </div>
 
             {/* NÍVEL 1: SELEÇÃO */}
@@ -4773,68 +4805,124 @@ export const Attendance: React.FC = () => {
             {modalStep === "aula" && (
               <div className="card-clima">
                 <h4 style={{ marginTop: 0, color: "#444" }}>🌤️ Condição Climática e Sensação</h4>
-                <div style={{ marginBottom: "12px" }}>
-                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "4px" }}>Condição climática:</label>
-                  <select 
-                    value={poolData.weatherCondition || ""} 
-                    onChange={e => setPoolData({...poolData, weatherCondition: e.target.value})}
-                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
-                  >
-                    <option value="">Selecione a condição</option>
-                    <optgroup label="Condições Favoráveis">
-                      <option value="Céu Claro">Céu Claro</option>
-                      <option value="Predomínio de Sol">Predomínio de Sol</option>
-                      <option value="Sol entre Nuvens">Sol entre Nuvens</option>
-                      <option value="Parcialmente Nublado">Parcialmente Nublado</option>
-                      <option value="Nublado">Nublado</option>
-                    </optgroup>
-                    <optgroup label="Condições que Justificam">
-                      <option value="Encoberto">Encoberto</option>
-                      <option value="Instável">Instável</option>
-                      <option value="Chuvas Isoladas">Chuvas Isoladas</option>
-                      <option value="Chuva">Chuva</option>
-                      <option value="Chuvisco">Chuvisco</option>
-                      <option value="Pancadas de Chuva">Pancadas de Chuva</option>
-                      <option value="Tempestade">Tempestade</option>
-                      <option value="Nevoeiro">Nevoeiro</option>
-                      <option value="Geada">Geada</option>
-                    </optgroup>
-                  </select>
-                </div>
-                <div style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "6px", marginBottom: "15px", WebkitOverflowScrolling: "touch" }}>
-                  {WEATHER_ICONS.sensations.map(icon => (
+                <div style={{ marginBottom: "16px", border: "1px solid #e5e7eb", borderRadius: "10px", background: "#f8fafc", padding: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "4px" }}>Condição climática:</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#2c3e50", marginBottom: "10px" }}>
+                        {poolData.weatherCondition || "Sem retorno automático"}
+                      </div>
+                      <div style={{ fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "4px" }}>Temp. externa (°C):</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#2c3e50", marginBottom: poolData.selectedIcons.length ? "10px" : 0 }}>
+                        {poolData.tempExterna || "Sem retorno automático"}
+                      </div>
+                      {poolData.selectedIcons.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                          {poolData.selectedIcons.map((icon) => (
+                            <span
+                              key={icon}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: "999px",
+                                border: "1px solid #cbd5e1",
+                                background: "#fff",
+                                color: "#475569",
+                                fontSize: "10px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {icon}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <button
-                      key={icon}
-                      onClick={() => toggleIcon(icon)}
+                      type="button"
+                      onClick={() => setShowClimateEditor((prev) => !prev)}
+                      title={showClimateEditor ? "Recolher edição manual" : "Editar condição climática"}
                       style={{
-                        padding: "4px 9px",
-                        borderRadius: "20px",
-                        border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
-                        background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
-                        color: poolData.selectedIcons.includes(icon) ? "#667eea" : "#666",
+                        alignSelf: "flex-start",
+                        border: "none",
+                        background: "transparent",
+                        color: "#666",
                         cursor: "pointer",
-                        fontSize: "9px",
-                        fontWeight: 600,
-                        flex: "0 0 auto",
-                        minWidth: icon === "Agradável" ? "76px" : "64px",
-                        whiteSpace: "nowrap"
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        padding: "2px 4px",
+                        lineHeight: 1,
                       }}
                     >
-                      {icon}
+                      ✎
                     </button>
-                  ))}
+                  </div>
+                  {showClimateEditor && (
+                    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
+                      <div style={{ marginBottom: "12px" }}>
+                        <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "4px" }}>Condição climática:</label>
+                        <select 
+                          value={poolData.weatherCondition || ""} 
+                          onChange={e => setPoolData({...poolData, weatherCondition: e.target.value})}
+                          style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
+                        >
+                          <option value="">Selecione a condição</option>
+                          <optgroup label="Condições Favoráveis">
+                            <option value="Céu Claro">Céu Claro</option>
+                            <option value="Predomínio de Sol">Predomínio de Sol</option>
+                            <option value="Sol entre Nuvens">Sol entre Nuvens</option>
+                            <option value="Parcialmente Nublado">Parcialmente Nublado</option>
+                            <option value="Nublado">Nublado</option>
+                          </optgroup>
+                          <optgroup label="Condições que Justificam">
+                            <option value="Encoberto">Encoberto</option>
+                            <option value="Instável">Instável</option>
+                            <option value="Chuvas Isoladas">Chuvas Isoladas</option>
+                            <option value="Chuva">Chuva</option>
+                            <option value="Chuvisco">Chuvisco</option>
+                            <option value="Pancadas de Chuva">Pancadas de Chuva</option>
+                            <option value="Tempestade">Tempestade</option>
+                            <option value="Nevoeiro">Nevoeiro</option>
+                            <option value="Geada">Geada</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "6px", marginBottom: "15px", WebkitOverflowScrolling: "touch" }}>
+                        {WEATHER_ICONS.sensations.map(icon => (
+                          <button
+                            key={icon}
+                            onClick={() => toggleIcon(icon)}
+                            style={{
+                              padding: "4px 9px",
+                              borderRadius: "20px",
+                              border: poolData.selectedIcons.includes(icon) ? "2px solid #667eea" : "1px solid #ddd",
+                              background: poolData.selectedIcons.includes(icon) ? "#eef2ff" : "white",
+                              color: poolData.selectedIcons.includes(icon) ? "#667eea" : "#666",
+                              cursor: "pointer",
+                              fontSize: "9px",
+                              fontWeight: 600,
+                              flex: "0 0 auto",
+                              minWidth: icon === "Agradável" ? "76px" : "64px",
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            {icon}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666" }}>Temp. Externa (°C)</label>
+                        <input 
+                          type="number" 
+                          value={poolData.tempExterna} 
+                          onChange={e => setPoolData({...poolData, tempExterna: e.target.value})}
+                          style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#f8f9fa" }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "20px" }}>
-                  <div>
-                    <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666" }}>Temp. Externa (°C)</label>
-                    <input 
-                      type="number" 
-                      value={poolData.tempExterna} 
-                      onChange={e => setPoolData({...poolData, tempExterna: e.target.value})}
-                      style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", background: "#f8f9fa" }}
-                    />
-                  </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px", marginBottom: "20px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666" }}>Temp. Piscina (°C)</label>
                     <input 
