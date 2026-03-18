@@ -923,6 +923,17 @@ export const Attendance: React.FC = () => {
     return () => window.removeEventListener("attendanceDataUpdated", refreshStorageData);
   }, []);
 
+  const refreshExcludedStudents = useCallback(async () => {
+    try {
+      const response = await getExcludedStudents();
+      const payload = Array.isArray(response?.data) ? response.data : [];
+      localStorage.setItem("excludedStudents", JSON.stringify(payload));
+      refreshStorageData();
+    } catch {
+      // mantém cache local quando backend estiver indisponível
+    }
+  }, [refreshStorageData]);
+
   useEffect(() => {
     let isMounted = true;
     getExcludedStudents()
@@ -947,6 +958,28 @@ export const Attendance: React.FC = () => {
       isMounted = false;
     };
   }, [refreshStorageData]);
+
+  useEffect(() => {
+    const triggerExcludedRefresh = () => {
+      refreshExcludedStudents();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        triggerExcludedRefresh();
+      }
+    };
+
+    window.addEventListener("focus", triggerExcludedRefresh);
+    window.addEventListener("pageshow", triggerExcludedRefresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", triggerExcludedRefresh);
+      window.removeEventListener("pageshow", triggerExcludedRefresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [refreshExcludedStudents]);
 
   useEffect(() => {
     localStorage.setItem(renewalAlertStorageKey, JSON.stringify(dismissedRenewalAlerts));
@@ -2947,6 +2980,22 @@ export const Attendance: React.FC = () => {
 
   const selectedDaysKey = resolvedDiasSemana.join("|");
 
+  const resolveReportHistoricoDateKey = (rawDayKey: string, availableDateKeys: string[]) => {
+    const raw = String(rawDayKey || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return availableDateKeys.includes(raw) ? raw : "";
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+      const [dd, mm, yyyy] = raw.split("/");
+      const iso = `${yyyy}-${mm}-${dd}`;
+      return availableDateKeys.includes(iso) ? iso : "";
+    }
+    const day = raw.padStart(2, "0");
+    const dateKey = `${monthKey}-${day}`;
+    return availableDateKeys.includes(dateKey) ? dateKey : "";
+  };
+
   useEffect(() => {
     const triggerRefresh = () => {
       if (hasUnsavedLocalChangesRef.current) return;
@@ -3197,9 +3246,8 @@ export const Attendance: React.FC = () => {
           const attendanceMap = (student.historico || {}) as Record<string, string>;
           const mappedAttendance = Object.entries(attendanceMap).reduce(
             (acc, [dayKey, status]) => {
-              const day = String(dayKey || "").padStart(2, "0");
-              const dateKey = `${monthKey}-${day}`;
-              if (newDates.includes(dateKey)) {
+              const dateKey = resolveReportHistoricoDateKey(String(dayKey || ""), newDates);
+              if (dateKey) {
                 acc[dateKey] = mapAttendanceValue(String(status || ""));
               }
               return acc;

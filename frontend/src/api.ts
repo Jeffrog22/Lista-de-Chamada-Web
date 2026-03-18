@@ -4,6 +4,14 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
+const noCacheConfig = {
+  headers: {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+  },
+};
+
 const EXCLUDED_STUDENTS_STORAGE_KEY = "excludedStudents";
 const ATTENDANCE_LOG_QUEUE_KEY = "pendingAttendanceLogs";
 const ATTENDANCE_DEBUG_KEY = "attendanceDebugPersistence";
@@ -197,15 +205,17 @@ const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
     .map((remote) => normalizeExcludedStudentRecord({ ...remote, _pendingSync: false }))
     .filter(isValidExcludedStudentRecord);
 
-  localItems
-    .filter(isPendingExcludedSync)
-    .forEach((localPending) => {
-      const idx = merged.findIndex((item) => exclusionMatches(item, localPending));
-      if (idx >= 0) {
-        merged[idx] = normalizeExcludedStudentRecord({ ...merged[idx], _pendingSync: true });
-      } else if (isValidExcludedStudentRecord(localPending)) {
-        merged.push(normalizeExcludedStudentRecord({ ...localPending, _pendingSync: true }));
-      }
+  localItems.forEach((localItem) => {
+    const idx = merged.findIndex((item) => exclusionMatches(item, localItem));
+    if (idx >= 0) {
+      merged[idx] = normalizeExcludedStudentRecord({
+        ...localItem,
+        ...merged[idx],
+        _pendingSync: isPendingExcludedSync(localItem),
+      });
+    } else if (isValidExcludedStudentRecord(localItem)) {
+      merged.push(normalizeExcludedStudentRecord(localItem));
+    }
     });
 
   writeExcludedStudentsLocal(merged);
@@ -221,7 +231,7 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
     (localItem) => {
       const missingRemotely = !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem));
       if (!missingRemotely) return false;
-      return isPendingExcludedSync(localItem) || remote.length === 0;
+      return true;
     }
   );
   if (candidates.length === 0) return { synced: 0, items: local };
@@ -372,7 +382,7 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 
 // Exclusions
 export const getExcludedStudents = () =>
-  API.get("/exclusions")
+  API.get("/exclusions", noCacheConfig)
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
@@ -437,7 +447,7 @@ export const getReports = (params?: Record<string, any>) =>
         ...(params || {}),
         _ts: Date.now(),
       };
-      return API.get("/reports", { params: normalizedParams }).catch(() => ({ data: [] }));
+      return API.get("/reports", { ...noCacheConfig, params: normalizedParams }).catch(() => ({ data: [] }));
     });
 export const generateReport = (data: any) => API.post("/reports", data).catch(() => ({ data: { ok: true } }));
 export const getFilters = () => API.get("/filters").catch(() => ({ data: { turmas: [], horarios: [], professores: [], meses: [], anos: [] } }));
@@ -555,7 +565,7 @@ export const saveJustificationLog = (data: any) =>
 
 // Academic calendar (reports summary)
 export const getAcademicCalendar = (params?: Record<string, any>) =>
-  API.get("/academic-calendar", { params }).catch(() => ({
+  API.get("/academic-calendar", { ...noCacheConfig, params }).catch(() => ({
     data: {
       settings: null,
       events: [],
