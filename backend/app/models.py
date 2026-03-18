@@ -151,3 +151,22 @@ class AttendanceLog(SQLModel, table=True):
     client_saved_at: Optional[str] = Field(default=None)
     source: Optional[str] = Field(default=None)
     registros_json: str = Field(default="[]", sa_column=Column(Text))
+
+
+class PoolLog(SQLModel, table=True):
+    __tablename__ = "pool_logs"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    data: str = Field(default="", index=True)
+    turma_codigo: str = Field(default="", index=True)
+    turma_label: str = Field(default="")
+    horario: str = Field(default="", index=True)
+    professor: str = Field(default="", index=True)
+    clima1: str = Field(default="")
+    clima2: str = Field(default="")
+    status_aula: str = Field(default="")
+    nota: str = Field(default="")
+    tipo_ocorrencia: str = Field(default="")
+    temp_externa: str = Field(default="")
+    temp_piscina: str = Field(default="")
+    cloro_ppm: Optional[str] = Field(default=None)
+    saved_at: str = Field(default="")

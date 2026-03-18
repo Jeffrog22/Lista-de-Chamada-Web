@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Fo
 from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, migrate_db, get_session
 from app import crud, models
-from app.models import AttendanceLog
+from app.models import AttendanceLog, PoolLog
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import os
@@ -592,6 +592,66 @@ def _load_pool_log(file_path: str) -> pd.DataFrame:
         df[col] = df[col].astype("object")
     return df
 
+
+def _pool_log_row_from_entry(entry: PoolLogEntryModel) -> Dict[str, Any]:
+    cloro_value = "-" if entry.nota in {"feriado", "ponte-feriado", "reuniao"} else ("-" if entry.cloroPpm is None else entry.cloroPpm)
+    temp_externa_value = _coerce_numeric_value(entry.tempExterna)
+    temp_piscina_value = _coerce_numeric_value(entry.tempPiscina)
+    return {
+        "Data": _normalize_date_key(entry.data),
+        "TurmaCodigo": entry.turmaCodigo or "",
+        "TurmaLabel": entry.turmaLabel or "",
+        "Horario": _format_horario(entry.horario),
+        "Professor": entry.professor or "",
+        "Clima 1": entry.clima1,
+        "Clima 2": entry.clima2,
+        "Status_aula": entry.statusAula,
+        "Nota": entry.nota,
+        "Tipo_ocorrencia": entry.tipoOcorrencia,
+        "Temp. (C)": temp_externa_value,
+        "Piscina (C)": temp_piscina_value,
+        "Cloro (ppm)": cloro_value,
+    }
+
+
+def _load_pool_log_dataframe() -> pd.DataFrame:
+    try:
+        from app.database import engine as _db_engine
+        from sqlmodel import Session as _DBSession
+
+        with _DBSession(_db_engine) as _db:
+            rows = _db.exec(select(PoolLog)).all()
+            if rows:
+                payload = []
+                for row in rows:
+                    payload.append({
+                        "Data": _normalize_date_key(row.data),
+                        "TurmaCodigo": row.turma_codigo or "",
+                        "TurmaLabel": row.turma_label or "",
+                        "Horario": _format_horario(row.horario),
+                        "Professor": row.professor or "",
+                        "Clima 1": row.clima1 or "",
+                        "Clima 2": row.clima2 or "",
+                        "Status_aula": row.status_aula or "",
+                        "Nota": row.nota or "",
+                        "Tipo_ocorrencia": row.tipo_ocorrencia or "",
+                        "Temp. (C)": row.temp_externa or "",
+                        "Piscina (C)": row.temp_piscina or "",
+                        "Cloro (ppm)": row.cloro_ppm,
+                        "saved_at": row.saved_at or "",
+                    })
+                df = pd.DataFrame(payload)
+                for col in [*POOL_LOG_COLUMNS, "saved_at"]:
+                    if col not in df.columns:
+                        df[col] = ""
+                    df[col] = df[col].astype("object")
+                return df
+    except Exception:
+        pass
+
+    file_path = os.path.join(DATA_DIR, "logPiscina.xlsx")
+    return _load_pool_log(file_path)
+
 def _pool_log_mask(df: pd.DataFrame, entry: PoolLogEntryModel) -> pd.Series:
     def _norm(value: Any) -> str:
         if value is None:
@@ -968,41 +1028,51 @@ def append_pool_log(entry: PoolLogEntryModel):
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
         file_path = os.path.join(DATA_DIR, "logPiscina.xlsx")
+        row = _pool_log_row_from_entry(entry)
+
         try:
-            df = _load_pool_log(file_path)
+            df = _load_pool_log_dataframe()
         except PermissionError:
             raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para salvar.")
-
-        cloro_value = "-" if entry.nota in {"feriado", "ponte-feriado", "reuniao"} else ("-" if entry.cloroPpm is None else entry.cloroPpm)
-        temp_externa_value = _coerce_numeric_value(entry.tempExterna)
-        temp_piscina_value = _coerce_numeric_value(entry.tempPiscina)
-        row = {
-            "Data": _normalize_date_key(entry.data),
-            "TurmaCodigo": entry.turmaCodigo or "",
-            "TurmaLabel": entry.turmaLabel or "",
-            "Horario": _format_horario(entry.horario),
-            "Professor": entry.professor or "",
-            "Clima 1": entry.clima1,
-            "Clima 2": entry.clima2,
-            "Status_aula": entry.statusAula,
-            "Nota": entry.nota,
-            "Tipo_ocorrencia": entry.tipoOcorrencia,
-            "Temp. (C)": temp_externa_value,
-            "Piscina (C)": temp_piscina_value,
-            "Cloro (ppm)": cloro_value,
-        }
 
         latest_for_day = _select_latest_pool_log_for_day(df, entry.data, entry.horario, entry.professor)
         if latest_for_day and _pool_log_meaningful_signature(latest_for_day) == _pool_log_meaningful_signature(row):
             return {"ok": True, "action": "noop", "file": file_path}
 
-        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         action = "created"
 
         try:
-            df.to_excel(file_path, index=False)
+            from app.database import engine as _db_engine
+            from sqlmodel import Session as _DBSession
+
+            with _DBSession(_db_engine) as _db:
+                _db.add(PoolLog(
+                    data=_normalize_date_key(row.get("Data", "")),
+                    turma_codigo=str(row.get("TurmaCodigo", "") or "").strip(),
+                    turma_label=str(row.get("TurmaLabel", "") or "").strip(),
+                    horario=_normalize_horario_key(row.get("Horario", "") or ""),
+                    professor=str(row.get("Professor", "") or "").strip(),
+                    clima1=str(row.get("Clima 1", "") or "").strip(),
+                    clima2=str(row.get("Clima 2", "") or "").strip(),
+                    status_aula=str(row.get("Status_aula", "") or "").strip(),
+                    nota=str(row.get("Nota", "") or "").strip(),
+                    tipo_ocorrencia=str(row.get("Tipo_ocorrencia", "") or "").strip(),
+                    temp_externa=str(row.get("Temp. (C)", "") or "").strip(),
+                    temp_piscina=str(row.get("Piscina (C)", "") or "").strip(),
+                    cloro_ppm=None if row.get("Cloro (ppm)", None) is None else str(row.get("Cloro (ppm)")),
+                    saved_at=pd.Timestamp.utcnow().isoformat(),
+                ))
+                _db.commit()
+        except Exception:
+            pass
+
+        try:
+            excel_df = _load_pool_log(file_path)
+            excel_df = pd.concat([excel_df, pd.DataFrame([row])], ignore_index=True)
+            excel_df.to_excel(file_path, index=False)
         except PermissionError:
             raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para salvar.")
+
         return {"ok": True, "action": action, "file": file_path}
     except HTTPException:
         raise
@@ -1018,11 +1088,7 @@ def get_pool_log(
     professor: Optional[str] = None,
 ):
     try:
-        file_path = os.path.join(DATA_DIR, "logPiscina.xlsx")
-        if not os.path.exists(file_path):
-            return Response(status_code=204)
-
-        df = _load_pool_log(file_path)
+        df = _load_pool_log_dataframe()
         if "Data" not in df.columns:
             return Response(status_code=204)
 
