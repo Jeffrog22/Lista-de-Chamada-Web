@@ -930,7 +930,6 @@ def get_weather(date: str):
         "cl": "Céu Claro",
         "nv": "Nevoeiro",
         "g": "Geada",
-        "ne": "Neve",
         "pnt": "Pancadas de Chuva à Noite",
         "psc": "Possibilidade de Chuva",
         "pcm": "Possibilidade de Chuva pela Manhã",

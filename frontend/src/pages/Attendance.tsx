@@ -208,7 +208,6 @@ const CPTEC_CONDITION_LABELS: Record<string, string> = {
   n: "Nublado",
   nv: "Nevoeiro",
   g: "Geada",
-  ne: "Neve",
   pnt: "Pancadas à noite",
   psc: "Possibilidade de chuva",
   pcm: "Possibilidade de chuva pela manhã",
@@ -4762,20 +4761,24 @@ export const Attendance: React.FC = () => {
                     style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
                   >
                     <option value="">Selecione a condição</option>
-                    <option value="Céu Claro">Céu Claro</option>
-                    <option value="Sol entre Nuvens">Sol entre Nuvens</option>
-                    <option value="Parcialmente Nublado">Parcialmente Nublado</option>
-                    <option value="Predomínio de Sol">Predomínio de Sol</option>
-                    <option value="Nublado">Nublado</option>
-                    <option value="Encoberto">Encoberto</option>
-                    <option value="Chuva">Chuva</option>
-                    <option value="Chuvas Isoladas">Chuvas Isoladas</option>
-                    <option value="Chuvisco">Chuvisco</option>
-                    <option value="Tempestade">Tempestade</option>
-                    <option value="Instável">Instável</option>
-                    <option value="Nevoeiro">Nevoeiro</option>
-                    <option value="Neve">Neve</option>
-                    <option value="Geada">Geada</option>
+                    <optgroup label="Condições Favoráveis">
+                      <option value="Céu Claro">Céu Claro</option>
+                      <option value="Predomínio de Sol">Predomínio de Sol</option>
+                      <option value="Sol entre Nuvens">Sol entre Nuvens</option>
+                      <option value="Parcialmente Nublado">Parcialmente Nublado</option>
+                      <option value="Nublado">Nublado</option>
+                    </optgroup>
+                    <optgroup label="Condições que Justificam">
+                      <option value="Encoberto">Encoberto</option>
+                      <option value="Instável">Instável</option>
+                      <option value="Chuvas Isoladas">Chuvas Isoladas</option>
+                      <option value="Chuva">Chuva</option>
+                      <option value="Chuvisco">Chuvisco</option>
+                      <option value="Pancadas de Chuva">Pancadas de Chuva</option>
+                      <option value="Tempestade">Tempestade</option>
+                      <option value="Nevoeiro">Nevoeiro</option>
+                      <option value="Geada">Geada</option>
+                    </optgroup>
                   </select>
                 </div>
                 <div style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "6px", marginBottom: "15px", WebkitOverflowScrolling: "touch" }}>
