@@ -924,6 +924,7 @@ def get_weather(date: str):
         "ch": "Chuvoso",
         "t": "Tempestade",
         "ps": "Predomínio de Sol",
+        "sn": "Sol entre Nuvens",
         "e": "Encoberto",
         "n": "Nublado",
         "cl": "Céu Claro",

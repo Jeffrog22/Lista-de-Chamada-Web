@@ -202,6 +202,7 @@ const CPTEC_CONDITION_LABELS: Record<string, string> = {
   ch: "Chuvoso",
   t: "Tempestade",
   ps: "Predomínio de sol",
+  sn: "Sol entre nuvens",
   cl: "Céu claro",
   e: "Encoberto",
   n: "Nublado",
@@ -4753,9 +4754,29 @@ export const Attendance: React.FC = () => {
             {modalStep === "aula" && (
               <div className="card-clima">
                 <h4 style={{ marginTop: 0, color: "#444" }}>🌤️ Condição Climática e Sensação</h4>
-                <div style={{ marginBottom: "12px", fontSize: "12px", color: "#555" }}>
-                  <strong>Condição climática:</strong>{" "}
-                  {poolData.weatherCondition || "Indisponível"}
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: "bold", color: "#666", marginBottom: "4px" }}>Condição climática:</label>
+                  <select 
+                    value={poolData.weatherCondition || ""} 
+                    onChange={e => setPoolData({...poolData, weatherCondition: e.target.value})}
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", fontSize: "12px", background: "white" }}
+                  >
+                    <option value="">Selecione a condição</option>
+                    <option value="Céu Claro">Céu Claro</option>
+                    <option value="Sol entre Nuvens">Sol entre Nuvens</option>
+                    <option value="Parcialmente Nublado">Parcialmente Nublado</option>
+                    <option value="Predomínio de Sol">Predomínio de Sol</option>
+                    <option value="Nublado">Nublado</option>
+                    <option value="Encoberto">Encoberto</option>
+                    <option value="Chuva">Chuva</option>
+                    <option value="Chuvas Isoladas">Chuvas Isoladas</option>
+                    <option value="Chuvisco">Chuvisco</option>
+                    <option value="Tempestade">Tempestade</option>
+                    <option value="Instável">Instável</option>
+                    <option value="Nevoeiro">Nevoeiro</option>
+                    <option value="Neve">Neve</option>
+                    <option value="Geada">Geada</option>
+                  </select>
                 </div>
                 <div style={{ display: "flex", flexWrap: "nowrap", overflowX: "auto", gap: "6px", marginBottom: "15px", WebkitOverflowScrolling: "touch" }}>
                   {WEATHER_ICONS.sensations.map(icon => (
