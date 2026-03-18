@@ -376,16 +376,29 @@ const getSuggestedDecisionFromRules = (params: {
   const normalizedLabel = normalizeWeatherText(String(params.conditionLabel || ""));
   const normalizedSensations = normalizeSensationList(params.sensations || []);
   const hasColdOrWind = normalizedSensations.includes("Frio") || normalizedSensations.includes("Vento");
+  
+  // Verificar sensações compostas PRIMEIRO (prioridade alta)
   if (normalizedLabel) {
+    // Nublado + Frio/Vento = Justificada
+    if (normalizedLabel.includes("nublado") && hasColdOrWind) {
+      return { status: "justificada", reason: "Nublado com frio/vento" };
+    }
+    // Encoberto + Frio/Vento = Justificada
+    if (normalizedLabel.includes("encoberto") && hasColdOrWind) {
+      return { status: "justificada", reason: "Encoberto com frio/vento" };
+    }
+    // Chuvisco com frio/vento = Justificada
     if (normalizedLabel.includes("chuvisco")) {
       if (hasColdOrWind) {
         return { status: "justificada", reason: "Chuvisco com frio/vento" };
       }
       return { status: "normal", reason: "Chuvisco leve sem frio/vento" };
     }
+    // Condições justificadas simples
     if (WEATHER_JUSTIFIED_KEYWORDS_CSV.some((keyword) => normalizedLabel.includes(keyword))) {
       return { status: "justificada", reason: "Condição climática desfavorável" };
     }
+    // Condições normais
     if (WEATHER_NORMAL_KEYWORDS.some((keyword) => normalizedLabel.includes(keyword))) {
       return { status: "normal", reason: "Condição climática favorável" };
     }
@@ -2392,6 +2405,7 @@ export const Attendance: React.FC = () => {
           String(climaCache.apiConditionCode || "")
         ),
         weatherConditionCode: String(climaCache.apiConditionCode || ""),
+        cloro: prev.cloro,
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
@@ -2411,6 +2425,7 @@ export const Attendance: React.FC = () => {
           String(fallbackCache.apiConditionCode || "")
         ),
         weatherConditionCode: String(fallbackCache.apiConditionCode || ""),
+        cloro: prev.cloro,
       }));
       setClimaPrefillApplied(true);
       setShowDateModal(true);
@@ -2435,6 +2450,7 @@ export const Attendance: React.FC = () => {
           selectedIcons: normalizeSensationList(retroIcons),
           weatherCondition: retroConditionLabel,
           weatherConditionCode: retroConditionCode,
+          cloro: prev.cloro,
         }));
 
         setClimaCache(date, {
@@ -2479,6 +2495,7 @@ export const Attendance: React.FC = () => {
           ...prev,
           weatherCondition: apiConditionLabel,
           weatherConditionCode: apiConditionCode,
+          cloro: prev.cloro,
         }));
         setShowDateModal(true);
         return;
@@ -2492,6 +2509,7 @@ export const Attendance: React.FC = () => {
       selectedIcons: isCurrentDate ? [] : normalizeSensationList(autoIcons),
       weatherCondition: apiConditionLabel,
       weatherConditionCode: apiConditionCode,
+      cloro: prev.cloro,
     }));
     setClimaCache(date, {
       tempExterna: normalizeNumberInput(apiData.temp),
