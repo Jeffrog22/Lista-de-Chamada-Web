@@ -2559,8 +2559,23 @@ export const Reports: React.FC = () => {
               <div className="reports-event-modal" onClick={(e) => e.stopPropagation()}>
                 <h3>Planejamento</h3>
                 <div className="reports-filter-note" style={{ marginBottom: 12 }}>
-                  Data selecionada: <strong>{planningCardDate.split("-").reverse().join("/")}</strong>
-                  {" "}• Semana: <strong>{selectedPlanningWeekKey.replace("semana:", "")}</strong>
+                  {(() => {
+                    const firstBlock = planningLookupResults[0];
+                    if (firstBlock && typeof firstBlock.startDay === "number" && typeof firstBlock.endDay === "number") {
+                      return (
+                        <>
+                          Período: <strong>{String(firstBlock.startDay).padStart(2, "0")} a {String(firstBlock.endDay).padStart(2, "0")}</strong>
+                          {" "}• Semana: <strong>{selectedPlanningWeekKey.replace("semana:", "")}</strong>
+                        </>
+                      );
+                    }
+                    return (
+                      <>
+                        Data selecionada: <strong>{planningCardDate.split("-").reverse().join("/")}</strong>
+                        {" "}• Semana: <strong>{selectedPlanningWeekKey.replace("semana:", "")}</strong>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="reports-professor-chips" style={{ marginBottom: 12 }}>
