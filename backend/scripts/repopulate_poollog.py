@@ -2,10 +2,16 @@
 import argparse
 import math
 import os
+import sys
 from typing import Any
 
 import pandas as pd
 from sqlmodel import Session, SQLModel, create_engine, select
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BACKEND_DIR = os.path.dirname(SCRIPT_DIR)
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 from app.database import _normalize_database_url
 from app.models import PoolLog
