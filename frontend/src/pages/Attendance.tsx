@@ -40,6 +40,7 @@ interface ReportStudentLite {
   nome: string;
   historico?: Record<string, string>;
   justifications?: Record<string, string>;
+  notes?: string[];
 }
 
 interface ReportClassLite {
@@ -2213,6 +2214,7 @@ export const Attendance: React.FC = () => {
             aluno_nome: item.aluno,
             attendance: item.attendance,
             justifications: item.justifications || {},
+            notes: item.notes || [],
           })),
         });
       } catch {
@@ -2657,6 +2659,7 @@ export const Attendance: React.FC = () => {
           aluno_nome: item.aluno,
           attendance: item.attendance,
           justifications: item.justifications || {},
+          notes: item.notes || [],
         })),
       }).catch(() => undefined);
     }
@@ -2803,6 +2806,7 @@ export const Attendance: React.FC = () => {
             aluno_nome: item.aluno,
             attendance: item.attendance,
             justifications: item.justifications || {},
+            notes: item.notes || [],
           })),
         }).catch(() => undefined);
       }
@@ -2871,6 +2875,7 @@ export const Attendance: React.FC = () => {
           aluno_nome: item.aluno,
           attendance: item.attendance,
           justifications: item.justifications || {},
+          notes: item.notes || [],
         })),
       }).catch(() => undefined);
     }
@@ -2964,35 +2969,61 @@ export const Attendance: React.FC = () => {
     window.location.hash = "students";
   };
 
+  const persistNotesSnapshot = useCallback(async (snapshot: AttendanceRecord[]) => {
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) return;
+
+    const attendanceResp: any = await saveAttendanceLog({
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
+      mes: monthKey,
+      registros: snapshot.map((item) => ({
+        aluno_nome: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+        notes: item.notes || [],
+      })),
+    }).catch(() => null);
+
+    if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
+      setHasUnsavedLocalChanges(false);
+    }
+
+    refreshSyncIndicator().catch(() => undefined);
+  }, [monthKey, refreshSyncIndicator, resolvePersistenceContext]);
+
   const handleAddNote = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && newNote.trim() && studentModalId !== null) {
-      setAttendance((prev) =>
-        prev.map((item) => {
-          if (item.id === studentModalId) {
-            return {
-              ...item,
-              notes: [...(item.notes || []), newNote.trim()],
-            };
-          }
-          return item;
-        })
-      );
+      const noteText = newNote.trim();
+      const nextAttendanceSnapshot = attendance.map((item) => {
+        if (item.id !== studentModalId) return item;
+        return {
+          ...item,
+          notes: [...(item.notes || []), noteText],
+        };
+      });
+
+      setHasUnsavedLocalChanges(true);
+      setAttendance(nextAttendanceSnapshot);
       setNewNote("");
+      persistNotesSnapshot(nextAttendanceSnapshot).catch(() => undefined);
     }
   };
 
   const handleDeleteNote = (noteIndex: number) => {
     if (studentModalId !== null) {
-      setAttendance((prev) =>
-        prev.map((item) => {
-          if (item.id === studentModalId) {
-            const updatedNotes = [...(item.notes || [])];
-            updatedNotes.splice(noteIndex, 1);
-            return { ...item, notes: updatedNotes };
-          }
-          return item;
-        })
-      );
+      const nextAttendanceSnapshot = attendance.map((item) => {
+        if (item.id !== studentModalId) return item;
+        const updatedNotes = [...(item.notes || [])];
+        updatedNotes.splice(noteIndex, 1);
+        return { ...item, notes: updatedNotes };
+      });
+
+      setHasUnsavedLocalChanges(true);
+      setAttendance(nextAttendanceSnapshot);
+      persistNotesSnapshot(nextAttendanceSnapshot).catch(() => undefined);
     }
   };
 
@@ -3199,6 +3230,7 @@ export const Attendance: React.FC = () => {
       const backendByName = new Map<string, {
         attendance: Record<string, "Presente" | "Falta" | "Justificado" | "">;
         justifications: Record<string, string>;
+        notes: string[];
       }>();
 
       try {
@@ -3289,6 +3321,7 @@ export const Attendance: React.FC = () => {
           {
             attendance: Record<string, "Presente" | "Falta" | "Justificado" | "">;
             justifications: Record<string, string>;
+            notes: string[];
           }
         >();
 
@@ -3298,6 +3331,9 @@ export const Attendance: React.FC = () => {
           if (isExcludedByIdentity(student.nome || "")) return;
           const attendanceMap = (student.historico || {}) as Record<string, string>;
           const justificationsMap = (student.justifications || {}) as Record<string, string>;
+          const notesList = Array.isArray(student.notes)
+            ? student.notes.map((note) => String(note || "").trim()).filter(Boolean)
+            : [];
           const mappedAttendance = Object.entries(attendanceMap).reduce(
             (acc, [dayKey, status]) => {
               const dateKey = resolveReportHistoricoDateKey(String(dayKey || ""), newDates);
@@ -3329,6 +3365,7 @@ export const Attendance: React.FC = () => {
           backendCandidateByName.set(studentKey, {
             attendance: mappedAttendance,
             justifications: mappedJustifications,
+            notes: notesList,
           });
         });
 
@@ -3463,6 +3500,17 @@ export const Attendance: React.FC = () => {
               });
 
               return merged;
+            })(),
+            notes: (() => {
+              const backendNotes = Array.isArray(backend?.notes)
+                ? backend!.notes.map((note) => String(note || "").trim()).filter(Boolean)
+                : [];
+              const storedNotes = Array.isArray(stored?.notes)
+                ? stored!.notes.map((note) => String(note || "").trim()).filter(Boolean)
+                : [];
+
+              if (backendNotes.length > 0) return backendNotes;
+              return storedNotes;
             })(),
           };
           })
@@ -3766,6 +3814,7 @@ export const Attendance: React.FC = () => {
           aluno_nome: item.aluno,
           attendance: item.attendance,
           justifications: item.justifications || {},
+          notes: item.notes || [],
         })),
       }).catch(() => null);
 
@@ -3816,6 +3865,7 @@ export const Attendance: React.FC = () => {
         aluno_nome: item.aluno,
         attendance: item.attendance,
         justifications: item.justifications || {},
+        notes: item.notes || [],
       })),
     };
 

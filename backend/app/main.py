@@ -98,6 +98,7 @@ class AttendanceLogItem(BaseModel):
     aluno_nome: str
     attendance: Dict[str, str]
     justifications: Optional[Dict[str, str]] = None
+    notes: Optional[List[str]] = None
 
 class AttendanceLogPayload(BaseModel):
     turmaCodigo: str = ""
@@ -146,6 +147,8 @@ class ReportStudent(BaseModel):
     justificativas: int
     frequencia: float
     historico: Dict[str, str]
+    justifications: Dict[str, str] = Field(default_factory=dict)
+    notes: List[str] = Field(default_factory=list)
     anotacoes: Optional[str] = None
 
 class ReportClass(BaseModel):
@@ -1203,6 +1206,14 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 existing_justifications = existing.get("justifications") if isinstance(existing.get("justifications"), dict) else {}
                 incoming_justifications = incoming.get("justifications") if isinstance(incoming.get("justifications"), dict) else {}
 
+                existing_notes = existing.get("notes") if isinstance(existing.get("notes"), list) else []
+                incoming_notes_raw = incoming.get("notes")
+                incoming_notes = [
+                    str(note).strip()
+                    for note in incoming_notes_raw
+                    if str(note or "").strip()
+                ] if isinstance(incoming_notes_raw, list) else None
+
                 sanitized_incoming_attendance = {
                     str(date_key): str(value)
                     for date_key, value in incoming_attendance.items()
@@ -1214,6 +1225,19 @@ def append_attendance_log(payload: AttendanceLogPayload):
                     if str(date_key or "").strip() and str(value or "").strip() != ""
                 }
 
+                merged_justifications = {
+                    **existing_justifications,
+                }
+
+                for date_key in sanitized_incoming_attendance.keys():
+                    if date_key in sanitized_incoming_justifications:
+                        merged_justifications[date_key] = sanitized_incoming_justifications[date_key]
+                    else:
+                        merged_justifications.pop(date_key, None)
+
+                for date_key, reason in sanitized_incoming_justifications.items():
+                    merged_justifications[date_key] = reason
+
                 return {
                     **existing,
                     **incoming,
@@ -1221,10 +1245,8 @@ def append_attendance_log(payload: AttendanceLogPayload):
                         **existing_attendance,
                         **sanitized_incoming_attendance,
                     },
-                    "justifications": {
-                        **existing_justifications,
-                        **sanitized_incoming_justifications,
-                    },
+                    "justifications": merged_justifications,
+                    "notes": incoming_notes if incoming_notes is not None else existing_notes,
                 }
 
             for record in incoming_registros:
@@ -1315,16 +1337,49 @@ def append_justifications_log(entries: List[JustificationLogEntry]):
     try:
         if not entries:
             return {"ok": True, "file": os.path.join(DATA_DIR, "baseJustificativas.json")}
+
         file_path = os.path.join(DATA_DIR, "baseJustificativas.json")
-        items = [entry.dict() for entry in entries]
-        for item in items:
+        existing_items = _load_json_list(file_path)
+
+        def _entry_key(item: Dict[str, Any]) -> str:
+            aluno = _normalize_text(str(item.get("aluno_nome") or "").strip())
+            data = _normalize_date_key(item.get("data") or "")
+            turma = _normalize_text(str(item.get("turmaCodigo") or item.get("turmaLabel") or "").strip())
+            horario = _normalize_horario_key(item.get("horario") or "")
+            professor = _normalize_text(str(item.get("professor") or "").strip())
+            return f"{aluno}||{data}||{turma}||{horario}||{professor}"
+
+        keyed_items: Dict[str, Dict[str, Any]] = {}
+        for existing in existing_items:
+            if not isinstance(existing, dict):
+                continue
+            normalized_existing = dict(existing)
+            normalized_existing["horario"] = _normalize_horario_key(normalized_existing.get("horario") or "")
+            normalized_existing["turmaCodigo"] = str(normalized_existing.get("turmaCodigo") or "").strip()
+            normalized_existing["turmaLabel"] = str(normalized_existing.get("turmaLabel") or "").strip()
+            normalized_existing["professor"] = str(normalized_existing.get("professor") or "").strip()
+            normalized_existing["data"] = _normalize_date_key(normalized_existing.get("data") or "")
+            key = _entry_key(normalized_existing)
+            if key.strip("|"):
+                keyed_items[key] = normalized_existing
+
+        upsert_count = 0
+        for entry in entries:
+            item = entry.dict()
             item["horario"] = _normalize_horario_key(item.get("horario") or "")
             item["turmaCodigo"] = str(item.get("turmaCodigo") or "").strip()
             item["turmaLabel"] = str(item.get("turmaLabel") or "").strip()
             item["professor"] = str(item.get("professor") or "").strip()
+            item["data"] = _normalize_date_key(item.get("data") or "")
             item["saved_at"] = pd.Timestamp.utcnow().isoformat()
-        _append_json_list(file_path, items)
-        return {"ok": True, "file": file_path, "count": len(items)}
+            key = _entry_key(item)
+            if not key.strip("|"):
+                continue
+            keyed_items[key] = item
+            upsert_count += 1
+
+        _save_json_list(file_path, list(keyed_items.values()))
+        return {"ok": True, "file": file_path, "count": upsert_count}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"justifications-log error: {exc}")
 
@@ -3017,6 +3072,20 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                     if day_key:
                         historico[day_key] = mapped
 
+                justifications_raw = record.get("justifications") or {}
+                justifications: Dict[str, str] = {}
+                if isinstance(justifications_raw, dict):
+                    for date_key, reason in justifications_raw.items():
+                        normalized_date = _normalize_date_key(date_key)
+                        normalized_reason = str(reason or "").strip()
+                        if normalized_date and normalized_reason:
+                            justifications[normalized_date] = normalized_reason
+
+                notes_raw = record.get("notes") or []
+                notes: List[str] = []
+                if isinstance(notes_raw, list):
+                    notes = [str(note or "").strip() for note in notes_raw if str(note or "").strip()]
+
                 total = presencas + faltas + justificativas
                 frequencia = round(((presencas + justificativas) / total) * 100, 1) if total else 0.0
                 student_meta = name_to_student_meta.get(normalized_name, {})
@@ -3030,6 +3099,8 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                         justificativas=justificativas,
                         frequencia=frequencia,
                         historico=historico,
+                        justifications=justifications,
+                        notes=notes,
                     )
                 )
         else:
@@ -3048,6 +3119,8 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
                         justificativas=0,
                         frequencia=0.0,
                         historico={},
+                        justifications={},
+                        notes=[],
                     )
                 )
 
