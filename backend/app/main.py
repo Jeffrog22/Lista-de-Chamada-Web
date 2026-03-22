@@ -1403,7 +1403,8 @@ def _text_corruption_score(value: str) -> int:
     suspicious_chars = "ÃÂ�├┤┬└┘╜╨║"
     suspicious = sum(1 for ch in value if ch in suspicious_chars)
     box_drawing = sum(1 for ch in value if 0x2500 <= ord(ch) <= 0x257F)
-    return suspicious + box_drawing
+    pipe_between_letters = len(re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ]\|[A-Za-zÀ-ÖØ-öø-ÿ]", value))
+    return suspicious + box_drawing + (pipe_between_letters * 3)
 
 
 def _repair_mojibake_text(value: Optional[str]) -> str:
@@ -1414,7 +1415,7 @@ def _repair_mojibake_text(value: Optional[str]) -> str:
     best = raw
     best_score = _text_corruption_score(raw)
 
-    for encoding in ("latin-1", "cp1252", "cp437", "cp850"):
+    for encoding in ("cp437", "latin-1", "cp1252"):
         try:
             candidate = raw.encode(encoding).decode("utf-8")
         except Exception:

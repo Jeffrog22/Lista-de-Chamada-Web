@@ -9,13 +9,13 @@ const resolveVersionFromCommitSubject = () => {
       .trim();
     if (!subject) return '';
 
-    const quotedMatch = subject.match(/'([^']+)'/);
+    const quotedMatch = subject.match(/'((?:v\.)?\d+(?:\.\d+)*(?:-[\w.]+)?)'/i);
     const rawQuotedToken = quotedMatch?.[1]?.trim() || '';
     if (rawQuotedToken) {
-      return rawQuotedToken.startsWith('v.') ? rawQuotedToken : `v.${rawQuotedToken}`;
+      return rawQuotedToken.toLowerCase().startsWith('v.') ? rawQuotedToken : `v.${rawQuotedToken}`;
     }
 
-    const directMatch = subject.match(/\b(v\.\d+(?:\.\d+)*(?:-[\w.]+)?)\b/i);
+    const directMatch = subject.match(/^\s*(v\.\d+(?:\.\d+)*(?:-[\w.]+)?)/i);
     const rawDirectToken = directMatch?.[1]?.trim() || '';
     if (rawDirectToken) {
       return rawDirectToken.toLowerCase().startsWith('v.') ? rawDirectToken : `v.${rawDirectToken}`;
