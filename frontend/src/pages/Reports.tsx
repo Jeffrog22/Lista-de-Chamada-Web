@@ -1709,6 +1709,7 @@ export const Reports: React.FC = () => {
     }
 
     const endKey = toDateKey(effectiveEnd);
+    const todayKey = getCurrentLocalDateKey();
     const filteredClasses = classesData.filter((cls) => {
       const meta = classScheduleMetaByKey.get(classSelectionKey(cls));
       if (!meta || meta.group !== summaryTurmaToggle) return false;
@@ -1736,6 +1737,7 @@ export const Reports: React.FC = () => {
           const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
           if (!parsed) return;
           const parsedKey = toDateKey(parsed);
+          if (normalizedStatus === "j" && parsedKey > todayKey) return;
           if (parsedKey > endKey) return;
           const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
           const isRetroactiveInSelectedMonth =
@@ -1836,6 +1838,7 @@ export const Reports: React.FC = () => {
     const { year, monthIndex, effectiveEnd } = selectedMonthLimits;
     if (!effectiveEnd) return { previstas: 0, dadas: 0 };
     const endKey = toDateKey(effectiveEnd);
+    const todayKey = getCurrentLocalDateKey();
     let previstasTotal = 0;
     let dadasTotal = 0;
     classesData.forEach((cls) => {
@@ -1855,6 +1858,7 @@ export const Reports: React.FC = () => {
           const parsed = parseHistoricoDayToDate(rawDay, year, monthIndex);
           if (!parsed) return;
           const parsedKey = toDateKey(parsed);
+          if (normalizedStatus === "j" && parsedKey > todayKey) return;
           if (parsedKey > endKey) return;
           const isPlannedDay = plannedClassDaysUntilCurrentSet.has(parsedKey);
           const isRetroactive = parsed.getFullYear() === year && parsed.getMonth() === monthIndex;

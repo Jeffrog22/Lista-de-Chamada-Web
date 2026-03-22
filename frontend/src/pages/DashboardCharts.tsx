@@ -358,6 +358,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
     const monthEnd = new Date(safeYear, safeMonthIndex + 1, 0);
     const today = new Date();
     const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const todayKey = toDateKey(todayOnly);
     const effectiveEnd =
       dateScope === 'mensal'
         ? monthEnd
@@ -403,6 +404,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
         if (!parsed) return;
 
         const parsedKey = toDateKey(parsed);
+        if (normalizedStatus === 'j' && parsedKey > todayKey) return;
         if (!plannedClassDaySet.has(parsedKey)) return;
         if (!weekdays.includes(parsed.getDay())) return;
         uniqueRecorded.add(parsedKey);
@@ -426,6 +428,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
         const parsed = parseHistoricoDayToDate(day, safeYear, safeMonthIndex);
         if (!parsed) return;
         const parsedKey = toDateKey(parsed);
+        if (normalizedStatus === 'j' && parsedKey > todayKey) return;
         if (!plannedClassDaySet.has(parsedKey)) return;
         if (!weekdays.includes(parsed.getDay())) return;
         uniqueObservedDays.add(parsedKey);
