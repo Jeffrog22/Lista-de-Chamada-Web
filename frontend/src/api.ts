@@ -14,6 +14,7 @@ const noCacheConfig = {
 
 const EXCLUDED_STUDENTS_STORAGE_KEY = "excludedStudents";
 const ATTENDANCE_LOG_QUEUE_KEY = "pendingAttendanceLogs";
+const JUSTIFICATION_LOG_QUEUE_KEY = "pendingJustificationLogs";
 const ATTENDANCE_DEBUG_KEY = "attendanceDebugPersistence";
 const ATTENDANCE_DEBUG_EVENTS_KEY = "attendanceDebugEvents";
 
@@ -272,6 +273,23 @@ const getAttendanceLogQueueKey = (payload: any) => {
   return `${turma}||${horario}||${professor}||${mes}`;
 };
 
+const getJustificationLogScopeKey = (payload: any) => {
+  const turma = normalizeAttendanceLogField(payload?.turmaCodigo || payload?.turmaLabel);
+  const horario = normalizeAttendanceLogHorario(payload?.horario);
+  const professor = normalizeAttendanceLogField(payload?.professor);
+  const dataRaw = String(payload?.data || "").trim();
+  const mesFromData = /^\d{4}-\d{2}-\d{2}$/.test(dataRaw) ? dataRaw.slice(0, 7) : "";
+  const mes = normalizeAttendanceLogField(payload?.mes || mesFromData);
+  return `${turma}||${horario}||${professor}||${mes}`;
+};
+
+const getJustificationLogQueueKey = (payload: any) => {
+  const scope = getJustificationLogScopeKey(payload);
+  const aluno = normalizeAttendanceLogField(payload?.aluno_nome || payload?.alunoNome || payload?.aluno || "");
+  const data = String(payload?.data || "").trim();
+  return `${scope}||${aluno}||${data}`;
+};
+
 const readPendingAttendanceLogs = () => {
   try {
     const raw = localStorage.getItem(ATTENDANCE_LOG_QUEUE_KEY);
@@ -285,6 +303,21 @@ const readPendingAttendanceLogs = () => {
 
 const writePendingAttendanceLogs = (items: any[]) => {
   localStorage.setItem(ATTENDANCE_LOG_QUEUE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+};
+
+const readPendingJustificationLogs = () => {
+  try {
+    const raw = localStorage.getItem(JUSTIFICATION_LOG_QUEUE_KEY);
+    if (!raw) return [] as any[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [] as any[];
+  }
+};
+
+const writePendingJustificationLogs = (items: any[]) => {
+  localStorage.setItem(JUSTIFICATION_LOG_QUEUE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
 };
 
 const upsertPendingAttendanceLog = (payload: any) => {
@@ -307,22 +340,47 @@ const removePendingAttendanceLog = (payload: any) => {
   return items;
 };
 
+const upsertPendingJustificationLog = (payload: any) => {
+  const items = readPendingJustificationLogs();
+  const key = getJustificationLogQueueKey(payload);
+  const idx = items.findIndex((item) => getJustificationLogQueueKey(item) === key);
+  if (idx >= 0) {
+    items[idx] = payload;
+  } else {
+    items.push(payload);
+  }
+  writePendingJustificationLogs(items);
+  return items;
+};
+
+const removePendingJustificationLog = (payload: any) => {
+  const key = getJustificationLogQueueKey(payload);
+  const items = readPendingJustificationLogs().filter((item) => getJustificationLogQueueKey(item) !== key);
+  writePendingJustificationLogs(items);
+  return items;
+};
+
 export const getPendingAttendanceScopeStatus = (payload: any) => {
-  const key = getAttendanceLogQueueKey(payload);
-  const items = readPendingAttendanceLogs();
-  const pending = items.filter((item) => getAttendanceLogQueueKey(item) === key).length;
+  const attendanceKey = getAttendanceLogQueueKey(payload);
+  const pending = readPendingAttendanceLogs().filter(
+    (item) => getAttendanceLogQueueKey(item) === attendanceKey
+  ).length;
   return { pending };
 };
 
 export const flushPendingAttendanceLogs = async () => {
-  const queue = readPendingAttendanceLogs();
-  logPersistenceDebug("flush:start", { queued: queue.length });
-  if (queue.length === 0) return { flushed: 0, pending: 0 };
+  const attendanceQueue = readPendingAttendanceLogs();
+  logPersistenceDebug("flush:start", {
+    attendanceQueued: attendanceQueue.length,
+  });
+  if (attendanceQueue.length === 0) {
+    return { flushed: 0, pending: 0 };
+  }
 
-  const remaining: any[] = [];
+  const remainingAttendance: any[] = [];
   let flushed = 0;
 
-  for (const payload of queue) {
+  for (const payload of attendanceQueue) {
     try {
       await API.post("/attendance-log", payload);
       flushed += 1;
@@ -334,7 +392,7 @@ export const flushPendingAttendanceLogs = async () => {
         mes: payload?.mes || "",
       });
     } catch {
-      remaining.push(payload);
+      remainingAttendance.push(payload);
       logPersistenceDebug("flush:item_fail", {
         turmaCodigo: payload?.turmaCodigo || "",
         turmaLabel: payload?.turmaLabel || "",
@@ -345,9 +403,10 @@ export const flushPendingAttendanceLogs = async () => {
     }
   }
 
-  writePendingAttendanceLogs(remaining);
-  logPersistenceDebug("flush:end", { flushed, pending: remaining.length });
-  return { flushed, pending: remaining.length };
+  writePendingAttendanceLogs(remainingAttendance);
+  const pending = remainingAttendance.length;
+  logPersistenceDebug("flush:end", { flushed, pending });
+  return { flushed, pending };
 };
 
 
@@ -561,7 +620,38 @@ export const forceAttendanceSync = (data: any) =>
   API.post("/attendance-log/force-sync", data).catch(() => ({ data: { ok: false, hasLog: false } }));
 
 export const saveJustificationLog = (data: any) =>
-  API.post("/justifications-log", data);
+  (() => {
+    const entries = (Array.isArray(data) ? data : [])
+      .map((item) => ({
+        ...item,
+        data: String(item?.data || "").trim(),
+        motivo: String(item?.motivo || "").trim(),
+      }))
+      .filter((item) => item.data && item.motivo);
+
+    if (entries.length === 0) {
+      return Promise.resolve({ data: { ok: true, count: 0 } });
+    }
+
+    return API.post("/justifications-log", entries)
+      .then((response) => {
+        entries.forEach((entry) => removePendingJustificationLog(entry));
+        return response;
+      })
+      .catch((error) => {
+        let pending = readPendingJustificationLogs().length;
+        entries.forEach((entry) => {
+          const queued = upsertPendingJustificationLog(entry);
+          pending = queued.length;
+        });
+        logPersistenceDebug("save:justification_queued", {
+          count: entries.length,
+          pending,
+          error: error?.message || "request_failed",
+        });
+        return { data: { ok: true, fallback: true, queued: true, pending } };
+      });
+  })();
 
 // Academic calendar (reports summary)
 export const getAcademicCalendar = (params?: Record<string, any>) =>

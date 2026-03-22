@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPendingAttendanceScopeStatus, getPoolLog, getReports, getWeather, saveAttendanceLog, saveJustificationLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPendingAttendanceScopeStatus, getPoolLog, getReports, getWeather, saveAttendanceLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -39,6 +39,7 @@ interface ActiveStudentMeta {
 interface ReportStudentLite {
   nome: string;
   historico?: Record<string, string>;
+  justifications?: Record<string, string>;
 }
 
 interface ReportClassLite {
@@ -614,6 +615,26 @@ export const Attendance: React.FC = () => {
       .sort((a, b) => Number(a.day) - Number(b.day));
   };
 
+  const getJustificationModalSeed = (student?: AttendanceRecord) => {
+    const entries = getMonthJustificationEntries(student?.justifications);
+    if (entries.length > 0) {
+      return {
+        day: entries[0].day || "",
+        reason: String(entries[0].reason || ""),
+      };
+    }
+
+    const firstJustifiedDate = Object.entries(student?.attendance || {})
+      .filter(([date, status]) => date.startsWith(`${monthKey}-`) && status === "Justificado")
+      .map(([date]) => date)
+      .sort((a, b) => a.localeCompare(b))[0];
+
+    return {
+      day: firstJustifiedDate ? String(firstJustifiedDate.split("-")[2] || "") : "",
+      reason: "",
+    };
+  };
+
   const getMonthJustificationSummary = (justifications?: Record<string, string>) => {
     const entries = getMonthJustificationEntries(justifications)
       .map((entry) => ({ ...entry, dayNum: Number(entry.day) }))
@@ -641,14 +662,24 @@ export const Attendance: React.FC = () => {
       groups.push({ start: entry.dayNum, end: entry.dayNum, reason: entry.reason });
     });
 
+    const renderedLongReasons = new Set<string>();
+
     return groups.map((group) => {
       const start = String(group.start).padStart(2, "0");
       const end = String(group.end).padStart(2, "0");
+      const isLongJustification = extractJustificationDays(group.reason) > 1;
+      if (isLongJustification) {
+        const reasonKey = String(group.reason || "").trim().toLowerCase();
+        if (renderedLongReasons.has(reasonKey)) {
+          return null;
+        }
+        renderedLongReasons.add(reasonKey);
+      }
       return {
-        dayLabel: group.start === group.end ? start : `${start}-${end}`,
+        dayLabel: isLongJustification ? start : (group.start === group.end ? start : `${start}-${end}`),
         reason: group.reason,
       };
-    });
+    }).filter((entry): entry is { dayLabel: string; reason: string } => Boolean(entry));
   };
 
   const extractJustificationDays = (reason?: string) => {
@@ -2165,19 +2196,6 @@ export const Attendance: React.FC = () => {
 
     if (persistence.isValid) {
       try {
-        logPersistenceDebug("saveJustificationLog:auto_calendar_closure", {
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
-          mes: monthKey,
-        });
-        await saveJustificationLog(changedEntries);
-      } catch {
-        // ignore to avoid blocking UI
-      }
-
-      try {
         logPersistenceDebug("saveAttendanceLog:auto_calendar_closure", {
           turmaCodigo: persistence.turmaCodigo,
           turmaLabel: persistence.turmaLabel,
@@ -2376,8 +2394,6 @@ export const Attendance: React.FC = () => {
         incidentImpact: "aula",
         logType: modalLogType,
       }));
-
-      const hasLoggedClimateData = Boolean(normalizedTemp || inferredConditionLabel);
 
       if (statusFromLog === "cancelada" || statusFromLog === "justificada") {
         const reason = inferredCondition || "Condições Climáticas";
@@ -2624,14 +2640,6 @@ export const Attendance: React.FC = () => {
     setAttendance(nextAttendance);
 
     if (persistence.isValid) {
-      logPersistenceDebug("saveJustificationLog:auto_holiday_effect", {
-        turmaCodigo: persistence.turmaCodigo,
-        turmaLabel: persistence.turmaLabel,
-        horario: persistence.horario,
-        professor: persistence.professor,
-        mes: monthKey,
-      });
-      saveJustificationLog(changedEntries).catch(() => undefined);
       logPersistenceDebug("saveAttendanceLog:auto_holiday_effect", {
         turmaCodigo: persistence.turmaCodigo,
         turmaLabel: persistence.turmaLabel,
@@ -2845,17 +2853,6 @@ export const Attendance: React.FC = () => {
         };
       });
       setAttendance(nextAttendanceSnapshot);
-
-      logPersistenceDebug("saveJustificationLog:modal_mass_justification", {
-        turmaCodigo: persistence.turmaCodigo,
-        turmaLabel: persistence.turmaLabel,
-        horario: persistence.horario,
-        professor: persistence.professor,
-        mes: monthKey,
-      });
-      if (changedEntries.length > 0) {
-        await saveJustificationLog(changedEntries).catch(() => undefined);
-      }
 
       logPersistenceDebug("saveAttendanceLog:modal_mass_justification", {
         turmaCodigo: persistence.turmaCodigo,
@@ -3199,7 +3196,10 @@ export const Attendance: React.FC = () => {
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
       );
 
-      const backendByName = new Map<string, { attendance: Record<string, "Presente" | "Falta" | "Justificado" | ""> }>();
+      const backendByName = new Map<string, {
+        attendance: Record<string, "Presente" | "Falta" | "Justificado" | "">;
+        justifications: Record<string, string>;
+      }>();
 
       try {
         const response = await getReports({ month: monthKey });
@@ -3286,7 +3286,10 @@ export const Attendance: React.FC = () => {
 
         const backendCandidateByName = new Map<
           string,
-          { attendance: Record<string, "Presente" | "Falta" | "Justificado" | ""> }
+          {
+            attendance: Record<string, "Presente" | "Falta" | "Justificado" | "">;
+            justifications: Record<string, string>;
+          }
         >();
 
         (matchedClass?.alunos || []).forEach((student) => {
@@ -3294,6 +3297,7 @@ export const Attendance: React.FC = () => {
           if (!studentKey) return;
           if (isExcludedByIdentity(student.nome || "")) return;
           const attendanceMap = (student.historico || {}) as Record<string, string>;
+          const justificationsMap = (student.justifications || {}) as Record<string, string>;
           const mappedAttendance = Object.entries(attendanceMap).reduce(
             (acc, [dayKey, status]) => {
               const dateKey = resolveReportHistoricoDateKey(String(dayKey || ""), newDates);
@@ -3304,7 +3308,28 @@ export const Attendance: React.FC = () => {
             },
             {} as Record<string, "Presente" | "Falta" | "Justificado" | "">
           );
-          backendCandidateByName.set(studentKey, { attendance: mappedAttendance });
+          const mappedJustifications = Object.entries(justificationsMap).reduce(
+            (acc, [rawDate, rawReason]) => {
+              const reason = String(rawReason || "").trim();
+              if (!reason) return acc;
+
+              const normalizedRawDate = String(rawDate || "").trim();
+              const directDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedRawDate)
+                ? normalizedRawDate
+                : resolveReportHistoricoDateKey(normalizedRawDate, newDates);
+
+              if (directDate && newDates.includes(directDate)) {
+                acc[directDate] = reason;
+              }
+              return acc;
+            },
+            {} as Record<string, string>
+          );
+
+          backendCandidateByName.set(studentKey, {
+            attendance: mappedAttendance,
+            justifications: mappedJustifications,
+          });
         });
 
         const backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
@@ -3422,7 +3447,23 @@ export const Attendance: React.FC = () => {
 
               return merged;
             })(),
-            justifications: stored?.justifications || {},
+            justifications: (() => {
+              const merged = {
+                ...(backend?.justifications || {}),
+              };
+
+              const storedJustifications = stored?.justifications || {};
+              Object.entries(storedJustifications).forEach(([date, value]) => {
+                if (!newDates.includes(date)) return;
+                const normalized = String(value || "").trim();
+                if (!normalized) return;
+                if (!String(merged[date] || "").trim()) {
+                  merged[date] = normalized;
+                }
+              });
+
+              return merged;
+            })(),
           };
           })
       );
@@ -3629,16 +3670,16 @@ export const Attendance: React.FC = () => {
   // Função de Justificativa: Abre o modal de notação
   const adicionarJustificativa = (id: number) => {
     const student = attendance.find((item) => item.id === id);
-    const entries = getMonthJustificationEntries(student?.justifications);
-    const first = entries[0];
+    const seed = getJustificationModalSeed(student);
     setJustificationStudentId(id);
-    setJustificationDay(first?.day || "");
-    setJustificationReason(first?.reason || "");
+    setJustificationDay(seed.day || "");
+    setJustificationReason(seed.reason || "");
     setShowJustificationModal(true);
   };
 
-  const salvarJustificativa = () => {
-    if (!justificationStudentId || !justificationDay || !justificationReason) {
+  const salvarJustificativa = async () => {
+    const normalizedReason = String(justificationReason || "").trim();
+    if (!justificationStudentId || !justificationDay || !normalizedReason) {
       alert("Por favor, preencha o dia e o motivo.");
       return;
     }
@@ -3676,31 +3717,38 @@ export const Attendance: React.FC = () => {
       return;
     }
 
+    const firstDateToRegisterReason = datesToApply[0];
+    if (!firstDateToRegisterReason) {
+      alert("Nenhuma data elegível para registrar a justificativa.");
+      return;
+    }
+
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setHasUnsavedLocalChanges(true);
-    setAttendance((prev) =>
-      prev.map((item) => {
-        if (item.id === justificationStudentId) {
-          const nextAttendance = { ...item.attendance };
-          const nextJustifications = { ...(item.justifications || {}) };
-          datesToApply.forEach((date) => {
-            nextAttendance[date] = "Justificado";
-            nextJustifications[date] = justificationReason;
-          });
+    const nextAttendanceSnapshot = attendance.map((item) => {
+      if (item.id !== justificationStudentId) return item;
 
-          return {
-            ...item,
-            attendance: nextAttendance,
-            justifications: nextJustifications,
-          };
-        }
-        return item;
-      })
-    );
+      const nextAttendance = { ...item.attendance };
+      const nextJustifications = { ...(item.justifications || {}) };
+
+      datesToApply.forEach((date) => {
+        nextAttendance[date] = "Justificado";
+        delete nextJustifications[date];
+      });
+
+      nextJustifications[firstDateToRegisterReason] = normalizedReason;
+
+      return {
+        ...item,
+        attendance: nextAttendance,
+        justifications: nextJustifications,
+      };
+    });
+    setAttendance(nextAttendanceSnapshot);
 
     setShowJustificationModal(false);
 
-    const student = attendance.find((item) => item.id === justificationStudentId);
+    const student = nextAttendanceSnapshot.find((item) => item.id === justificationStudentId);
     const persistence = resolvePersistenceContext();
     if (student) {
       if (!persistence.isValid) {
@@ -3708,24 +3756,25 @@ export const Attendance: React.FC = () => {
         return;
       }
 
-      logPersistenceDebug("saveJustificationLog:manual_single", {
+      const attendanceResp: any = await saveAttendanceLog({
         turmaCodigo: persistence.turmaCodigo,
         turmaLabel: persistence.turmaLabel,
         horario: persistence.horario,
         professor: persistence.professor,
         mes: monthKey,
-      });
-      saveJustificationLog([
-        ...datesToApply.map((date) => ({
-          aluno_nome: student.aluno,
-          data: date,
-          motivo: justificationReason,
-          turmaCodigo: persistence.turmaCodigo,
-          turmaLabel: persistence.turmaLabel,
-          horario: persistence.horario,
-          professor: persistence.professor,
+        registros: nextAttendanceSnapshot.map((item) => ({
+          aluno_nome: item.aluno,
+          attendance: item.attendance,
+          justifications: item.justifications || {},
         })),
-      ]).catch(() => undefined);
+      }).catch(() => null);
+
+      if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
+        setHasUnsavedLocalChanges(false);
+        setHydrationRefreshSeq((prev) => prev + 1);
+      }
+
+      refreshSyncIndicator().catch(() => undefined);
     }
   };
 
