@@ -9,12 +9,19 @@ const resolveVersionFromCommitSubject = () => {
       .trim();
     if (!subject) return '';
 
-    const match = subject.match(/'([^']+)'/);
-    if (!match || !match[1]) return '';
+    const quotedMatch = subject.match(/'([^']+)'/);
+    const rawQuotedToken = quotedMatch?.[1]?.trim() || '';
+    if (rawQuotedToken) {
+      return rawQuotedToken.startsWith('v.') ? rawQuotedToken : `v.${rawQuotedToken}`;
+    }
 
-    const token = match[1].trim();
-    if (!token) return '';
-    return token.startsWith('v.') ? token : `v.${token}`;
+    const directMatch = subject.match(/\b(v\.\d+(?:\.\d+)*(?:-[\w.]+)?)\b/i);
+    const rawDirectToken = directMatch?.[1]?.trim() || '';
+    if (rawDirectToken) {
+      return rawDirectToken.toLowerCase().startsWith('v.') ? rawDirectToken : `v.${rawDirectToken}`;
+    }
+
+    return '';
   } catch {
     return '';
   }
