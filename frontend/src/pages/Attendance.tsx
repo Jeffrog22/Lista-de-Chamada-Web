@@ -2397,11 +2397,9 @@ export const Attendance: React.FC = () => {
         setModalStep("aula");
       }
 
-      if (hasLoggedClimateData) {
-        setClimaPrefillApplied(true);
-        setShowDateModal(true);
-        return;
-      }
+      setClimaPrefillApplied(true);
+      setShowDateModal(true);
+      return;
     } catch {
       // Continua com prefill via cache/API; evita fallback de outra turma no mesmo dia.
     }

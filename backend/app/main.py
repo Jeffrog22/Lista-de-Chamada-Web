@@ -743,12 +743,26 @@ def _select_latest_pool_log_from_rows(rows: pd.DataFrame, requested_horario: str
     if rows.empty:
         return None
 
+    ordered_rows = rows.copy()
+    ordered_rows["__horario_minutes"] = ordered_rows["Horario"].astype(str).map(
+        lambda value: _horario_to_minutes(_normalize_excel_string(value))
+    )
+    ordered_rows["__horario_minutes"] = ordered_rows["__horario_minutes"].apply(
+        lambda value: value if value is not None else 10**9
+    )
+    if "saved_at" in ordered_rows.columns:
+        ordered_rows["__saved_at_key"] = ordered_rows["saved_at"].astype(str).map(_saved_at_sort_key)
+    else:
+        ordered_rows["__saved_at_key"] = -1
+    ordered_rows = ordered_rows.sort_values(["__horario_minutes", "__saved_at_key"], kind="mergesort")
+    ordered_rows = ordered_rows.drop(columns=["__horario_minutes", "__saved_at_key"], errors="ignore")
+
     requested_minutes = _horario_to_minutes(requested_horario)
     selected: Optional[Dict[str, Any]] = None
     selected_minutes = -1
     selected_index = -1
 
-    for row_index, row in rows.iterrows():
+    for row_index, row in ordered_rows.iterrows():
         row_minutes = _horario_to_minutes(_normalize_excel_string(row.get("Horario", "")))
         if requested_minutes is not None and row_minutes is not None and row_minutes > requested_minutes:
             continue
@@ -761,7 +775,7 @@ def _select_latest_pool_log_from_rows(rows: pd.DataFrame, requested_horario: str
     if selected is not None:
         return selected
 
-    return rows.iloc[-1].to_dict()
+    return ordered_rows.iloc[0].to_dict()
 
 
 def _select_latest_pool_log_for_day(
@@ -781,7 +795,9 @@ def _select_latest_pool_log_for_day(
     if day_rows.empty:
         return None
 
-    baseline_row = day_rows.iloc[0].to_dict()
+    baseline_row = _select_latest_pool_log_from_rows(day_rows, requested_horario)
+    if baseline_row is None:
+        return None
 
     professor_key = _normalize_text_fold(_normalize_excel_string(requested_professor))
     if professor_key:
