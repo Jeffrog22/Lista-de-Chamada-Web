@@ -1393,7 +1393,39 @@ def append_justifications_log(entries: List[JustificationLogEntry]):
         raise HTTPException(status_code=500, detail=f"justifications-log error: {exc}")
 
 def _normalize_text(value: Optional[str]) -> str:
-    return str(value or "").strip().lower()
+    return _repair_mojibake_text(str(value or "")).strip().lower()
+
+
+def _text_corruption_score(value: str) -> int:
+    if not value:
+        return 0
+
+    suspicious_chars = "ÃÂ�├┤┬└┘╜╨║"
+    suspicious = sum(1 for ch in value if ch in suspicious_chars)
+    box_drawing = sum(1 for ch in value if 0x2500 <= ord(ch) <= 0x257F)
+    return suspicious + box_drawing
+
+
+def _repair_mojibake_text(value: Optional[str]) -> str:
+    raw = str(value or "")
+    if not raw:
+        return ""
+
+    best = raw
+    best_score = _text_corruption_score(raw)
+
+    for encoding in ("latin-1", "cp1252", "cp437", "cp850"):
+        try:
+            candidate = raw.encode(encoding).decode("utf-8")
+        except Exception:
+            continue
+
+        candidate_score = _text_corruption_score(candidate)
+        if candidate_score < best_score:
+            best = candidate
+            best_score = candidate_score
+
+    return best
 
 
 def _transfer_overrides_file() -> str:
@@ -1679,7 +1711,7 @@ def _apply_transfer_overrides(session: Session) -> int:
 
 
 def _to_proper_case(value: Optional[str]) -> str:
-    raw = str(value or "").strip()
+    raw = _repair_mojibake_text(value).strip()
     if not raw:
         return ""
 
@@ -1717,7 +1749,7 @@ def _to_proper_case(value: Optional[str]) -> str:
 
 
 def _normalize_text_fold(value: Optional[str]) -> str:
-    raw = str(value or "").strip().lower()
+    raw = _repair_mojibake_text(value).strip().lower()
     if not raw:
         return ""
     return "".join(ch for ch in unicodedata.normalize("NFD", raw) if unicodedata.category(ch) != "Mn")
