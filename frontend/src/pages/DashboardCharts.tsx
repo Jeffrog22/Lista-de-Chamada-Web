@@ -535,7 +535,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
     const frequenciaPorPeriodo = byGroup((item) => getPeriodo(item.horario));
     const frequenciaPorProfessor = byGroup((item) => item.professor).sort((a, b) => a.name.localeCompare(b.name));
 
-    const rankingStudents = studentsAggregatedAllTimeActive.length > 0 ? studentsAggregatedAllTimeActive : studentsAggregated;
+    const rankingStudents = studentsAggregatedAllTimeActive;
 
     const topFrequentes = [...rankingStudents]
       .filter((item) => item.total > 0)
