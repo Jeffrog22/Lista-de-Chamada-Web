@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getBootstrap, getExcludedStudents } from "../api";
 import "./Vacancies.css";
 
-type Periodo = "Todos" | "Manha" | "Tarde";
+type Periodo = "Todos" | "Manhã" | "Tarde";
 
 interface ActiveStudentLite {
   id?: string;
@@ -77,7 +77,7 @@ const parsePeriodo = (horario: string): Periodo => {
   const normalized = formatHorario(horario);
   const hour = parseInt(normalized.split(":")[0], 10);
   if (Number.isNaN(hour)) return "Todos";
-  return hour < 12 ? "Manha" : "Tarde";
+  return hour < 12 ? "Manhã" : "Tarde";
 };
 
 const normalizeText = (value: string) => String(value || "").trim().toLowerCase();
@@ -347,7 +347,7 @@ export const Vacancies: React.FC = () => {
     <div className="vagas-root">
       <div className="vagas-header">
         <div>
-          <h2>Gestao de Vagas</h2>
+          <h2>Gestão de Vagas</h2>
           <p>Leitura da base oficial de dados.</p>
         </div>
         <div style={{ marginLeft: "auto" }}>
@@ -386,9 +386,9 @@ export const Vacancies: React.FC = () => {
           </select>
         </div>
         <div className="filter-block">
-          <label>Periodo</label>
+          <label>Período</label>
           <div className="periodo-toggle">
-            {["Todos", "Manha", "Tarde"].map((p) => (
+            {["Todos", "Manhã", "Tarde"].map((p) => (
               <button
                 key={p}
                 className={periodoFiltro === p ? "active" : ""}
