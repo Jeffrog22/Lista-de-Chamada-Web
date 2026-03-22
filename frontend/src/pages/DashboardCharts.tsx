@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { getAcademicCalendar, getReports } from '../api';
+import { getAcademicCalendar, getReports, getStatistics } from '../api';
 import { isDateClosedForAttendance } from '../utils/academicCalendar';
 import type { AcademicCalendarEvent, AcademicCalendarSettings } from '../utils/academicCalendar';
 import './DashboardCharts.css';
@@ -104,6 +104,18 @@ interface StudentAggregate {
   frequencia: number;
 }
 
+interface StatisticsLevel {
+  presencas?: number;
+  faltas?: number;
+  justificativas?: number;
+}
+
+interface StatisticsStudent {
+  nome?: string;
+  exclusionDate?: string | null;
+  levels?: StatisticsLevel[];
+}
+
 const formatHorario = (value: string) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -205,6 +217,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
 
   const [classSummaries, setClassSummaries] = useState<ClassSummary[]>([]);
   const [studentsAggregated, setStudentsAggregated] = useState<StudentAggregate[]>([]);
+  const [studentsAggregatedAllTimeActive, setStudentsAggregatedAllTimeActive] = useState<StudentAggregate[]>([]);
   const [reportClasses, setReportClasses] = useState<ReportClass[]>([]);
   const [calendarSettings, setCalendarSettings] = useState<AcademicCalendarSettings | null>(null);
   const [calendarEvents, setCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
@@ -216,6 +229,62 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
   const year = isControlled ? externalSelectedMonth!.split('-')[0] : localYear;
   const month = isControlled ? externalSelectedMonth!.split('-')[1] : localMonth;
   const selectedMonth = `${year}-${month}`;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getStatistics()
+      .then((response) => {
+        if (!isMounted) return;
+        const raw = Array.isArray(response?.data) ? (response.data as StatisticsStudent[]) : [];
+        const studentMap = new Map<string, Omit<StudentAggregate, 'frequencia' | 'total'>>();
+
+        raw.forEach((student) => {
+          if (student?.exclusionDate) return;
+          const key = normalize(student?.nome || '');
+          if (!key) return;
+
+          const levels = Array.isArray(student?.levels) ? student.levels : [];
+          let presencas = 0;
+          let faltas = 0;
+          let justificativas = 0;
+
+          levels.forEach((level) => {
+            presencas += Number(level?.presencas || 0);
+            faltas += Number(level?.faltas || 0);
+            justificativas += Number(level?.justificativas || 0);
+          });
+
+          const current = studentMap.get(key) || {
+            name: String(student?.nome || '-'),
+            presencas: 0,
+            faltas: 0,
+            justificativas: 0,
+          };
+
+          current.presencas += presencas;
+          current.faltas += faltas;
+          current.justificativas += justificativas;
+          studentMap.set(key, current);
+        });
+
+        const aggregated: StudentAggregate[] = Array.from(studentMap.values()).map((item) => {
+          const total = item.presencas + item.faltas + item.justificativas;
+          const frequencia = total > 0 ? Number((((item.presencas + item.justificativas) / total) * 100).toFixed(1)) : 0;
+          return { ...item, total, frequencia };
+        });
+
+        setStudentsAggregatedAllTimeActive(aggregated);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setStudentsAggregatedAllTimeActive([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const process = (data: ReportClass[]) => {
@@ -466,7 +535,9 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
     const frequenciaPorPeriodo = byGroup((item) => getPeriodo(item.horario));
     const frequenciaPorProfessor = byGroup((item) => item.professor).sort((a, b) => a.name.localeCompare(b.name));
 
-    const topFrequentes = [...studentsAggregated]
+    const rankingStudents = studentsAggregatedAllTimeActive.length > 0 ? studentsAggregatedAllTimeActive : studentsAggregated;
+
+    const topFrequentes = [...rankingStudents]
       .filter((item) => item.total > 0)
       .sort((a, b) => b.frequencia - a.frequencia)
       .slice(0, 5)
@@ -492,7 +563,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
       });
     });
 
-    const topAusentes: TopAbsentData[] = [...studentsAggregated]
+    const topAusentes: TopAbsentData[] = [...rankingStudents]
       .sort((a, b) => b.faltas - a.faltas)
       .slice(0, 5)
       .map((item) => ({
@@ -536,6 +607,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
     dateScope,
     reportClasses,
     studentsAggregated,
+    studentsAggregatedAllTimeActive,
     selectedMonth,
     occurrenceGroup,
     occurrenceProfessor,
