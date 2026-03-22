@@ -4323,6 +4323,7 @@ export const Attendance: React.FC = () => {
             <tbody>
               {sortedAttendance.map((item, idx) => {
                 const absences = Object.values(item.attendance).filter((s) => s === "Falta").length;
+                const hasNotes = Array.isArray(item.notes) && item.notes.some((note) => String(note || "").trim().length > 0);
                 const showNote =
                   Object.values(item.attendance).some((s) => s === "Falta" || s === "Justificado") ||
                   hasAnyMonthJustification(item.justifications);
@@ -4364,7 +4365,16 @@ export const Attendance: React.FC = () => {
                           ⏳
                         </span>
                       )}
-                      <span style={{ borderBottom: "1px dashed #ccc" }}>{getDisplayStudentName(item.aluno)}</span>
+                      <span
+                        style={{
+                          borderBottom: "1px dashed #ccc",
+                          background: hasNotes ? "#d2bae8" : "transparent",
+                          borderRadius: hasNotes ? "6px" : undefined,
+                          padding: hasNotes ? "2px 6px" : undefined,
+                        }}
+                      >
+                        {getDisplayStudentName(item.aluno)}
+                      </span>
                     </div>
                     {showRenewalAlert && renewalAlert && (
                       <div
