@@ -1214,37 +1214,46 @@ def append_attendance_log(payload: AttendanceLogPayload):
                     if str(note or "").strip()
                 ] if isinstance(incoming_notes_raw, list) else None
 
-                sanitized_incoming_attendance = {
-                    str(date_key): str(value)
+                normalized_incoming_attendance = {
+                    str(date_key).strip(): str(value or "").strip()
                     for date_key, value in incoming_attendance.items()
-                    if str(date_key or "").strip() and str(value or "").strip() != ""
+                    if str(date_key or "").strip()
                 }
-                sanitized_incoming_justifications = {
-                    str(date_key): str(value)
+                normalized_incoming_justifications = {
+                    str(date_key).strip(): str(value or "").strip()
                     for date_key, value in incoming_justifications.items()
-                    if str(date_key or "").strip() and str(value or "").strip() != ""
+                    if str(date_key or "").strip()
                 }
+
+                merged_attendance = {
+                    **existing_attendance,
+                }
+                for date_key, status_value in normalized_incoming_attendance.items():
+                    if status_value:
+                        merged_attendance[date_key] = status_value
+                    else:
+                        merged_attendance.pop(date_key, None)
 
                 merged_justifications = {
                     **existing_justifications,
                 }
-
-                for date_key in sanitized_incoming_attendance.keys():
-                    if date_key in sanitized_incoming_justifications:
-                        merged_justifications[date_key] = sanitized_incoming_justifications[date_key]
+                for date_key in normalized_incoming_attendance.keys():
+                    status_value = str(merged_attendance.get(date_key) or "").strip()
+                    incoming_reason = normalized_incoming_justifications.get(date_key, "")
+                    if status_value == "Justificado" and incoming_reason:
+                        merged_justifications[date_key] = incoming_reason
                     else:
                         merged_justifications.pop(date_key, None)
 
-                for date_key, reason in sanitized_incoming_justifications.items():
-                    merged_justifications[date_key] = reason
+                for date_key, reason in normalized_incoming_justifications.items():
+                    status_value = str(merged_attendance.get(date_key) or "").strip()
+                    if reason and status_value == "Justificado":
+                        merged_justifications[date_key] = reason
 
                 return {
                     **existing,
                     **incoming,
-                    "attendance": {
-                        **existing_attendance,
-                        **sanitized_incoming_attendance,
-                    },
+                    "attendance": merged_attendance,
                     "justifications": merged_justifications,
                     "notes": incoming_notes if incoming_notes is not None else existing_notes,
                 }
