@@ -370,7 +370,7 @@ export const Vacancies: React.FC = () => {
 
       <div className="vagas-filters">
         <div className="filter-block">
-          <label>Nivel</label>
+          <label>Nível</label>
           <select value={nivelFiltro} onChange={(e) => setNivelFiltro(e.target.value)}>
             {niveis.map((nivel) => (
               <option key={nivel} value={nivel}>{nivel}</option>
