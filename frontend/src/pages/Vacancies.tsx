@@ -302,47 +302,46 @@ export const Vacancies: React.FC = () => {
     [turmasFiltradas, studentsCountByClassKey]
   );
 
-  const vagasDisponiveis = useMemo(() => {
-    return turmasFiltradas.reduce((acc, turma) => {
+  const nivelOccupancy = useMemo(() => {
+    const grouped = new Map<string, { nivel: string; total: number; capacidade: number }>();
+
+    turmasFiltradas.forEach((turma) => {
       const meta = turmaMeta[turma];
-      const capacity = Math.max(0, Number(meta?.capacidade || 0));
-      const total = studentsCountByClassKey[turma] || 0;
-      if (total >= capacity) return acc;
-      return acc + (capacity - total);
-    }, 0);
+      const nivel = String(meta?.nivel || "-").trim() || "-";
+      const current = grouped.get(nivel) || { nivel, total: 0, capacidade: 0 };
+      current.total += studentsCountByClassKey[turma] || 0;
+      current.capacidade += Math.max(0, Number(meta?.capacidade || 0));
+      grouped.set(nivel, current);
+    });
+
+    return Array.from(grouped.values());
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+
+  const vagasDisponiveis = useMemo(() => {
+    return nivelOccupancy.reduce((acc, item) => {
+      if (item.total >= item.capacidade) return acc;
+      return acc + (item.capacidade - item.total);
+    }, 0);
+  }, [nivelOccupancy]);
 
   const vagasExcedentes = useMemo(() => {
-    return turmasFiltradas.reduce((acc, turma) => {
-      const meta = turmaMeta[turma];
-      const capacity = Math.max(0, Number(meta?.capacidade || 0));
-      const total = studentsCountByClassKey[turma] || 0;
-      if (total <= capacity) return acc;
-      return acc + (total - capacity);
+    return nivelOccupancy.reduce((acc, item) => {
+      if (item.total <= item.capacidade) return acc;
+      return acc + (item.total - item.capacidade);
     }, 0);
-  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+  }, [nivelOccupancy]);
 
-  const turmasComVagasDisponiveis = useMemo(() => {
-    return turmasFiltradas
-      .map((turma) => {
-        const meta = turmaMeta[turma];
-        const capacity = Math.max(0, Number(meta?.capacidade || 0));
-        const total = studentsCountByClassKey[turma] || 0;
-        const vagas = Math.max(0, capacity - total);
-        return {
-          turma,
-          turmaLabel: meta?.turmaLabel || turma,
-          nivel: formatNivelLabel(meta?.nivel || ""),
-          horario: meta?.horario ? formatHorario(meta.horario) : "-",
-          professor: meta?.professor || "-",
-          vagas,
-          total,
-          capacity,
-        };
-      })
+  const niveisComVagasDisponiveis = useMemo(() => {
+    return nivelOccupancy
+      .map((item) => ({
+        nivel: formatNivelLabel(item.nivel),
+        vagas: Math.max(0, item.capacidade - item.total),
+        total: item.total,
+        capacity: item.capacidade,
+      }))
       .filter((item) => item.vagas > 0)
-      .sort((a, b) => b.vagas - a.vagas || a.turmaLabel.localeCompare(b.turmaLabel));
-  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+      .sort((a, b) => b.vagas - a.vagas || a.nivel.localeCompare(b.nivel));
+  }, [nivelOccupancy]);
 
   return (
     <div className="vagas-root">
@@ -432,16 +431,16 @@ export const Vacancies: React.FC = () => {
 
       {showVagasDisponiveisDetalhe && (
         <div className="vagas-detail-box">
-          <h3>Turmas com vagas disponíveis</h3>
-          {turmasComVagasDisponiveis.length === 0 ? (
-            <div className="empty-state">Nenhuma turma com vaga para os filtros selecionados.</div>
+          <h3>Níveis com vagas disponíveis</h3>
+          {niveisComVagasDisponiveis.length === 0 ? (
+            <div className="empty-state">Nenhum nível com vaga para os filtros selecionados.</div>
           ) : (
             <div className="vagas-detail-list">
-              {turmasComVagasDisponiveis.map((item) => (
-                <div key={item.turma} className="vagas-detail-row">
+              {niveisComVagasDisponiveis.map((item) => (
+                <div key={item.nivel} className="vagas-detail-row">
                   <div>
-                    <strong>{item.turmaLabel} | {item.nivel}</strong>
-                    <span>{item.horario} - {item.professor}</span>
+                    <strong>{item.nivel}</strong>
+                    <span>Consolidado por nível (todos os professores/turmas filtrados)</span>
                   </div>
                   <div className="vagas-detail-meta">
                     <span>{item.vagas} vagas</span>
