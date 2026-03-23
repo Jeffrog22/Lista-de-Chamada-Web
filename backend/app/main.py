@@ -2489,9 +2489,9 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
 
     table_top = page_height - 120
     row_height = 16
-    fixed_col_widths = [140, 115, 62, 72]  # Increased Whatsapp from 88 to 115
+    fixed_col_widths = [140, 115, 52, 72]  # parQ reduced to free horizontal space
     notes_width = 168
-    preferred_date_col_width = 16
+    preferred_date_col_width = 14
 
     def _draw_header_block(selected: ReportClass):
         y = page_height - margin_top
@@ -2580,8 +2580,13 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             if col_idx in (0, len(columns) - 1):
                 pdf.drawString(x0 + 2, y - 11, text[:28])
             else:
-                # Personal data columns: whatsapp 18, parQ/Aniversário 12
-                max_chars = 18 if label == "Whatsapp" else 12
+                # Personal data columns: whatsapp 18, parQ 10, aniversário 12
+                if label == "Whatsapp":
+                    max_chars = 18
+                elif label == "parQ":
+                    max_chars = 10
+                else:
+                    max_chars = 12
                 pdf.drawCentredString((x0 + x1) / 2, y - 11, text[:max_chars])
 
         y -= row_height
@@ -2612,8 +2617,13 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
                 if col_idx in (0, len(columns) - 1):
                     pdf.drawString(x0 + 2, y - 11, value[:42])
                 else:
-                    # Personal data columns: whatsapp 18, parQ/Aniversário 12
-                    max_chars = 18 if label == "Whatsapp" else 12
+                    # Personal data columns: whatsapp 18, parQ 10, aniversário 12
+                    if label == "Whatsapp":
+                        max_chars = 18
+                    elif label == "parQ":
+                        max_chars = 10
+                    else:
+                        max_chars = 12
                     pdf.drawCentredString((x0 + x1) / 2, y - 11, value[:max_chars])
 
             y -= row_height
