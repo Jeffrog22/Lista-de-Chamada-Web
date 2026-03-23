@@ -3211,13 +3211,25 @@ export const Attendance: React.FC = () => {
 
       const isExcludedByIdentity = (alunoNome: string) => {
         const nameKey = normalizeText(alunoNome || "");
+        
+        // Check by name first (most direct)
+        if (excludedNamesForSelectedClass.has(nameKey)) return true;
+        
+        // Check by UID/ID from metadata if available
         const studentMeta = activeMetaByName.get(nameKey);
-        const studentId = String((studentMeta as any)?.id || "").trim();
-        const studentUid = String((studentMeta as any)?.studentUid || (studentMeta as any)?.student_uid || "").trim();
-
-        if (studentUid && excludedUidsForSelectedClass.has(studentUid)) return true;
-        if (studentId && excludedIdsForSelectedClass.has(studentId)) return true;
-        return excludedNamesForSelectedClass.has(nameKey);
+        if (studentMeta) {
+          const studentId = String((studentMeta as any)?.id || "").trim();
+          const studentUid = String((studentMeta as any)?.studentUid || (studentMeta as any)?.student_uid || "").trim();
+          if (studentUid && excludedUidsForSelectedClass.has(studentUid)) return true;
+          if (studentId && excludedIdsForSelectedClass.has(studentId)) return true;
+        }
+        
+        // Also check against full exclusion list directly by normalized name
+        // in case metadata is missing
+        return excludedList.some((exclusion) => {
+          const excNorm = normalizeText(exclusion?.nome || exclusion?.Nome || "");
+          return excNorm === nameKey && exclusionMatchesSelectedClass(exclusion);
+        });
       };
 
       const storedHasAnyMark = (storedRecords || []).some((item) =>
