@@ -4689,7 +4689,7 @@ export const Attendance: React.FC = () => {
                   fontWeight: 600,
                 }}
               >
-                Dia ({selectedDate.split("-").reverse().join("/")})
+                Dia {String(selectedDate.split("-")[2] || "").padStart(2, "0")}
               </button>
             </div>
           )}
