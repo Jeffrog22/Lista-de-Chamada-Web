@@ -6,6 +6,7 @@ import {
   downloadMultiClassExcelReport,
   getAcademicCalendar,
   getBootstrap,
+  getExcludedStudents,
   getPlanningFiles,
   getReports,
   getStatistics,
@@ -942,9 +943,20 @@ export const Reports: React.FC = () => {
     }
   }, []);
 
+  const refreshExcludedStudentsFromBackend = useCallback(async () => {
+    try {
+      const response = await getExcludedStudents();
+      const payload = Array.isArray(response?.data) ? response.data : [];
+      localStorage.setItem("excludedStudents", JSON.stringify(payload));
+    } catch {
+      // keep cached data when backend is unavailable
+    }
+  }, []);
+
   useEffect(() => {
     refreshPlanningStoreFromBackend();
-  }, [refreshPlanningStoreFromBackend]);
+    refreshExcludedStudentsFromBackend();
+  }, [refreshPlanningStoreFromBackend, refreshExcludedStudentsFromBackend]);
 
   useEffect(() => {
     localStorage.setItem(PLANNING_STORAGE_KEY, JSON.stringify(planningStore));

@@ -2574,7 +2574,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             if col_idx in (0, len(columns) - 1):
                 pdf.drawString(x0 + 2, y - 11, text[:28])
             else:
-                pdf.drawCentredString((x0 + x1) / 2, y - 11, text[:10])
+                pdf.drawCentredString((x0 + x1) / 2, y - 11, text[:12])
 
         y -= row_height
         pdf.setFont("Helvetica", 7)
@@ -2604,7 +2604,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
                 if col_idx in (0, len(columns) - 1):
                     pdf.drawString(x0 + 2, y - 11, value[:42])
                 else:
-                    pdf.drawCentredString((x0 + x1) / 2, y - 11, value[:16])
+                    pdf.drawCentredString((x0 + x1) / 2, y - 11, value[:12])
 
             y -= row_height
 
