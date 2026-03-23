@@ -420,7 +420,7 @@ export const Vacancies: React.FC = () => {
         >
           <span className="label">Vagas Disponíveis</span>
           <strong>{vagasDisponiveis}</strong>
-          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por turma"}</small>
+          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por nível"}</small>
         </button>
         <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
           <span className="label">Vagas Excedentes</span>
