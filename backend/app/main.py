@@ -2491,7 +2491,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
     row_height = 16
     fixed_col_widths = [140, 115, 62, 72]  # Increased Whatsapp from 88 to 115
     notes_width = 168
-    min_date_col_width = 18
+    preferred_date_col_width = 16
 
     def _draw_header_block(selected: ReportClass):
         y = page_height - margin_top
@@ -2538,7 +2538,13 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
 
     def _build_columns(day_chunk: List[str]) -> List[tuple[str, float]]:
         available_for_days = page_width - margin_left - margin_right - sum(fixed_col_widths) - notes_width
-        dynamic_width = (available_for_days / len(day_chunk)) if day_chunk else available_for_days
+        if day_chunk:
+            fit_width = available_for_days / len(day_chunk)
+            dynamic_width = min(fit_width, preferred_date_col_width)
+            notes_col_width = notes_width + max(0.0, available_for_days - (dynamic_width * len(day_chunk)))
+        else:
+            dynamic_width = available_for_days
+            notes_col_width = notes_width
         columns: List[tuple[str, float]] = [
             ("Nome", fixed_col_widths[0]),
             ("Whatsapp", fixed_col_widths[1]),
@@ -2547,7 +2553,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
         ]
         for day in day_chunk:
             columns.append((day, dynamic_width))
-        columns.append(("Anotações", notes_width))
+        columns.append(("Anotações", notes_col_width))
         return columns
 
     def _draw_grid_page(selected: ReportClass, rows: List[Dict[str, Any]], day_chunk: List[str], day_range_label: str):
@@ -2626,7 +2632,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             day for aluno in selected.alunos for day in (aluno.historico or {}).keys()
         ])
         available_for_days = page_width - margin_left - margin_right - sum(fixed_col_widths) - notes_width
-        max_date_slots_fit = max(1, int(available_for_days // min_date_col_width))
+        max_date_slots_fit = max(1, int(available_for_days // preferred_date_col_width))
         if class_days:
             day_chunks = [
                 class_days[idx: idx + max_date_slots_fit]
