@@ -2489,7 +2489,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
 
     table_top = page_height - 120
     row_height = 16
-    fixed_col_widths = [140, 88, 62, 72]
+    fixed_col_widths = [140, 115, 62, 72]  # Increased Whatsapp from 88 to 115
     notes_width = 168
     min_date_col_width = 18
 
@@ -2574,8 +2574,8 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             if col_idx in (0, len(columns) - 1):
                 pdf.drawString(x0 + 2, y - 11, text[:28])
             else:
-                # Personal data columns need more space: whatsapp 15, parQ/Aniversário 12
-                max_chars = 15 if label == "Whatsapp" else 12
+                # Personal data columns: whatsapp 18, parQ/Aniversário 12
+                max_chars = 18 if label == "Whatsapp" else 12
                 pdf.drawCentredString((x0 + x1) / 2, y - 11, text[:max_chars])
 
         y -= row_height
@@ -2606,8 +2606,8 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
                 if col_idx in (0, len(columns) - 1):
                     pdf.drawString(x0 + 2, y - 11, value[:42])
                 else:
-                    # Personal data columns need more space: whatsapp 15, parQ/Aniversário 12
-                    max_chars = 15 if label == "Whatsapp" else 12
+                    # Personal data columns: whatsapp 18, parQ/Aniversário 12
+                    max_chars = 18 if label == "Whatsapp" else 12
                     pdf.drawCentredString((x0 + x1) / 2, y - 11, value[:max_chars])
 
             y -= row_height
