@@ -138,6 +138,11 @@ class ExclusionEntry(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+
+class ExclusionsBulkPayload(BaseModel):
+    items: List[ExclusionEntry] = Field(default_factory=list)
+    replace: bool = False
+
 class ReportStudent(BaseModel):
     id: str
     student_uid: Optional[str] = None
@@ -2895,6 +2900,52 @@ def add_exclusion(entry: ExclusionEntry):
         items.append(payload)
     _save_json_list(file_path, items)
     return {"ok": True, "updated": updated}
+
+
+@app.post("/exclusions/bulk")
+def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
+    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    existing_items = [] if payload.replace else _clean_exclusions_list(_load_json_list(file_path))
+
+    updated = 0
+    added = 0
+    skipped = 0
+
+    for entry in payload.items or []:
+        normalized_entry = _normalize_exclusion_item(entry.dict())
+        if not normalized_entry.get("dataExclusao"):
+            normalized_entry["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
+
+        uid = str(normalized_entry.get("student_uid") or normalized_entry.get("studentUid") or "").strip()
+        item_id = str(normalized_entry.get("id") or "").strip()
+        nome = _normalize_text(normalized_entry.get("nome") or normalized_entry.get("Nome") or "")
+        if not uid and not item_id and not nome:
+            skipped += 1
+            continue
+
+        match_index = next(
+            (idx for idx, existing in enumerate(existing_items) if _resolve_exclusion_match(existing, entry)),
+            -1,
+        )
+        if match_index >= 0:
+            existing_items[match_index] = {**existing_items[match_index], **normalized_entry}
+            updated += 1
+        else:
+            existing_items.append(normalized_entry)
+            added += 1
+
+    cleaned = _clean_exclusions_list(existing_items)
+    _save_json_list(file_path, cleaned)
+
+    return {
+        "ok": True,
+        "replace": payload.replace,
+        "received": len(payload.items or []),
+        "added": added,
+        "updated": updated,
+        "skipped": skipped,
+        "total": len(cleaned),
+    }
 
 @app.post("/exclusions/restore")
 def restore_exclusion(entry: ExclusionEntry):
