@@ -3840,6 +3840,102 @@ export const Attendance: React.FC = () => {
     }
   };
 
+  const removerJustificativa = async (entryDayLabel: string, entryReason: string) => {
+    if (!justificationStudentId) return;
+
+    const dayLabel = String(entryDayLabel || "").trim();
+    const reason = String(entryReason || "").trim();
+    if (!dayLabel) return;
+
+    const startDay = Number.parseInt(dayLabel.split("-")[0] || "", 10);
+    if (!Number.isFinite(startDay)) {
+      alert("Não foi possível identificar o dia inicial da justificativa.");
+      return;
+    }
+
+    const startDate = dateDates.find((date) => Number.parseInt(date.split("-")[2] || "", 10) === startDay);
+    if (!startDate) {
+      alert("Dia não encontrado nas datas exibidas deste mês.");
+      return;
+    }
+
+    const afastamentoDays = extractJustificationDays(reason);
+    const candidateDates = [...dateDates].filter((date) => date >= startDate).sort((a, b) => a.localeCompare(b));
+
+    let datesToRemove: string[] = [];
+    if (afastamentoDays > 1) {
+      datesToRemove = candidateDates.slice(0, afastamentoDays);
+    } else if (dayLabel.includes("-")) {
+      const [fromRaw, toRaw] = dayLabel.split("-").map((part) => Number.parseInt(part || "", 10));
+      const fromDay = Number.isFinite(fromRaw) ? fromRaw : startDay;
+      const toDay = Number.isFinite(toRaw) ? toRaw : startDay;
+      const minDay = Math.min(fromDay, toDay);
+      const maxDay = Math.max(fromDay, toDay);
+      datesToRemove = dateDates.filter((date) => {
+        const currentDay = Number.parseInt(date.split("-")[2] || "", 10);
+        return Number.isFinite(currentDay) && currentDay >= minDay && currentDay <= maxDay;
+      });
+    } else {
+      datesToRemove = [startDate];
+    }
+
+    if (datesToRemove.length === 0) {
+      alert("Nenhuma data elegível para remover justificativa.");
+      return;
+    }
+
+    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHasUnsavedLocalChanges(true);
+
+    const nextAttendanceSnapshot = attendance.map((item) => {
+      if (item.id !== justificationStudentId) return item;
+
+      const nextAttendance = { ...(item.attendance || {}) };
+      const nextJustifications = { ...(item.justifications || {}) };
+
+      datesToRemove.forEach((date) => {
+        delete nextJustifications[date];
+        if (nextAttendance[date] === "Justificado") {
+          nextAttendance[date] = "";
+        }
+      });
+
+      return {
+        ...item,
+        attendance: nextAttendance,
+        justifications: nextJustifications,
+      };
+    });
+
+    setAttendance(nextAttendanceSnapshot);
+
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) {
+      alert("Selecione turma, horário e professor válidos antes de salvar.");
+      return;
+    }
+
+    const attendanceResp: any = await saveAttendanceLog({
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
+      mes: monthKey,
+      registros: nextAttendanceSnapshot.map((item) => ({
+        aluno_nome: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+        notes: item.notes || [],
+      })),
+    }).catch(() => null);
+
+    if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
+      setHasUnsavedLocalChanges(false);
+      setHydrationRefreshSeq((prev) => prev + 1);
+      refreshSyncIndicator().catch(() => undefined);
+    }
+  };
+
   const handleSave = async () => {
     if (monthKey !== visibleMonthKey) {
       alert(
@@ -4752,9 +4848,26 @@ export const Attendance: React.FC = () => {
                   <div style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "6px" }}>Justificativas do mês</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "#666" }}>
                     {entries.map((entry, idx) => (
-                      <div key={`${entry.dayLabel}-${idx}`} style={{ display: "flex", gap: "6px" }}>
+                      <div key={`${entry.dayLabel}-${idx}`} style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                         <span style={{ minWidth: "44px", fontWeight: 700 }}>{entry.dayLabel}</span>
-                        <span>{entry.reason}</span>
+                        <span style={{ flex: 1 }}>{entry.reason}</span>
+                        <button
+                          type="button"
+                          onClick={() => removerJustificativa(entry.dayLabel, entry.reason)}
+                          title="Remover justificativa"
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#dc2626",
+                            cursor: "pointer",
+                            fontWeight: 700,
+                            fontSize: "14px",
+                            lineHeight: 1,
+                            padding: "2px 4px",
+                          }}
+                        >
+                          ✕
+                        </button>
                       </div>
                     ))}
                   </div>
