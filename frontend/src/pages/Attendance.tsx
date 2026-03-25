@@ -3236,9 +3236,6 @@ export const Attendance: React.FC = () => {
       const storedHasAnyMark = (storedRecords || []).some((item) =>
         Object.values(item?.attendance || {}).some((value) => Boolean(value))
       );
-      const storedHasAnyJustification = (storedRecords || []).some((item) =>
-        Object.values(item?.justifications || {}).some((value) => Boolean(String(value || "").trim()))
-      );
       const storedByName = new Map(
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
       );
@@ -3248,6 +3245,7 @@ export const Attendance: React.FC = () => {
         justifications: Record<string, string>;
         notes: string[];
       }>();
+      let backendSnapshotTrusted = false;
 
       try {
         const response = await getReports({ month: monthKey });
@@ -3388,17 +3386,8 @@ export const Attendance: React.FC = () => {
         const backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
           Object.values(entry.attendance || {}).some((value) => Boolean(value))
         );
-        const backendHasAnyJustification = Array.from(backendCandidateByName.values()).some((entry) =>
-          Object.values(entry.justifications || {}).some((value) => Boolean(String(value || "").trim()))
-        );
-        const visibleClassStudentsCount = classStudents.filter((aluno) => !isExcludedByIdentity(aluno || "")).length;
-        const minExpectedSnapshotCount = Math.max(1, Math.floor(visibleClassStudentsCount * 0.6));
-        const snapshotCoverageLooksReliable = matchedCount >= minExpectedSnapshotCount;
-
         const canTrustBackendSnapshot = backendHasAnyMark || !storedHasAnyMark;
-        const canTrustBackendJustificationsSnapshot = Boolean(matchedClass?.hasLog)
-          && snapshotCoverageLooksReliable
-          && (backendHasAnyMark || backendHasAnyJustification || (!storedHasAnyMark && !storedHasAnyJustification));
+        backendSnapshotTrusted = canTrustBackendSnapshot;
 
         if (canTrustBackendSnapshot) {
           backendCandidateByName.forEach((value, key) => backendByName.set(key, value));
@@ -3480,6 +3469,7 @@ export const Attendance: React.FC = () => {
         classStudents
           .filter((aluno) => !isExcludedByIdentity(aluno || ""))
           .map((aluno, idx) => {
+          const studentKey = normalizeText(aluno);
           const base = newDates.reduce(
             (acc, date) => {
               acc[date] = "";
@@ -3488,8 +3478,9 @@ export const Attendance: React.FC = () => {
             {} as { [date: string]: "Presente" | "Falta" | "Justificado" | "" }
           );
 
-          const backend = backendByName.get(normalizeText(aluno));
-          const stored = storedByName.get(normalizeText(aluno));
+          const backend = backendByName.get(studentKey);
+          const stored = storedByName.get(studentKey);
+          const allowStoredMerge = !backendSnapshotTrusted || !backend;
 
           return {
             id: idx + 1,
@@ -3501,12 +3492,14 @@ export const Attendance: React.FC = () => {
               };
 
               const storedAttendance = stored?.attendance || {};
-              Object.entries(storedAttendance).forEach(([date, value]) => {
-                if (!newDates.includes(date)) return;
-                if (value && !merged[date]) {
-                  merged[date] = value;
-                }
-              });
+              if (allowStoredMerge) {
+                Object.entries(storedAttendance).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  if (value && !merged[date]) {
+                    merged[date] = value;
+                  }
+                });
+              }
 
               return merged;
             })(),
@@ -3515,19 +3508,17 @@ export const Attendance: React.FC = () => {
                 ...(backend?.justifications || {}),
               };
 
-              if (canTrustBackendJustificationsSnapshot) {
-                return merged;
-              }
-
               const storedJustifications = stored?.justifications || {};
-              Object.entries(storedJustifications).forEach(([date, value]) => {
-                if (!newDates.includes(date)) return;
-                const normalized = String(value || "").trim();
-                if (!normalized) return;
-                if (!String(merged[date] || "").trim()) {
-                  merged[date] = normalized;
-                }
-              });
+              if (allowStoredMerge) {
+                Object.entries(storedJustifications).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  const normalized = String(value || "").trim();
+                  if (!normalized) return;
+                  if (!String(merged[date] || "").trim()) {
+                    merged[date] = normalized;
+                  }
+                });
+              }
 
               return merged;
             })(),
@@ -3539,6 +3530,7 @@ export const Attendance: React.FC = () => {
                 ? stored!.notes.map((note) => String(note || "").trim()).filter(Boolean)
                 : [];
 
+              if (backendSnapshotTrusted) return backendNotes;
               if (backendNotes.length > 0) return backendNotes;
               return storedNotes;
             })(),
