@@ -3502,6 +3502,10 @@ export const Attendance: React.FC = () => {
                 ...(backend?.justifications || {}),
               };
 
+              if (canTrustBackendSnapshot) {
+                return merged;
+              }
+
               const storedJustifications = stored?.justifications || {};
               Object.entries(storedJustifications).forEach(([date, value]) => {
                 if (!newDates.includes(date)) return;
