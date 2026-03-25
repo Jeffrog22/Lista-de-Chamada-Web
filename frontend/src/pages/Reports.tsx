@@ -1119,7 +1119,7 @@ export const Reports: React.FC = () => {
         } else if (block.type === "date") {
           const exactDateMatch = block.key === selectedPlanningDateKey;
           const labelRangeMatch = planningRangeIncludesDate(block.label || "", Number(file.year || selectedYear), selectedPlanningDateKey);
-          score = exactDateMatch ? 6 : labelRangeMatch ? 5 : 0;
+          score = exactDateMatch ? 7 : labelRangeMatch ? 6 : 0;
         } else {
           return;
         }
@@ -1133,9 +1133,41 @@ export const Reports: React.FC = () => {
     if (matched.length === 0) return [] as PlanningBlock[];
 
     const bestScore = Math.max(...matched.map((item) => item._score));
+    let bestMatched = matched.filter((item) => item._score === bestScore);
 
-    return matched
-      .filter((item) => item._score === bestScore)
+    if (bestMatched.length > 1 && selectedDay !== null) {
+      const datePriority = bestMatched.filter((item) => item.type === "date");
+      if (datePriority.length > 0) {
+        bestMatched = datePriority;
+      } else {
+        const boundaryStarts = bestMatched.filter(
+          (item) => item.type === "week" && typeof item.startDay === "number" && item.startDay === selectedDay
+        );
+
+        if (boundaryStarts.length > 0) {
+          bestMatched = boundaryStarts;
+        } else {
+          const weekBlocks = bestMatched.filter(
+            (item) => item.type === "week" && typeof item.startDay === "number" && typeof item.endDay === "number"
+          );
+
+          if (weekBlocks.length > 0) {
+            const minSpan = Math.min(
+              ...weekBlocks.map((item) => Math.max(0, Number(item.endDay) - Number(item.startDay)))
+            );
+            const narrowest = weekBlocks.filter(
+              (item) => Math.max(0, Number(item.endDay) - Number(item.startDay)) === minSpan
+            );
+            if (narrowest.length > 0) {
+              const bestStart = Math.max(...narrowest.map((item) => Number(item.startDay || 0)));
+              bestMatched = narrowest.filter((item) => Number(item.startDay || 0) === bestStart);
+            }
+          }
+        }
+      }
+    }
+
+    return bestMatched
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ _score, ...block }) => block);
   }, [planningSelectedTargetKey, planningStore.files, selectedPlanningWeekKey, selectedPlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
