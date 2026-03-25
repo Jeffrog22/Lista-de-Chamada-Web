@@ -251,14 +251,14 @@ const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
   return merged;
 };
 
-const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[]) => {
+const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[], forceAll = false) => {
   const remote = Array.isArray(remoteItems) ? remoteItems : [];
   const local = Array.isArray(localItems) ? localItems : [];
   if (local.length === 0) return { synced: 0, items: local };
 
   const candidates = local.filter(
     (localItem) => {
-      if (!isPendingExcludedSync(localItem)) return false;
+      if (!forceAll && !isPendingExcludedSync(localItem)) return false;
       const missingRemotely = !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem));
       if (!missingRemotely) return false;
       return true;
@@ -474,6 +474,17 @@ export const getExcludedStudents = () =>
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
+      const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
+
+      if (remoteItems.length === 0 && localData.length > 0) {
+        writeExcludedStudentsLocal(localData);
+        try {
+          const syncResult = await syncExcludedStudentsToRemote([], localData, true);
+          return { ...response, data: syncResult.items, _fromFallback: false, _recoveredFromLocal: true };
+        } catch {
+          return { ...response, data: localData, _fromFallback: false, _recoveredFromLocal: true };
+        }
+      }
 
       const baseline = mergeExcludedStudentsLocalWithRemote(remoteItems);
 
