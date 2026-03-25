@@ -211,9 +211,10 @@ export const Exclusions: React.FC = () => {
       .then((response) => {
         if (!isMounted) return;
         const data = response.data;
+        const fromFallback = Boolean((response as any)?._fromFallback);
         if (Array.isArray(data)) {
           const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
-          const resolved = data.length > 0 ? sanitizeExcludedStudents(data as ExcludedStudent[]) : local;
+          const resolved = fromFallback ? local : sanitizeExcludedStudents(data as ExcludedStudent[]);
           setStudents(resolved);
           localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         } else {
@@ -304,21 +305,23 @@ export const Exclusions: React.FC = () => {
 
     const leftTurmas = getStudentTurmaSet(left);
     const rightTurmas = getStudentTurmaSet(right);
+    const hasTurmaContext = leftTurmas.size > 0 && rightTurmas.size > 0;
     const turmaMatches =
-      leftTurmas.size === 0 ||
-      rightTurmas.size === 0 ||
+      !hasTurmaContext ||
       Array.from(leftTurmas).some((value) => rightTurmas.has(value));
     if (!turmaMatches) return false;
 
     const leftHorario = normalizeHorarioDigits(String(left.horario || left.Horario || ""));
     const rightHorario = normalizeHorarioDigits(String(right.horario || right.Horario || ""));
-    if (leftHorario && rightHorario && leftHorario !== rightHorario) return false;
+    const hasHorarioContext = Boolean(leftHorario && rightHorario);
+    if (hasHorarioContext && leftHorario !== rightHorario) return false;
 
     const leftProfessor = normalizeText(String(left.professor || left.Professor || ""));
     const rightProfessor = normalizeText(String(right.professor || right.Professor || ""));
-    if (leftProfessor && rightProfessor && leftProfessor !== rightProfessor) return false;
+    const hasProfessorContext = Boolean(leftProfessor && rightProfessor);
+    if (hasProfessorContext && leftProfessor !== rightProfessor) return false;
 
-    return true;
+    return hasTurmaContext || hasHorarioContext || hasProfessorContext;
   };
 
   const sanitizeExcludedStudents = (list: ExcludedStudent[]) => {

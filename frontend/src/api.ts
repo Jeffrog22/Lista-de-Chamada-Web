@@ -114,23 +114,50 @@ const exclusionMatches = (candidate: any, payload: any) => {
   );
   if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
 
-  const candidateTurma = normalizeText(
-    candidate?.turma || candidate?.Turma || candidate?.turmaLabel || candidate?.TurmaLabel || candidate?.grupo || candidate?.Grupo || candidate?.turmaCodigo || candidate?.TurmaCodigo
+  const candidateTurmaSet = new Set(
+    [
+      candidate?.turma,
+      candidate?.Turma,
+      candidate?.turmaLabel,
+      candidate?.TurmaLabel,
+      candidate?.turmaCodigo,
+      candidate?.TurmaCodigo,
+      candidate?.grupo,
+      candidate?.Grupo,
+    ]
+      .map((value) => normalizeText(value))
+      .filter(Boolean)
   );
-  const payloadTurma = normalizeText(
-    payload?.turma || payload?.Turma || payload?.turmaLabel || payload?.TurmaLabel || payload?.grupo || payload?.Grupo || payload?.turmaCodigo || payload?.TurmaCodigo
+  const payloadTurmaSet = new Set(
+    [
+      payload?.turma,
+      payload?.Turma,
+      payload?.turmaLabel,
+      payload?.TurmaLabel,
+      payload?.turmaCodigo,
+      payload?.TurmaCodigo,
+      payload?.grupo,
+      payload?.Grupo,
+    ]
+      .map((value) => normalizeText(value))
+      .filter(Boolean)
   );
-  const turmaMatches = !candidateTurma || !payloadTurma || candidateTurma === payloadTurma;
+
+  const hasTurmaContext = candidateTurmaSet.size > 0 && payloadTurmaSet.size > 0;
+  const turmaMatches = !hasTurmaContext || Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
+  if (!turmaMatches) return false;
 
   const candidateHorario = normalizeHorarioKey(candidate?.horario || candidate?.Horario);
   const payloadHorario = normalizeHorarioKey(payload?.horario || payload?.Horario);
-  const horarioMatches = !candidateHorario || !payloadHorario || candidateHorario === payloadHorario;
+  const hasHorarioContext = Boolean(candidateHorario && payloadHorario);
+  if (hasHorarioContext && candidateHorario !== payloadHorario) return false;
 
   const candidateProfessor = normalizeText(candidate?.professor || candidate?.Professor);
   const payloadProfessor = normalizeText(payload?.professor || payload?.Professor);
-  const professorMatches = !candidateProfessor || !payloadProfessor || candidateProfessor === payloadProfessor;
+  const hasProfessorContext = Boolean(candidateProfessor && payloadProfessor);
+  if (hasProfessorContext && candidateProfessor !== payloadProfessor) return false;
 
-  return turmaMatches && horarioMatches && professorMatches;
+  return hasTurmaContext || hasHorarioContext || hasProfessorContext;
 };
 
 const readExcludedStudentsLocal = () => {
@@ -207,14 +234,15 @@ const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
     .filter(isValidExcludedStudentRecord);
 
   localItems.forEach((localItem) => {
+    const localPending = isPendingExcludedSync(localItem);
     const idx = merged.findIndex((item) => exclusionMatches(item, localItem));
     if (idx >= 0) {
       merged[idx] = normalizeExcludedStudentRecord({
         ...localItem,
         ...merged[idx],
-        _pendingSync: isPendingExcludedSync(localItem),
+        _pendingSync: localPending,
       });
-    } else if (isValidExcludedStudentRecord(localItem)) {
+    } else if (localPending && isValidExcludedStudentRecord(localItem)) {
       merged.push(normalizeExcludedStudentRecord(localItem));
     }
     });
@@ -230,6 +258,7 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
 
   const candidates = local.filter(
     (localItem) => {
+      if (!isPendingExcludedSync(localItem)) return false;
       const missingRemotely = !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem));
       if (!missingRemotely) return false;
       return true;
@@ -441,20 +470,19 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 
 // Exclusions
 export const getExcludedStudents = () =>
-  API.get("/exclusions", noCacheConfig)
+  API.get("/exclusions", { ...noCacheConfig, params: { _ts: Date.now() } })
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       const localStateExists = hasExcludedStudentsLocalState();
-      const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
 
-      const baseline = remoteItems.length > 0 ? mergeExcludedStudentsLocalWithRemote(remoteItems) : localData;
+      const baseline = mergeExcludedStudentsLocalWithRemote(remoteItems);
 
       if (baseline.length > 0) {
         try {
           const syncResult = await syncExcludedStudentsToRemote(remoteItems, baseline);
-          return { ...response, data: syncResult.items };
+          return { ...response, data: syncResult.items, _fromFallback: false };
         } catch {
-          return { ...response, data: baseline };
+          return { ...response, data: baseline, _fromFallback: false };
         }
       }
 
@@ -462,9 +490,9 @@ export const getExcludedStudents = () =>
         writeExcludedStudentsLocal([]);
       }
 
-      return { ...response, data: [] };
+      return { ...response, data: [], _fromFallback: false };
     })
-    .catch(() => ({ data: readExcludedStudentsLocal() }));
+    .catch(() => ({ data: readExcludedStudentsLocal(), _fromFallback: true }));
 
 export const addExclusion = (data: any) =>
   API.post("/exclusions", data)

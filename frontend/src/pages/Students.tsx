@@ -159,21 +159,23 @@ export const Students: React.FC = () => {
 
     const leftTurmas = exclusionTurmaSet(left);
     const rightTurmas = exclusionTurmaSet(right);
+    const hasTurmaContext = leftTurmas.size > 0 && rightTurmas.size > 0;
     const turmaMatches =
-      leftTurmas.size === 0 ||
-      rightTurmas.size === 0 ||
+      !hasTurmaContext ||
       Array.from(leftTurmas).some((value) => rightTurmas.has(value));
     if (!turmaMatches) return false;
 
     const leftHorario = normalizeHorarioKey(left?.horario || left?.Horario || "");
     const rightHorario = normalizeHorarioKey(right?.horario || right?.Horario || "");
-    if (leftHorario && rightHorario && leftHorario !== rightHorario) return false;
+    const hasHorarioContext = Boolean(leftHorario && rightHorario);
+    if (hasHorarioContext && leftHorario !== rightHorario) return false;
 
     const leftProfessor = normalizeText(left?.professor || left?.Professor || "");
     const rightProfessor = normalizeText(right?.professor || right?.Professor || "");
-    if (leftProfessor && rightProfessor && leftProfessor !== rightProfessor) return false;
+    const hasProfessorContext = Boolean(leftProfessor && rightProfessor);
+    if (hasProfessorContext && leftProfessor !== rightProfessor) return false;
 
-    return true;
+    return hasTurmaContext || hasHorarioContext || hasProfessorContext;
   };
 
   const isStudentExcluded = (student: Student, records: any[]) => {
@@ -418,8 +420,9 @@ export const Students: React.FC = () => {
     getExcludedStudents()
       .then((response) => {
         if (!isMounted) return;
+        const fromFallback = Boolean((response as any)?._fromFallback);
         const remote = sanitizeExcludedRecords(Array.isArray(response?.data) ? response.data : []);
-        if (remote.length > 0) {
+        if (!fromFallback) {
           setExcludedRecords(remote);
           localStorage.setItem("excludedStudents", JSON.stringify(remote));
           return;

@@ -987,6 +987,7 @@ export const Attendance: React.FC = () => {
       .then((response) => {
         if (!isMounted) return;
         const payload = Array.isArray(response?.data) ? response.data : [];
+        const fromFallback = Boolean((response as any)?._fromFallback);
         let localList: any[] = [];
         try {
           const localRaw = localStorage.getItem("excludedStudents");
@@ -995,7 +996,7 @@ export const Attendance: React.FC = () => {
         } catch {
           localList = [];
         }
-        const resolved = payload.length > 0 ? payload : localList;
+        const resolved = fromFallback ? localList : payload;
         localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         refreshStorageData();
       })

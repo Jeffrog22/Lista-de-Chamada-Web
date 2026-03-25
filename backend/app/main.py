@@ -1853,21 +1853,24 @@ def _exclusion_records_match(item: Dict[str, Any], payload_dict: Dict[str, Any])
 
     item_turmas = _exclusion_turma_set(item)
     payload_turmas = _exclusion_turma_set(payload_dict)
-    turma_matches = not item_turmas or not payload_turmas or bool(item_turmas.intersection(payload_turmas))
+    has_turma_context = bool(item_turmas) and bool(payload_turmas)
+    turma_matches = not has_turma_context or bool(item_turmas.intersection(payload_turmas))
     if not turma_matches:
         return False
 
     item_horario = _normalize_horario_key(item.get("horario") or item.get("Horario") or "")
     payload_horario = _normalize_horario_key(payload_dict.get("horario") or payload_dict.get("Horario") or "")
-    if item_horario and payload_horario and item_horario != payload_horario:
+    has_horario_context = bool(item_horario) and bool(payload_horario)
+    if has_horario_context and item_horario != payload_horario:
         return False
 
     item_professor = _normalize_text(item.get("professor") or item.get("Professor") or "")
     payload_professor = _normalize_text(payload_dict.get("professor") or payload_dict.get("Professor") or "")
-    if item_professor and payload_professor and item_professor != payload_professor:
+    has_professor_context = bool(item_professor) and bool(payload_professor)
+    if has_professor_context and item_professor != payload_professor:
         return False
 
-    return True
+    return has_turma_context or has_horario_context or has_professor_context
 
 
 def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
