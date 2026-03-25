@@ -11,6 +11,7 @@ import re
 import uuid
 import math
 from datetime import datetime, timedelta, date
+from threading import RLock
 import unicodedata
 import pandas as pd
 import requests
@@ -48,6 +49,7 @@ app = FastAPI(title="Lista-de-Chamada - API", lifespan=lifespan)
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DATA_DIR = os.path.join(BASE_DIR, "data")
+EXCLUSIONS_FILE_LOCK = RLock()
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
@@ -2876,108 +2878,113 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
 @app.get("/exclusions")
 def list_exclusions():
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _load_json_list(file_path)
-    cleaned = _clean_exclusions_list(items)
-    if cleaned != items:
-        _save_json_list(file_path, cleaned)
-    return cleaned
+    with EXCLUSIONS_FILE_LOCK:
+        items = _load_json_list(file_path)
+        cleaned = _clean_exclusions_list(items)
+        if cleaned != items:
+            _save_json_list(file_path, cleaned)
+        return cleaned
 
 @app.post("/exclusions")
 def add_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _clean_exclusions_list(_load_json_list(file_path))
-    payload = _normalize_exclusion_item(entry.dict())
-    if not payload.get("dataExclusao"):
-        payload["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
+    with EXCLUSIONS_FILE_LOCK:
+        items = _clean_exclusions_list(_load_json_list(file_path))
+        payload = _normalize_exclusion_item(entry.dict())
+        if not payload.get("dataExclusao"):
+            payload["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
 
-    updated = False
-    for idx, item in enumerate(items):
-        if _resolve_exclusion_match(item, entry):
-            items[idx] = {**item, **payload}
-            updated = True
-            break
-    if not updated:
-        items.append(payload)
-    _save_json_list(file_path, items)
-    return {"ok": True, "updated": updated}
+        updated = False
+        for idx, item in enumerate(items):
+            if _resolve_exclusion_match(item, entry):
+                items[idx] = {**item, **payload}
+                updated = True
+                break
+        if not updated:
+            items.append(payload)
+        _save_json_list(file_path, items)
+        return {"ok": True, "updated": updated}
 
 
 @app.post("/exclusions/bulk")
 def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    existing_items = [] if payload.replace else _clean_exclusions_list(_load_json_list(file_path))
+    with EXCLUSIONS_FILE_LOCK:
+        existing_items = [] if payload.replace else _clean_exclusions_list(_load_json_list(file_path))
 
-    updated = 0
-    added = 0
-    skipped = 0
+        updated = 0
+        added = 0
+        skipped = 0
 
-    for entry in payload.items or []:
-        normalized_entry = _normalize_exclusion_item(entry.dict())
-        if not normalized_entry.get("dataExclusao"):
-            normalized_entry["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
+        for entry in payload.items or []:
+            normalized_entry = _normalize_exclusion_item(entry.dict())
+            if not normalized_entry.get("dataExclusao"):
+                normalized_entry["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
 
-        uid = str(normalized_entry.get("student_uid") or normalized_entry.get("studentUid") or "").strip()
-        item_id = str(normalized_entry.get("id") or "").strip()
-        nome = _normalize_text(normalized_entry.get("nome") or normalized_entry.get("Nome") or "")
-        if not uid and not item_id and not nome:
-            skipped += 1
-            continue
+            uid = str(normalized_entry.get("student_uid") or normalized_entry.get("studentUid") or "").strip()
+            item_id = str(normalized_entry.get("id") or "").strip()
+            nome = _normalize_text(normalized_entry.get("nome") or normalized_entry.get("Nome") or "")
+            if not uid and not item_id and not nome:
+                skipped += 1
+                continue
 
-        match_index = next(
-            (idx for idx, existing in enumerate(existing_items) if _resolve_exclusion_match(existing, entry)),
-            -1,
-        )
-        if match_index >= 0:
-            existing_items[match_index] = {**existing_items[match_index], **normalized_entry}
-            updated += 1
-        else:
-            existing_items.append(normalized_entry)
-            added += 1
+            match_index = next(
+                (idx for idx, existing in enumerate(existing_items) if _resolve_exclusion_match(existing, entry)),
+                -1,
+            )
+            if match_index >= 0:
+                existing_items[match_index] = {**existing_items[match_index], **normalized_entry}
+                updated += 1
+            else:
+                existing_items.append(normalized_entry)
+                added += 1
 
-    cleaned = _clean_exclusions_list(existing_items)
-    _save_json_list(file_path, cleaned)
+        cleaned = _clean_exclusions_list(existing_items)
+        _save_json_list(file_path, cleaned)
 
-    return {
-        "ok": True,
-        "replace": payload.replace,
-        "received": len(payload.items or []),
-        "added": added,
-        "updated": updated,
-        "skipped": skipped,
-        "total": len(cleaned),
-    }
+        return {
+            "ok": True,
+            "replace": payload.replace,
+            "received": len(payload.items or []),
+            "added": added,
+            "updated": updated,
+            "skipped": skipped,
+            "total": len(cleaned),
+        }
 
 @app.post("/exclusions/restore")
 def restore_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _clean_exclusions_list(_load_json_list(file_path))
-    restored: Optional[Dict[str, Any]] = None
-    remaining: List[Dict[str, Any]] = []
-    for item in items:
-        if restored is None and _resolve_exclusion_match(item, entry):
-            restored = item
-            continue
-        remaining.append(item)
-    _save_json_list(file_path, remaining)
-    if restored is None:
-        raise HTTPException(status_code=404, detail="Exclusion not found")
-    return {"ok": True, "restored": restored}
+    with EXCLUSIONS_FILE_LOCK:
+        items = _clean_exclusions_list(_load_json_list(file_path))
+        restored: Optional[Dict[str, Any]] = None
+        remaining: List[Dict[str, Any]] = []
+        for item in items:
+            if restored is None and _resolve_exclusion_match(item, entry):
+                restored = item
+                continue
+            remaining.append(item)
+        _save_json_list(file_path, remaining)
+        if restored is None:
+            raise HTTPException(status_code=404, detail="Exclusion not found")
+        return {"ok": True, "restored": restored}
 
 @app.post("/exclusions/delete")
 def delete_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
-    items = _clean_exclusions_list(_load_json_list(file_path))
-    remaining: List[Dict[str, Any]] = []
-    deleted = False
-    for item in items:
-        if not deleted and _resolve_exclusion_match(item, entry):
-            deleted = True
-            continue
-        remaining.append(item)
-    _save_json_list(file_path, remaining)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Exclusion not found")
-    return {"ok": True}
+    with EXCLUSIONS_FILE_LOCK:
+        items = _clean_exclusions_list(_load_json_list(file_path))
+        remaining: List[Dict[str, Any]] = []
+        deleted = False
+        for item in items:
+            if not deleted and _resolve_exclusion_match(item, entry):
+                deleted = True
+                continue
+            remaining.append(item)
+        _save_json_list(file_path, remaining)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Exclusion not found")
+        return {"ok": True}
 
 @app.get("/filters", response_model=ReportsFilterOut)
 def get_report_filters(session: Session = Depends(get_session)) -> ReportsFilterOut:

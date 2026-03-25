@@ -266,22 +266,24 @@ const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[
   );
   if (candidates.length === 0) return { synced: 0, items: local };
 
-  const results = await Promise.allSettled(
-    candidates.map((item) => API.post("/exclusions", normalizeExcludedStudentRecord({ ...item, _pendingSync: false })))
-  );
-
-  const succeeded = candidates.filter((_, index) => results[index]?.status === "fulfilled");
-  if (succeeded.length === 0) return { synced: 0, items: local };
+  try {
+    await API.post("/exclusions/bulk", {
+      items: candidates.map((item) => normalizeExcludedStudentRecord({ ...item, _pendingSync: false })),
+      replace: false,
+    });
+  } catch {
+    return { synced: 0, items: local };
+  }
 
   const nextItems = local.map((item) => {
-    if (succeeded.some((okItem) => exclusionMatches(okItem, item))) {
+    if (candidates.some((okItem) => exclusionMatches(okItem, item))) {
       return normalizeExcludedStudentRecord({ ...item, _pendingSync: false });
     }
     return item;
   });
 
   writeExcludedStudentsLocal(nextItems);
-  return { synced: succeeded.length, items: nextItems };
+  return { synced: candidates.length, items: nextItems };
 };
 
 const normalizeAttendanceLogField = (value: unknown) => String(value || "").trim().toLowerCase();
