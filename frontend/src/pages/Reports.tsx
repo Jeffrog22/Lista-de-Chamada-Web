@@ -834,6 +834,68 @@ const weekKeyFromDateKey = (dateKey: string) => {
   return `semana:${getWeekOfMonth(d)}`;
 };
 
+const parseDateTokenInLabel = (token: string, fallbackYear: number) => {
+  const match = String(token || "").trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = match[3] ? Number(match[3]) : fallbackYear;
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+  const dateObj = new Date(year, month - 1, day);
+  if (Number.isNaN(dateObj.getTime())) return null;
+  return dateObj;
+};
+
+const resolvePlanningDateRange = (label: string, fallbackYear: number) => {
+  const clean = String(label || "").trim();
+  if (!clean) return null as { start: Date; end: Date } | null;
+
+  const explicitDateTokens = clean.match(/\b\d{1,2}\/\d{1,2}(?:\/20\d{2})?\b/g) || [];
+  if (explicitDateTokens.length >= 2) {
+    const start = parseDateTokenInLabel(explicitDateTokens[0], fallbackYear);
+    let end = parseDateTokenInLabel(explicitDateTokens[1], fallbackYear);
+    if (!start || !end) return null;
+    if (end.getTime() < start.getTime() && !/\/20\d{2}\b/.test(explicitDateTokens[1])) {
+      end = new Date(end.getFullYear() + 1, end.getMonth(), end.getDate());
+    }
+    return { start, end };
+  }
+
+  const dayToDateMatch = clean.match(/\b(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?\b/i);
+  if (dayToDateMatch) {
+    const startDay = Number(dayToDateMatch[1]);
+    const endDay = Number(dayToDateMatch[2]);
+    const endMonth = Number(dayToDateMatch[3]);
+    const endYear = dayToDateMatch[4] ? Number(dayToDateMatch[4]) : fallbackYear;
+    if (!Number.isFinite(startDay) || !Number.isFinite(endDay) || !Number.isFinite(endMonth) || !Number.isFinite(endYear)) {
+      return null;
+    }
+
+    const end = new Date(endYear, endMonth - 1, endDay);
+    if (Number.isNaN(end.getTime())) return null;
+
+    const inferredStartMonth = startDay > endDay ? endMonth - 1 : endMonth;
+    const normalizedStartMonth = inferredStartMonth >= 1 ? inferredStartMonth : 12;
+    const normalizedStartYear = inferredStartMonth >= 1 ? endYear : endYear - 1;
+    const start = new Date(normalizedStartYear, normalizedStartMonth - 1, startDay);
+    if (Number.isNaN(start.getTime())) return null;
+
+    return { start, end };
+  }
+
+  return null;
+};
+
+const planningRangeIncludesDate = (label: string, fallbackYear: number, selectedDateKey: string) => {
+  const selectedDate = new Date(`${selectedDateKey}T00:00:00`);
+  if (Number.isNaN(selectedDate.getTime())) return false;
+  const range = resolvePlanningDateRange(label, fallbackYear);
+  if (!range) return false;
+
+  const selectedTime = selectedDate.getTime();
+  return selectedTime >= range.start.getTime() && selectedTime <= range.end.getTime();
+};
+
 const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const weekdayMonToSun = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const monthOptions = [
@@ -1036,23 +1098,31 @@ export const Reports: React.FC = () => {
     const matched: Array<PlanningBlock & { _score: number }> = [];
     filesForTarget.forEach((file) => {
       file.blocks.forEach((block) => {
-        if (block.type !== "week") return;
-
         const hasText = String(block.text || "").trim().length > 0;
         if (!hasText) return;
 
-        const monthMatches = !block.month || block.month === selectedMonthNumber;
-        if (!monthMatches) return;
+        let score = 0;
 
-        const weekMatches = selectedWeek !== null && typeof block.week === "number" && block.week === selectedWeek;
-        const rangeMatches =
-          selectedDay !== null &&
-          typeof block.startDay === "number" &&
-          typeof block.endDay === "number" &&
-          selectedDay >= block.startDay &&
-          selectedDay <= block.endDay;
+        if (block.type === "week") {
+          const monthMatches = !block.month || block.month === selectedMonthNumber;
+          if (!monthMatches) return;
 
-        const score = rangeMatches ? 5 : weekMatches ? 4 : 0;
+          const weekMatches = selectedWeek !== null && typeof block.week === "number" && block.week === selectedWeek;
+          const rangeMatches =
+            selectedDay !== null &&
+            typeof block.startDay === "number" &&
+            typeof block.endDay === "number" &&
+            selectedDay >= block.startDay &&
+            selectedDay <= block.endDay;
+
+          score = rangeMatches ? 5 : weekMatches ? 4 : 0;
+        } else if (block.type === "date") {
+          const exactDateMatch = block.key === selectedPlanningDateKey;
+          const labelRangeMatch = planningRangeIncludesDate(block.label || "", Number(file.year || selectedYear), selectedPlanningDateKey);
+          score = exactDateMatch ? 6 : labelRangeMatch ? 5 : 0;
+        } else {
+          return;
+        }
 
         if (score > 0) {
           matched.push({ ...block, _score: score });
