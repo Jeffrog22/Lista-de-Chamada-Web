@@ -513,6 +513,45 @@ export const addExclusion = (data: any) =>
     })
     .catch(() => ({ data: { ok: true, fallback: true, items: upsertExcludedStudentLocal(data, true) } }));
 
+export const addExclusionsBulk = (items: any[], replace = false) => {
+  const payloadItems = (Array.isArray(items) ? items : []).map((item) => normalizeExcludedStudentRecord(item));
+  if (payloadItems.length === 0) {
+    return Promise.resolve({ data: { ok: true, added: 0, updated: 0, skipped: 0, total: readExcludedStudentsLocal().length } });
+  }
+
+  return API.post("/exclusions/bulk", { items: payloadItems, replace })
+    .then((response) => {
+      const current = replace ? [] : readExcludedStudentsLocal();
+      const next = [...current];
+      payloadItems.forEach((item) => {
+        const idx = next.findIndex((existing) => exclusionMatches(existing, item));
+        const normalized = normalizeExcludedStudentRecord({ ...item, _pendingSync: false });
+        if (idx >= 0) {
+          next[idx] = normalizeExcludedStudentRecord({ ...next[idx], ...normalized, _pendingSync: false });
+        } else {
+          next.push(normalized);
+        }
+      });
+      writeExcludedStudentsLocal(next);
+      return response;
+    })
+    .catch(() => {
+      const current = replace ? [] : readExcludedStudentsLocal();
+      const next = [...current];
+      payloadItems.forEach((item) => {
+        const idx = next.findIndex((existing) => exclusionMatches(existing, item));
+        const normalized = normalizeExcludedStudentRecord({ ...item, _pendingSync: true });
+        if (idx >= 0) {
+          next[idx] = normalizeExcludedStudentRecord({ ...next[idx], ...normalized, _pendingSync: true });
+        } else {
+          next.push(normalized);
+        }
+      });
+      writeExcludedStudentsLocal(next);
+      return { data: { ok: true, fallback: true, items: next, queued: payloadItems.length } };
+    });
+};
+
 export const restoreStudent = (data: any) =>
   API.post("/exclusions/restore", data)
     .then((response) => {

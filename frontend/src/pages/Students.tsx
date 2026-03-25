@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
+import { addExclusion, addExclusionsBulk, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 interface Student {
@@ -1133,21 +1133,24 @@ export const Students: React.FC = () => {
       return;
     }
 
-    await Promise.allSettled(
-      selectedStudents.map((student) => {
-        const exclusionPayload = {
-          ...student,
-          student_uid: student.studentUid || "",
-          grupo: student.grupo || student.turmaCodigo || "",
-          turma: student.turmaLabel || student.turma || student.turmaCodigo || "",
-          turmaLabel: student.turmaLabel || student.turma || student.turmaCodigo || "",
-          turmaCodigo: student.turmaCodigo || "",
-          dataExclusao: new Date().toLocaleDateString("pt-BR"),
-          motivo_exclusao: reason,
-        };
-        return addExclusion(exclusionPayload);
-      })
-    );
+    const payloads = selectedStudents.map((student) => ({
+      ...student,
+      student_uid: student.studentUid || "",
+      grupo: student.grupo || student.turmaCodigo || "",
+      turma: student.turmaLabel || student.turma || student.turmaCodigo || "",
+      turmaLabel: student.turmaLabel || student.turma || student.turmaCodigo || "",
+      turmaCodigo: student.turmaCodigo || "",
+      dataExclusao: new Date().toLocaleDateString("pt-BR"),
+      motivo_exclusao: reason,
+    }));
+
+    if (payloads.length > 1) {
+      await addExclusionsBulk(payloads, false).catch(() => undefined);
+    } else if (payloads.length === 1) {
+      await addExclusion(payloads[0]).catch(() => {
+        alert("Falha ao enviar exclusão ao backend. Tente novamente.");
+      });
+    }
 
     await getExcludedStudents()
       .then((response) => {
