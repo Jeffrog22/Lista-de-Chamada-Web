@@ -3236,6 +3236,9 @@ export const Attendance: React.FC = () => {
       const storedHasAnyMark = (storedRecords || []).some((item) =>
         Object.values(item?.attendance || {}).some((value) => Boolean(value))
       );
+      const storedHasAnyJustification = (storedRecords || []).some((item) =>
+        Object.values(item?.justifications || {}).some((value) => Boolean(String(value || "").trim()))
+      );
       const storedByName = new Map(
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
       );
@@ -3385,7 +3388,17 @@ export const Attendance: React.FC = () => {
         const backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
           Object.values(entry.attendance || {}).some((value) => Boolean(value))
         );
+        const backendHasAnyJustification = Array.from(backendCandidateByName.values()).some((entry) =>
+          Object.values(entry.justifications || {}).some((value) => Boolean(String(value || "").trim()))
+        );
+        const visibleClassStudentsCount = classStudents.filter((aluno) => !isExcludedByIdentity(aluno || "")).length;
+        const minExpectedSnapshotCount = Math.max(1, Math.floor(visibleClassStudentsCount * 0.6));
+        const snapshotCoverageLooksReliable = matchedCount >= minExpectedSnapshotCount;
+
         const canTrustBackendSnapshot = backendHasAnyMark || !storedHasAnyMark;
+        const canTrustBackendJustificationsSnapshot = Boolean(matchedClass?.hasLog)
+          && snapshotCoverageLooksReliable
+          && (backendHasAnyMark || backendHasAnyJustification || (!storedHasAnyMark && !storedHasAnyJustification));
 
         if (canTrustBackendSnapshot) {
           backendCandidateByName.forEach((value, key) => backendByName.set(key, value));
@@ -3502,7 +3515,7 @@ export const Attendance: React.FC = () => {
                 ...(backend?.justifications || {}),
               };
 
-              if (canTrustBackendSnapshot) {
+              if (canTrustBackendJustificationsSnapshot) {
                 return merged;
               }
 
