@@ -91,76 +91,118 @@ def test_pool_log_defaults_temp_piscina(client: TestClient, tmp_path: Path):
     assert fetched["tempPiscina"] == "28"
 
 
-def test_pool_log_daywide_baseline_with_professor_override_priority(client: TestClient):
-    morning = _build_payload(
+def test_pool_log_returns_latest_for_same_scope_even_with_different_professor(client: TestClient):
+    first_save = _build_payload(
         {
             "data": "2026-03-10",
-            "turmaCodigo": "A1",
-            "turmaLabel": "Grupo A",
-            "horario": "06:00",
+            "turmaCodigo": "DQS-01",
+            "turmaLabel": "Quarta e Sexta",
+            "horario": "15:15",
             "professor": "Daniela",
             "clima1": "Nublado",
             "clima2": "Frio",
             "tempExterna": "20",
         }
     )
-    afternoon = _build_payload(
+    second_save = _build_payload(
         {
             "data": "2026-03-10",
-            "turmaCodigo": "B2",
-            "turmaLabel": "Grupo B",
-            "horario": "13:00",
+            "turmaCodigo": "DQS-01",
+            "turmaLabel": "Quarta e Sexta",
+            "horario": "15:15",
             "professor": "Jefferson",
-            "clima1": "Chuva",
-            "clima2": "Abafado",
-            "tempExterna": "26",
+            "clima1": "Pancadas de Chuva",
+            "clima2": "Agradavel",
+            "tempExterna": "30",
         }
     )
 
-    assert client.post("/pool-log", json=morning).status_code == 200
-    assert client.post("/pool-log", json=afternoon).status_code == 200
+    assert client.post("/pool-log", json=first_save).status_code == 200
+    assert client.post("/pool-log", json=second_save).status_code == 200
 
-    resp_default_10h = client.get(
+    # Mesmo pedindo professores diferentes, deve voltar a última sobreposição
+    # do escopo da aula (data/turma/horário).
+    resp_daniela = client.get(
         "/pool-log",
         params={
             "date": "2026-03-10",
-            "turmaCodigo": "QUALQUER",
-            "turmaLabel": "Outro Grupo",
-            "horario": "10:00",
-            "professor": "Outro Prof",
+            "turmaCodigo": "DQS-01",
+            "turmaLabel": "Quarta e Sexta",
+            "horario": "15:15",
+            "professor": "Daniela",
         },
     )
-    assert resp_default_10h.status_code == 200
-    assert resp_default_10h.json()["clima1"] == "Nublado"
-    assert resp_default_10h.json()["professor"] == "Daniela"
+    assert resp_daniela.status_code == 200
+    assert resp_daniela.json()["clima1"] == "Pancadas de Chuva"
+    assert resp_daniela.json()["professor"] == "Jefferson"
 
-    resp_default_16h = client.get(
+    resp_jefferson = client.get(
         "/pool-log",
         params={
             "date": "2026-03-10",
-            "turmaCodigo": "QUALQUER",
-            "turmaLabel": "Outro Grupo",
-            "horario": "16:00",
-            "professor": "Outro Prof",
-        },
-    )
-    assert resp_default_16h.status_code == 200
-    assert resp_default_16h.json()["clima1"] == "Nublado"
-    assert resp_default_16h.json()["horario"] == "06:00"
-
-    resp_prof_override = client.get(
-        "/pool-log",
-        params={
-            "date": "2026-03-10",
-            "turmaCodigo": "QUALQUER",
-            "turmaLabel": "Outro Grupo",
-            "horario": "16:00",
+            "turmaCodigo": "DQS-01",
+            "turmaLabel": "Quarta e Sexta",
+            "horario": "15:15",
             "professor": "Jefferson",
         },
     )
-    assert resp_prof_override.status_code == 200
-    assert resp_prof_override.json()["clima1"] == "Chuva"
-    assert resp_prof_override.json()["horario"] == "13:00"
+    assert resp_jefferson.status_code == 200
+    assert resp_jefferson.json()["clima1"] == "Pancadas de Chuva"
+    assert resp_jefferson.json()["professor"] == "Jefferson"
+
+
+def test_pool_log_keeps_turma_scope_isolated(client: TestClient):
+    turma_a = _build_payload(
+        {
+            "data": "2026-03-12",
+            "turmaCodigo": "A1",
+            "turmaLabel": "Grupo A",
+            "horario": "13:00",
+            "professor": "Prof A",
+            "clima1": "Sol",
+        }
+    )
+    turma_b = _build_payload(
+        {
+            "data": "2026-03-12",
+            "turmaCodigo": "B2",
+            "turmaLabel": "Grupo B",
+            "horario": "13:00",
+            "professor": "Prof B",
+            "clima1": "Chuva",
+        }
+    )
+
+    assert client.post("/pool-log", json=turma_a).status_code == 200
+    assert client.post("/pool-log", json=turma_b).status_code == 200
+
+    resp_a = client.get(
+        "/pool-log",
+        params={
+            "date": "2026-03-12",
+            "turmaCodigo": "A1",
+            "turmaLabel": "Grupo A",
+            "horario": "13:00",
+            "professor": "Outro Prof",
+        },
+    )
+    assert resp_a.status_code == 200
+    assert resp_a.json()["clima1"] == "Sol"
+    assert resp_a.json()["turmaCodigo"] == "A1"
+
+    resp_b = client.get(
+        "/pool-log",
+        params={
+            "date": "2026-03-12",
+            "turmaCodigo": "B2",
+            "turmaLabel": "Grupo B",
+            "horario": "13:00",
+            "professor": "Outro Prof",
+        },
+    )
+    assert resp_b.status_code == 200
+    assert resp_b.json()["clima1"] == "Chuva"
+    assert resp_b.json()["turmaCodigo"] == "B2"
 
 
 def test_pool_log_noop_when_same_day_state_repeats(client: TestClient, tmp_path: Path):

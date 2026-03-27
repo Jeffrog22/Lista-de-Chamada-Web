@@ -793,6 +793,8 @@ def _select_latest_pool_log_for_day(
     date_value: str,
     requested_horario: str,
     requested_professor: str = "",
+    requested_turma_codigo: str = "",
+    requested_turma_label: str = "",
 ) -> Optional[Dict[str, Any]]:
     if df.empty or "Data" not in df.columns:
         return None
@@ -805,21 +807,37 @@ def _select_latest_pool_log_for_day(
     if day_rows.empty:
         return None
 
-    baseline_row = _select_latest_pool_log_from_rows(day_rows, requested_horario)
+    turma_codigo_key = _normalize_text_fold(_normalize_excel_string(requested_turma_codigo))
+    turma_label_key = _normalize_text_fold(_normalize_excel_string(requested_turma_label))
+
+    scoped_rows = day_rows
+    if turma_codigo_key or turma_label_key:
+        turma_codigo_col = day_rows["TurmaCodigo"].astype(str).map(
+            lambda value: _normalize_text_fold(_normalize_excel_string(value))
+        )
+        turma_label_col = day_rows["TurmaLabel"].astype(str).map(
+            lambda value: _normalize_text_fold(_normalize_excel_string(value))
+        )
+
+        scope_mask = pd.Series([True] * len(day_rows), index=day_rows.index)
+        if turma_codigo_key:
+            scope_mask = scope_mask & ((turma_codigo_col == turma_codigo_key) | (turma_codigo_col == ""))
+        if turma_label_key:
+            scope_mask = scope_mask & ((turma_label_col == turma_label_key) | (turma_label_col == ""))
+
+        scoped_rows = day_rows[scope_mask]
+
+    # Compatibilidade retroativa: se não houver escopo claro no histórico,
+    # volta para a regra diária para não quebrar leituras antigas.
+    if scoped_rows.empty:
+        scoped_rows = day_rows
+
+    baseline_row = _select_latest_pool_log_from_rows(scoped_rows, requested_horario)
     if baseline_row is None:
         return None
 
-    professor_key = _normalize_text_fold(_normalize_excel_string(requested_professor))
-    if professor_key:
-        professor_rows = day_rows[
-            day_rows["Professor"].astype(str).map(lambda value: _normalize_text_fold(_normalize_excel_string(value))) == professor_key
-        ]
-        selected_professor_row = _select_latest_pool_log_from_rows(professor_rows, requested_horario)
-        if selected_professor_row is not None:
-            return selected_professor_row
-
-    # Regra diária: replica o primeiro registro do dia para todas as aulas/professores,
-    # exceto quando houver override específico do professor.
+    # Regra de sincronização: sempre retorna o log mais recente por escopo
+    # (dia/turma/horário), sem segmentar por professor/dispositivo.
     return baseline_row
 
 class ImportResult(BaseModel):
@@ -1073,7 +1091,14 @@ def append_pool_log(entry: PoolLogEntryModel):
         except PermissionError:
             raise HTTPException(status_code=423, detail="logPiscina.xlsx em uso. Feche o arquivo para salvar.")
 
-        latest_for_day = _select_latest_pool_log_for_day(df, entry.data, entry.horario, entry.professor)
+        latest_for_day = _select_latest_pool_log_for_day(
+            df,
+            entry.data,
+            entry.horario,
+            entry.professor,
+            entry.turmaCodigo,
+            entry.turmaLabel,
+        )
         if latest_for_day and _pool_log_meaningful_signature(latest_for_day) == _pool_log_meaningful_signature(row):
             return {"ok": True, "action": "noop", "file": file_path}
 
@@ -1150,7 +1175,14 @@ def get_pool_log(
         if "Data" not in df.columns:
             return Response(status_code=204)
 
-        selected_row = _select_latest_pool_log_for_day(df, date, horario or "", professor or "")
+        selected_row = _select_latest_pool_log_for_day(
+            df,
+            date,
+            horario or "",
+            professor or "",
+            turmaCodigo or "",
+            turmaLabel or "",
+        )
         if selected_row is None:
             return Response(status_code=204)
 
