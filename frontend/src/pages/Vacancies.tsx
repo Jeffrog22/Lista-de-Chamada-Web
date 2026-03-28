@@ -477,19 +477,13 @@ export const Vacancies: React.FC = () => {
       });
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
-  const vagasDisponiveisBrutas = useMemo(() => {
+  const vagasDisponiveis = useMemo(() => {
     return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.capacidade - item.total), 0);
   }, [vagasDetalhadasPorNivel]);
 
   const vagasExcedentes = useMemo(() => {
     return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.total - item.capacidade), 0);
   }, [vagasDetalhadasPorNivel]);
-
-  const vagasDisponiveis = useMemo(() => {
-    // Havendo excedente em qualquer nível, a visão executiva prioriza bloqueio de realocação.
-    if (vagasExcedentes > 0) return 0;
-    return vagasDisponiveisBrutas;
-  }, [vagasDisponiveisBrutas, vagasExcedentes]);
 
   const toggleNivelDetalhe = (nivelKey: string) => {
     setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
@@ -533,6 +527,11 @@ export const Vacancies: React.FC = () => {
       return turmaSubdiv === selectedNivelDetailFilter.subdivKey;
     });
   }, [selectedNivelDetailFilter, turmasFiltradas, turmaMeta]);
+
+  const getBalanceLabel = (total: number, capacidade: number) => {
+    if (total > capacidade) return `${total - capacidade} excedente${total - capacidade > 1 ? "s" : ""}`;
+    return `${capacidade - total} vaga${capacidade - total > 1 ? "s" : ""}`;
+  };
 
   return (
     <div className="vagas-root">
@@ -611,13 +610,7 @@ export const Vacancies: React.FC = () => {
         >
           <span className="label">Vagas Disponíveis</span>
           <strong>{vagasDisponiveis}</strong>
-          <small>
-            {vagasExcedentes > 0
-              ? "Existem excedentes: prioridade de ajuste por nível"
-              : vagasDisponiveis <= 0
-                ? "Turmas lotadas"
-                : "Clique para ver por nível"}
-          </small>
+          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por nível"}</small>
         </button>
         <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
           <span className="label">Vagas Excedentes</span>
@@ -666,8 +659,14 @@ export const Vacancies: React.FC = () => {
                   {expandedNiveis[item.nivelKey] && (
                     <div className="vagas-detail-subrows">
                       <div className="vagas-detail-periodos">
-                        <span>Manhã: <strong>{item.periodos["Manhã"].total}/{item.periodos["Manhã"].capacidade}</strong></span>
-                        <span>Tarde: <strong>{item.periodos["Tarde"].total}/{item.periodos["Tarde"].capacidade}</strong></span>
+                        <span>
+                          Manhã: <strong>{item.periodos["Manhã"].total}/{item.periodos["Manhã"].capacidade}</strong>
+                          {` (${getBalanceLabel(item.periodos["Manhã"].total, item.periodos["Manhã"].capacidade)})`}
+                        </span>
+                        <span>
+                          Tarde: <strong>{item.periodos["Tarde"].total}/{item.periodos["Tarde"].capacidade}</strong>
+                          {` (${getBalanceLabel(item.periodos["Tarde"].total, item.periodos["Tarde"].capacidade)})`}
+                        </span>
                       </div>
 
                       {item.subdivisoes.map((sub) => {
