@@ -1272,6 +1272,25 @@ export const Reports: React.FC = () => {
     return Number.MAX_SAFE_INTEGER;
   };
 
+  const getDayPriority = (diasSemana?: string): number => {
+    if (!diasSemana) return 100;
+    const raw = String(diasSemana || "").toLowerCase().trim();
+    
+    // Terça (3) and Quinta (5) = priority 0-1
+    // Quarta (4) and Sexta (6) = priority 2-3
+    // Others = priority 4+
+    
+    if (raw.includes("terça") || raw.includes("3ª") || raw.includes("3a")) return 0;
+    if (raw.includes("quinta") || raw.includes("5ª") || raw.includes("5a")) return 1;
+    if (raw.includes("quarta") || raw.includes("4ª") || raw.includes("4a")) return 2;
+    if (raw.includes("sexta") || raw.includes("6ª") || raw.includes("6a")) return 3;
+    if (raw.includes("segunda") || raw.includes("2ª") || raw.includes("2a")) return 4;
+    if (raw.includes("segunda-feira")) return 4;
+    if (raw.includes("saturday") || raw.includes("sábado")) return 5;
+    if (raw.includes("sunday") || raw.includes("domingo")) return 6;
+    return 100;
+  };
+
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
@@ -2152,6 +2171,7 @@ export const Reports: React.FC = () => {
           nivel: cls.nivel || "-",
           horario: cls.horario || "",
           professor: cls.professor || "-",
+          diasSemana: cls.diasSemana || "",
           lotacao,
           capacidade,
           vagasDisponiveis,
@@ -2160,9 +2180,20 @@ export const Reports: React.FC = () => {
         };
       })
       .sort(
-        (a, b) =>
-          getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario) ||
-          a.turma.localeCompare(b.turma)
+        (a, b) => {
+          // Priority 1: Day of week (Tuesday/Thursday first, then Wednesday/Friday)
+          const dayPriorityA = getDayPriority(a.diasSemana);
+          const dayPriorityB = getDayPriority(b.diasSemana);
+          const byDayPriority = dayPriorityA - dayPriorityB;
+          if (byDayPriority !== 0) return byDayPriority;
+          
+          // Priority 2: Time of day
+          const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
+          if (byHorario !== 0) return byHorario;
+          
+          // Priority 3: Turma name
+          return a.turma.localeCompare(b.turma);
+        }
       );
   }, [bootstrapClasses, excludedSnapshot, studentsSnapshot]);
 
