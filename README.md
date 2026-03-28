@@ -38,6 +38,23 @@ Para executar a validação principal (backend + E2E smoke + E2E relatórios) de
 
 O script para na primeira falha e exibe a etapa que quebrou.
 
+## Rollback rápido para base estável
+
+Se uma nova solicitação falhar em produção e for necessário retornar para a base estável `v.003.00-00`, use:
+
+1. `powershell -ExecutionPolicy Bypass -File .\scripts\rollback_v003_00_00.ps1`
+2. (Windows / clique duplo) `.\scripts\rollback_v003_00_00.bat`
+
+O script executa:
+
+1. `git fetch --tags origin`
+2. validação de existência da tag `v.003.00-00`
+3. checkout de `master`
+4. `git reset --hard v.003.00-00`
+5. `git push --force-with-lease origin master`
+
+Use apenas quando quiser realmente voltar o `master` para essa base.
+
 ## CI (GitHub Actions)
 
 O pipeline de QA está em [.github/workflows/qa.yml](.github/workflows/qa.yml) e roda automaticamente em push/PR para `master`/`main`.
