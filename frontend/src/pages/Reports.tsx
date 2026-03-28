@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import * as XLSX from "xlsx";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
@@ -916,7 +917,7 @@ const monthOptions = [
 ];
 
 export const Reports: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "estatisticas">("resumo");
+  const [activeTab, setActiveTab] = useState<"resumo" | "frequencias" | "graficos" | "estatisticas" | "vagas">("resumo");
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentLocalDateKey().slice(0, 7));
   const [selectedTurmaLabel, setSelectedTurmaLabel] = useState<string>("");
   const [selectedHorario, setSelectedHorario] = useState<string>("");
@@ -930,6 +931,9 @@ export const Reports: React.FC = () => {
   const [loadingWeatherMonth, setLoadingWeatherMonth] = useState(false);
   const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherSnapshot>>({});
   const [periodsCollapsed, setPeriodsCollapsed] = useState(false);
+  const [vacancySearch, setVacancySearch] = useState("");
+  const [vacancyNivelFilter, setVacancyNivelFilter] = useState("");
+  const [vacancyProfessorFilter, setVacancyProfessorFilter] = useState("");
 
   // Statistics state
   const [statistics, setStatistics] = useState<StudentStatistics[]>([]);
@@ -2035,9 +2039,185 @@ export const Reports: React.FC = () => {
   })();
   const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
 
-  // 'classesByTurma' e 'turmas' removidos — não são mais necessários dentro da aba Relatórios (Gestão de Vagas foi retirada).
+  const vacancyRows = useMemo(() => {
+    const classCountByKey = new Map<string, number>();
 
-  // 'Gestão de Vagas' removida da seção de Relatórios — manter dados no módulo principal de Vagas.
+    studentsSnapshot.forEach((student) => {
+      const key = `${normalizeText(student.turma || "")}||${normalizeHorarioSelectionKey(student.horario || "")}||${normalizeText(student.professor || "")}`;
+      classCountByKey.set(key, (classCountByKey.get(key) || 0) + 1);
+    });
+
+    return [...bootstrapClasses]
+      .map((cls) => {
+        const key = bootstrapClassSelectionKey(cls);
+        const lotacao = Number(classCountByKey.get(key) || 0);
+        const capacidade = Math.max(0, Number(cls.capacidade || 0));
+        const vagasDisponiveis = Math.max(0, capacidade - lotacao);
+        const excesso = Math.max(0, lotacao - capacidade);
+        const ocupacaoPct = capacidade > 0 ? Math.round((lotacao / capacidade) * 100) : 0;
+
+        return {
+          key,
+          turma: cls.turmaLabel || "-",
+          nivel: cls.nivel || "-",
+          horario: cls.horario || "",
+          professor: cls.professor || "-",
+          lotacao,
+          capacidade,
+          vagasDisponiveis,
+          excesso,
+          ocupacaoPct,
+        };
+      })
+      .sort(
+        (a, b) =>
+          getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario) ||
+          a.turma.localeCompare(b.turma)
+      );
+  }, [bootstrapClasses, studentsSnapshot]);
+
+  const vacancyNivelOptions = useMemo(
+    () => Array.from(new Set(vacancyRows.map((row) => row.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [vacancyRows]
+  );
+
+  const vacancyProfessorOptions = useMemo(
+    () => Array.from(new Set(vacancyRows.map((row) => row.professor).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [vacancyRows]
+  );
+
+  const filteredVacancyRows = useMemo(() => {
+    const searchKey = normalizeText(vacancySearch || "");
+
+    return vacancyRows.filter((row) => {
+      if (vacancyNivelFilter && row.nivel !== vacancyNivelFilter) return false;
+      if (vacancyProfessorFilter && row.professor !== vacancyProfessorFilter) return false;
+      if (!searchKey) return true;
+
+      const rowSearch = [
+        row.turma,
+        row.nivel,
+        row.professor,
+        formatHorario(row.horario),
+        `${row.lotacao}/${row.capacidade}`,
+      ]
+        .map((value) => normalizeText(String(value || "")))
+        .join(" ");
+
+      return rowSearch.includes(searchKey);
+    });
+  }, [vacancyNivelFilter, vacancyProfessorFilter, vacancyRows, vacancySearch]);
+
+  const vacancySummary = useMemo(() => {
+    const totalCapacidade = filteredVacancyRows.reduce((acc, row) => acc + row.capacidade, 0);
+    const totalLotacao = filteredVacancyRows.reduce((acc, row) => acc + row.lotacao, 0);
+    const totalVagas = filteredVacancyRows.reduce((acc, row) => acc + row.vagasDisponiveis, 0);
+    const totalExcesso = filteredVacancyRows.reduce((acc, row) => acc + row.excesso, 0);
+    return { totalCapacidade, totalLotacao, totalVagas, totalExcesso };
+  }, [filteredVacancyRows]);
+
+  const escapeHtml = (value: string) =>
+    String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const handleExportVacanciesXlsx = () => {
+    if (filteredVacancyRows.length === 0) {
+      alert("Não há dados de vagas para exportar.");
+      return;
+    }
+
+    const rows = filteredVacancyRows.map((row) => ({
+      Turma: row.turma,
+      "Nível": row.nivel,
+      "Lotação/Capacidade": `${row.lotacao}/${row.capacidade}`,
+      "Vagas Disponíveis": row.vagasDisponiveis,
+      Excesso: row.excesso,
+      Horário: formatHorario(row.horario),
+      Professor: row.professor,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Vagas");
+    XLSX.writeFile(workbook, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
+  };
+
+  const handlePrintVacanciesPdf = () => {
+    if (filteredVacancyRows.length === 0) {
+      alert("Não há dados de vagas para imprimir.");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1080,height=760");
+    if (!printWindow) {
+      alert("Não foi possível abrir a janela de impressão. Verifique se há bloqueio de pop-up.");
+      return;
+    }
+
+    const rowsMarkup = filteredVacancyRows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.turma)}</td>
+            <td>${escapeHtml(row.nivel)}</td>
+            <td>${escapeHtml(`${row.lotacao}/${row.capacidade}`)}</td>
+            <td>${escapeHtml(String(row.vagasDisponiveis))}</td>
+            <td>${escapeHtml(String(row.excesso))}</td>
+            <td>${escapeHtml(formatHorario(row.horario))}</td>
+            <td>${escapeHtml(row.professor)}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Relatório de Vagas</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+            h1 { margin: 0 0 6px; font-size: 20px; }
+            p { margin: 0 0 14px; font-size: 12px; color: #444; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
+            th { background: #f3f4f6; }
+            .summary { margin: 10px 0 16px; display: flex; gap: 16px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <h1>Relatório de Vagas</h1>
+          <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
+          <div class="summary">
+            <span>Lotação total: <strong>${escapeHtml(String(vacancySummary.totalLotacao))}</strong></span>
+            <span>Capacidade total: <strong>${escapeHtml(String(vacancySummary.totalCapacidade))}</strong></span>
+            <span>Vagas disponíveis: <strong>${escapeHtml(String(vacancySummary.totalVagas))}</strong></span>
+            <span>Excesso: <strong>${escapeHtml(String(vacancySummary.totalExcesso))}</strong></span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Turma</th>
+                <th>Nível</th>
+                <th>Lotação/Capacidade</th>
+                <th>Vagas</th>
+                <th>Excesso</th>
+                <th>Horário</th>
+                <th>Professor</th>
+              </tr>
+            </thead>
+            <tbody>${rowsMarkup}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
 
   const handleGenerateExcel = async () => {
     const selectedClasses = exportClassGrid
@@ -2136,6 +2316,9 @@ export const Reports: React.FC = () => {
         </button>
         <button className={`reports-tab ${activeTab === "frequencias" ? "active" : ""}`} onClick={() => setActiveTab("frequencias")}>
           📅 Frequência e Planejamento
+        </button>
+        <button className={`reports-tab ${activeTab === "vagas" ? "active" : ""}`} onClick={() => setActiveTab("vagas")}>
+          🧩 Vagas
         </button>
       </div>
 
@@ -2953,6 +3136,106 @@ export const Reports: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "vagas" && (
+        <div className="reports-section">
+          <div className="reports-vacancy-header">
+            <h3 style={{ margin: 0 }}>Gestão de Vagas</h3>
+            <p style={{ margin: 0, color: "#4b5563", fontSize: 13 }}>
+              Visão consolidada por turma com lotação, capacidade e disponibilidade.
+            </p>
+          </div>
+
+          <div className="reports-vacancy-filters">
+            <div className="reports-filter-field">
+              <label>Busca</label>
+              <input
+                type="text"
+                placeholder="Turma, nível, professor ou horário"
+                value={vacancySearch}
+                onChange={(e) => setVacancySearch(e.target.value)}
+              />
+            </div>
+            <div className="reports-filter-field">
+              <label>Nível</label>
+              <select value={vacancyNivelFilter} onChange={(e) => setVacancyNivelFilter(e.target.value)}>
+                <option value="">Todos</option>
+                {vacancyNivelOptions.map((nivel) => (
+                  <option key={nivel} value={nivel}>
+                    {nivel}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="reports-filter-field">
+              <label>Professor</label>
+              <select value={vacancyProfessorFilter} onChange={(e) => setVacancyProfessorFilter(e.target.value)}>
+                <option value="">Todos</option>
+                {vacancyProfessorOptions.map((professor) => (
+                  <option key={professor} value={professor}>
+                    {professor}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="reports-vacancy-filter-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setVacancySearch("");
+                  setVacancyNivelFilter("");
+                  setVacancyProfessorFilter("");
+                }}
+              >
+                Limpar
+              </button>
+              <button className="btn-secondary" onClick={() => refreshVacanciesSnapshot()}>
+                Atualizar
+              </button>
+            </div>
+          </div>
+
+          <div className="reports-vacancy-summary-list">
+            <span><strong>{filteredVacancyRows.length}</strong> turmas</span>
+            <span>Lotação: <strong>{vacancySummary.totalLotacao}</strong></span>
+            <span>Capacidade: <strong>{vacancySummary.totalCapacidade}</strong></span>
+            <span>Vagas: <strong>{vacancySummary.totalVagas}</strong></span>
+            <span>Excesso: <strong>{vacancySummary.totalExcesso}</strong></span>
+          </div>
+
+          <div className="reports-export-actions">
+            <button className="btn-primary" onClick={handleExportVacanciesXlsx} disabled={filteredVacancyRows.length === 0}>
+              Imprimir vagas (.xlsx)
+            </button>
+            <button className="btn-secondary" onClick={handlePrintVacanciesPdf} disabled={filteredVacancyRows.length === 0}>
+              Imprimir vagas (.pdf)
+            </button>
+          </div>
+
+          <div className="reports-vacancy-grid">
+            {filteredVacancyRows.map((row) => (
+              <article key={row.key} className="reports-vacancy-card">
+                <div className="reports-vacancy-line">
+                  <strong>{row.turma}</strong>
+                  <span>| {row.nivel} - {row.lotacao}/{row.capacidade}</span>
+                </div>
+                <div className="reports-vacancy-line">
+                  <strong>{formatHorario(row.horario)}</strong>
+                  <span>| {row.professor}</span>
+                </div>
+                <div className="reports-vacancy-list">
+                  <span>Vagas: {row.vagasDisponiveis}</span>
+                  <span>Excesso: {row.excesso}</span>
+                  <span>Ocupação: {row.ocupacaoPct}%</span>
+                </div>
+              </article>
+            ))}
+            {filteredVacancyRows.length === 0 && (
+              <div className="reports-class-grid-empty">Nenhuma turma encontrada para os filtros de vagas.</div>
+            )}
           </div>
         </div>
       )}

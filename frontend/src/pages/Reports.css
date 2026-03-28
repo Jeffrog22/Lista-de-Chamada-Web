@@ -403,6 +403,79 @@
   margin-top: 14px;
 }
 
+.reports-vacancy-header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.reports-vacancy-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) repeat(2, minmax(170px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.reports-vacancy-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.reports-vacancy-summary-list {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #374151;
+}
+
+.reports-vacancy-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+}
+
+.reports-vacancy-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.reports-vacancy-line {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  color: #111827;
+  font-size: 13px;
+}
+
+.reports-vacancy-line strong {
+  font-size: 14px;
+}
+
+.reports-vacancy-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.reports-vacancy-list span {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
 .reports-frequency-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
@@ -989,5 +1062,13 @@
 
   .reports-calendar-content {
     grid-template-columns: 1fr;
+  }
+
+  .reports-vacancy-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .reports-vacancy-filter-actions {
+    justify-content: flex-start;
   }
 }
