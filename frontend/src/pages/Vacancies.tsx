@@ -392,40 +392,13 @@ export const Vacancies: React.FC = () => {
     [turmasFiltradas, studentsCountByClassKey]
   );
 
-  const nivelOccupancy = useMemo(() => {
-    const grouped = new Map<string, { nivel: string; nivelKey: string; total: number; capacidade: number }>();
-
-    turmasFiltradas.forEach((turma) => {
-      const meta = turmaMeta[turma];
-      const details = getNivelDetails(meta?.nivel || "");
-      const nivel = details.simpleLabel;
-      const nivelKey = details.simpleKey;
-      const current = grouped.get(nivelKey) || { nivel, nivelKey, total: 0, capacidade: 0 };
-      current.total += studentsCountByClassKey[turma] || 0;
-      current.capacidade += Math.max(0, Number(meta?.capacidade || 0));
-      grouped.set(nivelKey, current);
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => {
-      const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
-      if (byRank !== 0) return byRank;
-      return a.nivel.localeCompare(b.nivel);
-    });
-  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
-
   const vagasDisponiveis = useMemo(() => {
-    return nivelOccupancy.reduce((acc, item) => {
-      if (item.total >= item.capacidade) return acc;
-      return acc + (item.capacidade - item.total);
-    }, 0);
-  }, [nivelOccupancy]);
+    return Math.max(0, capacidadeTotal - alunosAtivos);
+  }, [capacidadeTotal, alunosAtivos]);
 
   const vagasExcedentes = useMemo(() => {
-    return nivelOccupancy.reduce((acc, item) => {
-      if (item.total <= item.capacidade) return acc;
-      return acc + (item.total - item.capacidade);
-    }, 0);
-  }, [nivelOccupancy]);
+    return Math.max(0, alunosAtivos - capacidadeTotal);
+  }, [alunosAtivos, capacidadeTotal]);
 
   const vagasDetalhadasPorNivel = useMemo(() => {
     type NivelDetail = {
@@ -505,11 +478,10 @@ export const Vacancies: React.FC = () => {
           return a.key.localeCompare(b.key);
         }),
       }))
-      .filter((item) => item.vagas > 0)
       .sort((a, b) => {
         const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
         if (byRank !== 0) return byRank;
-        return b.vagas - a.vagas;
+        return a.nivel.localeCompare(b.nivel);
       });
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
@@ -527,6 +499,18 @@ export const Vacancies: React.FC = () => {
       return { nivelKey, subdivKey };
     });
   };
+
+  useEffect(() => {
+    setSelectedNivelDetailFilter(null);
+    setExpandedNiveis({});
+  }, [nivelFiltro, turmaLabelFiltro, periodoFiltro]);
+
+  useEffect(() => {
+    if (!showVagasDisponiveisDetalhe) {
+      setSelectedNivelDetailFilter(null);
+      setExpandedNiveis({});
+    }
+  }, [showVagasDisponiveisDetalhe]);
 
   const turmasFiltradasDetalhe = useMemo(() => {
     if (!selectedNivelDetailFilter) return turmasFiltradas;
@@ -643,7 +627,7 @@ export const Vacancies: React.FC = () => {
             </div>
           )}
           {vagasDetalhadasPorNivel.length === 0 ? (
-            <div className="empty-state">Nenhum nível com vaga para os filtros selecionados.</div>
+            <div className="empty-state">Nenhum nível encontrado para os filtros selecionados.</div>
           ) : (
             <div className="vagas-detail-list">
               {vagasDetalhadasPorNivel.map((item) => (
@@ -658,7 +642,11 @@ export const Vacancies: React.FC = () => {
                       <span>Turmas (nível simples): {item.turmas.join(" | ")}</span>
                     </div>
                     <div className="vagas-detail-meta">
-                      <span>{item.vagas} vagas</span>
+                      <span>
+                        {item.total > item.capacidade
+                          ? `${item.total - item.capacidade} excedente${item.total - item.capacidade > 1 ? "s" : ""}`
+                          : `${item.vagas} vagas`}
+                      </span>
                       <span>{item.total}/{item.capacidade}</span>
                     </div>
                   </button>
