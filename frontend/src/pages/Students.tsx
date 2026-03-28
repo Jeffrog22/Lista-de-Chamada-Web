@@ -1739,7 +1739,12 @@ export const Students: React.FC = () => {
                 onClick={() => handleSort("nome")}
                 style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
               >
-                Nome{getSortIndicator("nome")}
+                <div style={{ display: "grid", gap: "2px" }}>
+                  <span>Nome{getSortIndicator("nome")}</span>
+                  <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}>
+                    Total: {displayedStudents.length}
+                  </span>
+                </div>
               </th>
               <th
                 onClick={() => handleSort("nivel")}
