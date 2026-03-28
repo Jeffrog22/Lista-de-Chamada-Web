@@ -6,6 +6,7 @@ type Periodo = "Todos" | "Manhã" | "Tarde";
 
 interface ActiveStudentLite {
   id?: string;
+  studentUid?: string;
   nome?: string;
   nivel?: string;
   turma?: string;
@@ -36,6 +37,9 @@ interface BootstrapClassLite {
 }
 
 interface ExclusionLite {
+  id?: string;
+  student_uid?: string;
+  studentUid?: string;
   nome?: string;
   Nome?: string;
   turma?: string;
@@ -208,6 +212,7 @@ export const Vacancies: React.FC = () => {
           }>;
           students: Array<{
             id: number;
+            student_uid?: string;
             class_id: number;
             nome: string;
             categoria: string;
@@ -227,6 +232,7 @@ export const Vacancies: React.FC = () => {
           const cls = classById.get(student.class_id);
           return {
             id: String(student.id),
+            studentUid: String(student.student_uid || ""),
             nome: student.nome,
             nivel: cls?.nivel || student.nivel || "",
             turma: cls?.turma_label || cls?.codigo || "",
@@ -349,6 +355,18 @@ export const Vacancies: React.FC = () => {
 
   const studentsCountByClassKey = useMemo(() => {
     const isExcludedStudent = (student: ActiveStudentLite, exclusion: ExclusionLite) => {
+      const studentUid = String(student?.studentUid || "").trim();
+      const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
+      if (studentUid && exclusionUid) {
+        return studentUid === exclusionUid;
+      }
+
+      const studentId = String(student?.id || "").trim();
+      const exclusionId = String(exclusion?.id || "").trim();
+      if (studentId && exclusionId && studentId === exclusionId) {
+        return true;
+      }
+
       const studentName = normalizeText(student?.nome || "");
       const exclusionName = normalizeText(exclusion?.nome || exclusion?.Nome || "");
       if (!studentName || !exclusionName || studentName !== exclusionName) return false;

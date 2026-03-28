@@ -75,6 +75,7 @@ interface ClassStats {
 
 interface ActiveStudentLite {
   id?: string;
+  studentUid?: string;
   nome?: string;
   grupo?: string;
   turma?: string;
@@ -121,6 +122,26 @@ interface BootstrapClassLite {
   nivel: string;
   capacidade: number;
   diasSemana?: string;
+}
+
+interface ExclusionLite {
+  id?: string;
+  student_uid?: string;
+  studentUid?: string;
+  nome?: string;
+  Nome?: string;
+  turma?: string;
+  Turma?: string;
+  turmaLabel?: string;
+  TurmaLabel?: string;
+  turmaCodigo?: string;
+  TurmaCodigo?: string;
+  grupo?: string;
+  Grupo?: string;
+  horario?: string;
+  Horario?: string;
+  professor?: string;
+  Professor?: string;
 }
 
 interface CalendarEventForm {
@@ -1015,8 +1036,16 @@ export const Reports: React.FC = () => {
     try {
       const response = await getExcludedStudents();
       const payload = Array.isArray(response?.data) ? response.data : [];
+      setExcludedSnapshot(payload as ExclusionLite[]);
       localStorage.setItem("excludedStudents", JSON.stringify(payload));
     } catch {
+      try {
+        const raw = localStorage.getItem("excludedStudents");
+        const parsed = raw ? JSON.parse(raw) : [];
+        setExcludedSnapshot(Array.isArray(parsed) ? (parsed as ExclusionLite[]) : []);
+      } catch {
+        setExcludedSnapshot([]);
+      }
       // keep cached data when backend is unavailable
     }
   }, []);
@@ -1246,6 +1275,7 @@ export const Reports: React.FC = () => {
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
   const [classesData, setClassesData] = useState<ClassStats[]>([]);
   const [bootstrapClasses, setBootstrapClasses] = useState<BootstrapClassLite[]>([]);
+  const [excludedSnapshot, setExcludedSnapshot] = useState<ExclusionLite[]>([]);
   const [summaryTurmaToggle, setSummaryTurmaToggle] = useState<"terca-quinta" | "quarta-sexta">("terca-quinta");
   const [summaryProfessorToggle, setSummaryProfessorToggle] = useState<string>("");
 
@@ -1368,6 +1398,7 @@ export const Reports: React.FC = () => {
           }>;
           students: Array<{
             id: number;
+            student_uid?: string;
             class_id: number;
             nome: string;
             whatsapp: string;
@@ -1387,6 +1418,7 @@ export const Reports: React.FC = () => {
           const cls = classById.get(student.class_id);
           return {
             id: String(student.id),
+            studentUid: String(student.student_uid || ""),
             nome: student.nome,
             turma: cls?.turma_label || cls?.codigo || "",
             turmaCodigo: cls?.grupo || cls?.codigo || "",
@@ -2039,10 +2071,68 @@ export const Reports: React.FC = () => {
   })();
   const selectedClassCodeLower = (selectedClassCode || "-").toLowerCase();
 
+  const isExcludedStudentForVacancy = (student: ActiveStudentLite, exclusion: ExclusionLite) => {
+    const studentUid = String(student?.studentUid || "").trim();
+    const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
+    if (studentUid && exclusionUid) {
+      return studentUid === exclusionUid;
+    }
+
+    const studentId = String(student?.id || "").trim();
+    const exclusionId = String(exclusion?.id || "").trim();
+    if (studentId && exclusionId && studentId === exclusionId) {
+      return true;
+    }
+
+    const studentName = normalizeText(student?.nome || "");
+    const exclusionName = normalizeText(exclusion?.nome || exclusion?.Nome || "");
+    if (!studentName || !exclusionName || studentName !== exclusionName) return false;
+
+    const studentTurmas = new Set(
+      [student?.turma, student?.grupo, student?.turmaCodigo]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean)
+    );
+    const exclusionTurmas = new Set(
+      [
+        exclusion?.turma,
+        exclusion?.Turma,
+        exclusion?.turmaLabel,
+        exclusion?.TurmaLabel,
+        exclusion?.grupo,
+        exclusion?.Grupo,
+        exclusion?.turmaCodigo,
+        exclusion?.TurmaCodigo,
+      ]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean)
+    );
+
+    const hasTurmaContext = studentTurmas.size > 0 && exclusionTurmas.size > 0;
+    const turmaMatches = !hasTurmaContext || Array.from(exclusionTurmas).some((value) => studentTurmas.has(value));
+    if (!turmaMatches) return false;
+
+    const studentHorario = normalizeHorarioSelectionKey(student?.horario || "");
+    const exclusionHorario = normalizeHorarioSelectionKey(String(exclusion?.horario || exclusion?.Horario || ""));
+    const hasHorarioContext = Boolean(studentHorario && exclusionHorario);
+    if (hasHorarioContext && studentHorario !== exclusionHorario) return false;
+
+    const studentProfessor = normalizeText(student?.professor || "");
+    const exclusionProfessor = normalizeText(String(exclusion?.professor || exclusion?.Professor || ""));
+    const hasProfessorContext = Boolean(studentProfessor && exclusionProfessor);
+    if (hasProfessorContext && studentProfessor !== exclusionProfessor) return false;
+
+    return hasTurmaContext || hasHorarioContext || hasProfessorContext;
+  };
+
   const vacancyRows = useMemo(() => {
     const classCountByKey = new Map<string, number>();
 
-    studentsSnapshot.forEach((student) => {
+    const activeStudents = studentsSnapshot.filter(
+      (student) => !excludedSnapshot.some((exclusion) => isExcludedStudentForVacancy(student, exclusion))
+    );
+
+    activeStudents.forEach((student) => {
       const key = `${normalizeText(student.turma || "")}||${normalizeHorarioSelectionKey(student.horario || "")}||${normalizeText(student.professor || "")}`;
       classCountByKey.set(key, (classCountByKey.get(key) || 0) + 1);
     });
@@ -2074,7 +2164,7 @@ export const Reports: React.FC = () => {
           getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario) ||
           a.turma.localeCompare(b.turma)
       );
-  }, [bootstrapClasses, studentsSnapshot]);
+  }, [bootstrapClasses, excludedSnapshot, studentsSnapshot]);
 
   const vacancyNivelOptions = useMemo(
     () => Array.from(new Set(vacancyRows.map((row) => row.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
