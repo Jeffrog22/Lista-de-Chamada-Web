@@ -106,11 +106,78 @@ export const Vacancies: React.FC = () => {
   const [classesSnapshot, setClassesSnapshot] = useState<BootstrapClassLite[]>([]);
   const [excludedSnapshot, setExcludedSnapshot] = useState<ExclusionLite[]>([]);
   const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
+  const [expandedNiveis, setExpandedNiveis] = useState<Record<string, boolean>>({});
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
 
   const [nivelFiltro, setNivelFiltro] = useState<string>("Todos");
   const [turmaLabelFiltro, setTurmaLabelFiltro] = useState<string>("Todos");
   const [periodoFiltro, setPeriodoFiltro] = useState<Periodo>("Todos");
+
+  const getNivelDetails = (nivelRaw: string) => {
+    const original = String(nivelRaw || "").trim();
+    const lowered = normalizeText(original)
+      .replace(/[áàãâä]/g, "a")
+      .replace(/[éèêë]/g, "e")
+      .replace(/[íìîï]/g, "i")
+      .replace(/[óòõôö]/g, "o")
+      .replace(/[úùûü]/g, "u")
+      .replace(/ç/g, "c");
+
+    const fallbackLabel = formatNivelLabel(original);
+
+    if (!lowered) {
+      return {
+        simpleKey: "sem-nivel",
+        simpleLabel: "Sem nível",
+        subdivisao: "",
+      };
+    }
+
+    if (lowered.includes("iniciac")) {
+      const subMatch = lowered.match(/(?:iniciac[a-z]*)\s*([a-z])$/i);
+      return {
+        simpleKey: "iniciacao",
+        simpleLabel: "Iniciação",
+        subdivisao: subMatch ? subMatch[1].toUpperCase() : "",
+      };
+    }
+
+    const normalized = lowered.replace(/nivel\s*/g, "").replace(/\s+/g, " ").trim();
+    const compact = normalized.replace(/\s+/g, "");
+    const directMatch = compact.match(/^(\d+)([a-z])?$/i);
+    if (directMatch) {
+      const numero = directMatch[1];
+      return {
+        simpleKey: `nivel-${numero}`,
+        simpleLabel: `Nível ${numero}`,
+        subdivisao: directMatch[2] ? directMatch[2].toUpperCase() : "",
+      };
+    }
+
+    const looseNumberMatch = lowered.match(/(\d+)\s*([a-z])?$/i);
+    if (looseNumberMatch) {
+      const numero = looseNumberMatch[1];
+      return {
+        simpleKey: `nivel-${numero}`,
+        simpleLabel: `Nível ${numero}`,
+        subdivisao: looseNumberMatch[2] ? looseNumberMatch[2].toUpperCase() : "",
+      };
+    }
+
+    return {
+      simpleKey: `raw-${normalizeText(fallbackLabel)}`,
+      simpleLabel: fallbackLabel,
+      subdivisao: "",
+    };
+  };
+
+  const getNivelRank = (simpleKey: string, simpleLabel: string) => {
+    if (simpleKey === "iniciacao") return 0;
+    const match = simpleKey.match(/^nivel-(\d+)$/i);
+    if (match) return Number.parseInt(match[1], 10);
+    if (simpleKey === "sem-nivel") return 999;
+    return 500 + normalizeText(simpleLabel).charCodeAt(0);
+  };
 
   const loadBootstrap = () => {
     setLoadingBootstrap(true);
@@ -217,9 +284,20 @@ export const Vacancies: React.FC = () => {
   }, [classesSnapshot]);
 
   const niveis = useMemo(() => {
-    const unique = new Set<string>();
-    classesSnapshot.forEach((item) => item.nivel && unique.add(item.nivel));
-    return ["Todos", ...Array.from(unique).sort()];
+    const unique = new Map<string, string>();
+    classesSnapshot.forEach((item) => {
+      const details = getNivelDetails(item.nivel || "");
+      if (!details.simpleKey) return;
+      unique.set(details.simpleKey, details.simpleLabel);
+    });
+    const ordered = Array.from(unique.entries())
+      .sort((a, b) => {
+        const byRank = getNivelRank(a[0], a[1]) - getNivelRank(b[0], b[1]);
+        if (byRank !== 0) return byRank;
+        return a[1].localeCompare(b[1]);
+      })
+      .map((entry) => entry[1]);
+    return ["Todos", ...ordered];
   }, [classesSnapshot]);
 
   const turmaLabels = useMemo(() => {
@@ -230,7 +308,8 @@ export const Vacancies: React.FC = () => {
 
   const filteredClasses = useMemo(() => {
     return classesSnapshot.filter((item) => {
-      if (nivelFiltro !== "Todos" && item.nivel !== nivelFiltro) return false;
+      const nivelDetails = getNivelDetails(item.nivel || "");
+      if (nivelFiltro !== "Todos" && nivelDetails.simpleLabel !== nivelFiltro) return false;
       if (turmaLabelFiltro !== "Todos" && item.turmaLabel !== turmaLabelFiltro) return false;
       if (periodoFiltro !== "Todos") {
         const periodo = parsePeriodo(item.horario || "");
@@ -303,18 +382,24 @@ export const Vacancies: React.FC = () => {
   );
 
   const nivelOccupancy = useMemo(() => {
-    const grouped = new Map<string, { nivel: string; total: number; capacidade: number }>();
+    const grouped = new Map<string, { nivel: string; nivelKey: string; total: number; capacidade: number }>();
 
     turmasFiltradas.forEach((turma) => {
       const meta = turmaMeta[turma];
-      const nivel = String(meta?.nivel || "-").trim() || "-";
-      const current = grouped.get(nivel) || { nivel, total: 0, capacidade: 0 };
+      const details = getNivelDetails(meta?.nivel || "");
+      const nivel = details.simpleLabel;
+      const nivelKey = details.simpleKey;
+      const current = grouped.get(nivelKey) || { nivel, nivelKey, total: 0, capacidade: 0 };
       current.total += studentsCountByClassKey[turma] || 0;
       current.capacidade += Math.max(0, Number(meta?.capacidade || 0));
-      grouped.set(nivel, current);
+      grouped.set(nivelKey, current);
     });
 
-    return Array.from(grouped.values());
+    return Array.from(grouped.values()).sort((a, b) => {
+      const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
+      if (byRank !== 0) return byRank;
+      return a.nivel.localeCompare(b.nivel);
+    });
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
@@ -331,17 +416,95 @@ export const Vacancies: React.FC = () => {
     }, 0);
   }, [nivelOccupancy]);
 
-  const niveisComVagasDisponiveis = useMemo(() => {
-    return nivelOccupancy
+  const vagasDetalhadasPorNivel = useMemo(() => {
+    type NivelDetail = {
+      nivelKey: string;
+      nivel: string;
+      total: number;
+      capacidade: number;
+      vagas: number;
+      periodos: Record<"Manhã" | "Tarde", { total: number; capacidade: number }>;
+      turmas: string[];
+      subdivisoes: Array<{ key: string; label: string; total: number; capacidade: number }>;
+    };
+
+    const grouped = new Map<string, NivelDetail>();
+
+    turmasFiltradas.forEach((turma) => {
+      const meta = turmaMeta[turma];
+      if (!meta) return;
+
+      const details = getNivelDetails(meta.nivel || "");
+      const nivelKey = details.simpleKey;
+      const periodo = parsePeriodo(meta.horario || "");
+      const subdiv = details.subdivisao || "Sem subdivisão";
+      const capacidade = Math.max(0, Number(meta.capacidade || 0));
+      const total = studentsCountByClassKey[turma] || 0;
+
+      const existing = grouped.get(nivelKey) || {
+        nivelKey,
+        nivel: details.simpleLabel,
+        total: 0,
+        capacidade: 0,
+        vagas: 0,
+        periodos: {
+          "Manhã": { total: 0, capacidade: 0 },
+          "Tarde": { total: 0, capacidade: 0 },
+        },
+        turmas: [],
+        subdivisoes: [],
+      };
+
+      existing.total += total;
+      existing.capacidade += capacidade;
+      if (periodo === "Manhã" || periodo === "Tarde") {
+        existing.periodos[periodo].total += total;
+        existing.periodos[periodo].capacidade += capacidade;
+      }
+
+      const turmaResumo = `${meta.turmaLabel} • ${formatHorario(meta.horario || "")}`;
+      if (!existing.turmas.includes(turmaResumo)) {
+        existing.turmas.push(turmaResumo);
+      }
+
+      const subdivIdx = existing.subdivisoes.findIndex((item) => item.key === subdiv);
+      if (subdivIdx >= 0) {
+        existing.subdivisoes[subdivIdx].total += total;
+        existing.subdivisoes[subdivIdx].capacidade += capacidade;
+      } else {
+        existing.subdivisoes.push({
+          key: subdiv,
+          label: subdiv === "Sem subdivisão" ? "Sem subdivisão" : `${details.simpleLabel} ${subdiv}`,
+          total,
+          capacidade,
+        });
+      }
+
+      grouped.set(nivelKey, existing);
+    });
+
+    return Array.from(grouped.values())
       .map((item) => ({
-        nivel: formatNivelLabel(item.nivel),
+        ...item,
         vagas: Math.max(0, item.capacidade - item.total),
-        total: item.total,
-        capacity: item.capacidade,
+        turmas: [...item.turmas].sort((a, b) => a.localeCompare(b)),
+        subdivisoes: [...item.subdivisoes].sort((a, b) => {
+          if (a.key === "Sem subdivisão") return 1;
+          if (b.key === "Sem subdivisão") return -1;
+          return a.key.localeCompare(b.key);
+        }),
       }))
       .filter((item) => item.vagas > 0)
-      .sort((a, b) => b.vagas - a.vagas || a.nivel.localeCompare(b.nivel));
-  }, [nivelOccupancy]);
+      .sort((a, b) => {
+        const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
+        if (byRank !== 0) return byRank;
+        return b.vagas - a.vagas;
+      });
+  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+
+  const toggleNivelDetalhe = (nivelKey: string) => {
+    setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
+  };
 
   return (
     <div className="vagas-root">
@@ -431,21 +594,44 @@ export const Vacancies: React.FC = () => {
 
       {showVagasDisponiveisDetalhe && (
         <div className="vagas-detail-box">
-          <h3>Níveis com vagas disponíveis</h3>
-          {niveisComVagasDisponiveis.length === 0 ? (
+          <h3>Relação total de vagas/capacidade</h3>
+          <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
+          {vagasDetalhadasPorNivel.length === 0 ? (
             <div className="empty-state">Nenhum nível com vaga para os filtros selecionados.</div>
           ) : (
             <div className="vagas-detail-list">
-              {niveisComVagasDisponiveis.map((item) => (
-                <div key={item.nivel} className="vagas-detail-row">
-                  <div>
-                    <strong>{item.nivel}</strong>
-                    <span>Consolidado por nível (todos os professores/turmas filtrados)</span>
-                  </div>
-                  <div className="vagas-detail-meta">
-                    <span>{item.vagas} vagas</span>
-                    <span>{item.total}/{item.capacity}</span>
-                  </div>
+              {vagasDetalhadasPorNivel.map((item) => (
+                <div key={item.nivelKey} className="vagas-detail-row-block">
+                  <button
+                    type="button"
+                    className={`vagas-detail-row vagas-detail-row-button ${expandedNiveis[item.nivelKey] ? "active" : ""}`}
+                    onClick={() => toggleNivelDetalhe(item.nivelKey)}
+                  >
+                    <div>
+                      <strong>{item.nivel}</strong>
+                      <span>Turmas (nível simples): {item.turmas.join(" | ")}</span>
+                    </div>
+                    <div className="vagas-detail-meta">
+                      <span>{item.vagas} vagas</span>
+                      <span>{item.total}/{item.capacidade}</span>
+                    </div>
+                  </button>
+
+                  {expandedNiveis[item.nivelKey] && (
+                    <div className="vagas-detail-subrows">
+                      <div className="vagas-detail-periodos">
+                        <span>Manhã: <strong>{item.periodos["Manhã"].total}/{item.periodos["Manhã"].capacidade}</strong></span>
+                        <span>Tarde: <strong>{item.periodos["Tarde"].total}/{item.periodos["Tarde"].capacidade}</strong></span>
+                      </div>
+
+                      {item.subdivisoes.map((sub) => (
+                        <div key={`${item.nivelKey}-${sub.key}`} className="vagas-detail-subrow">
+                          <strong>{sub.label}</strong>
+                          <span>{sub.total}/{sub.capacidade}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

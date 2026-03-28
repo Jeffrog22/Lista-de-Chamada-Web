@@ -166,6 +166,16 @@
   color: var(--vagas-text);
 }
 
+.vagas-detail-total {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: var(--vagas-muted);
+}
+
+.vagas-detail-total strong {
+  color: var(--vagas-text);
+}
+
 .vagas-detail-list {
   display: grid;
   gap: 8px;
@@ -179,6 +189,23 @@
   justify-content: space-between;
   gap: 12px;
   align-items: center;
+}
+
+.vagas-detail-row-block {
+  display: grid;
+  gap: 8px;
+}
+
+.vagas-detail-row-button {
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  cursor: pointer;
+}
+
+.vagas-detail-row-button.active {
+  border-color: rgba(15, 118, 110, 0.35);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.1);
 }
 
 .vagas-detail-row strong {
@@ -195,6 +222,37 @@
   display: grid;
   text-align: right;
   gap: 2px;
+}
+
+.vagas-detail-subrows {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.vagas-detail-periodos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--vagas-muted);
+}
+
+.vagas-detail-subrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--vagas-text);
+  border-top: 1px dashed #cbd5e1;
+  padding-top: 8px;
+}
+
+.vagas-detail-subrow strong {
+  font-weight: 700;
 }
 
 .vagas-list {
