@@ -793,6 +793,12 @@ export const Students: React.FC = () => {
     return normalized;
   };
 
+  const isGroupedNivelSelection = (value: string) => {
+    const normalized = normalizeText(value || "").replace(/\s+/g, " ").trim();
+    const groupedKey = getNivelFilterKey(value);
+    return /^nivel [1-4]$/.test(groupedKey) && normalized === groupedKey;
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -1185,7 +1191,7 @@ export const Students: React.FC = () => {
   const nivelExtras = Array.from(
     new Set(
       students
-        .map((s) => getNivelFilterKey(s.nivel))
+        .map((s) => String(s.nivel || "").trim())
         .filter(Boolean)
         .filter((nivel) => !nivelOrder.some((item) => normalizeText(item) === normalizeText(nivel)))
     )
@@ -1202,7 +1208,13 @@ export const Students: React.FC = () => {
       s.idade.toString().includes(term) ||
       normalizeText(s.professor).includes(term);
 
-    const matchesNivel = !filters.nivel || getNivelFilterKey(s.nivel) === getNivelFilterKey(filters.nivel);
+    const matchesNivel = (() => {
+      if (!filters.nivel) return true;
+      if (isGroupedNivelSelection(filters.nivel)) {
+        return getNivelFilterKey(s.nivel) === getNivelFilterKey(filters.nivel);
+      }
+      return normalizeText(s.nivel) === normalizeText(filters.nivel);
+    })();
     const turmaValue = getTurmaDisplayLabel(s);
     const matchesTurma = !filters.turma || turmaValue === filters.turma;
     const matchesHorario =
