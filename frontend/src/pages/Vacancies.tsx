@@ -399,6 +399,8 @@ export const Vacancies: React.FC = () => {
       total: number;
       capacidade: number;
       vagas: number;
+      vagasPorPeriodo: number;
+      excedentesPorPeriodo: number;
       periodos: Record<"Manhã" | "Tarde", { total: number; capacidade: number }>;
       turmas: string[];
       subdivisoes: Array<{ key: string; label: string; total: number; capacidade: number }>;
@@ -423,6 +425,8 @@ export const Vacancies: React.FC = () => {
         total: 0,
         capacidade: 0,
         vagas: 0,
+        vagasPorPeriodo: 0,
+        excedentesPorPeriodo: 0,
         periodos: {
           "Manhã": { total: 0, capacidade: 0 },
           "Tarde": { total: 0, capacidade: 0 },
@@ -462,13 +466,19 @@ export const Vacancies: React.FC = () => {
     return Array.from(grouped.values())
       .map((item) => ({
         ...item,
-        vagas: Math.max(0, item.capacidade - item.total),
         turmas: [...item.turmas].sort((a, b) => a.localeCompare(b)),
         subdivisoes: [...item.subdivisoes].sort((a, b) => {
           if (a.key === "Sem subdivisão") return 1;
           if (b.key === "Sem subdivisão") return -1;
           return a.key.localeCompare(b.key);
         }),
+        vagas: Math.max(0, item.capacidade - item.total),
+        vagasPorPeriodo:
+          Math.max(0, item.periodos["Manhã"].capacidade - item.periodos["Manhã"].total) +
+          Math.max(0, item.periodos["Tarde"].capacidade - item.periodos["Tarde"].total),
+        excedentesPorPeriodo:
+          Math.max(0, item.periodos["Manhã"].total - item.periodos["Manhã"].capacidade) +
+          Math.max(0, item.periodos["Tarde"].total - item.periodos["Tarde"].capacidade),
       }))
       .sort((a, b) => {
         const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
@@ -478,11 +488,11 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.capacidade - item.total), 0);
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.vagasPorPeriodo, 0);
   }, [vagasDetalhadasPorNivel]);
 
   const vagasExcedentes = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.total - item.capacidade), 0);
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.excedentesPorPeriodo, 0);
   }, [vagasDetalhadasPorNivel]);
 
   const toggleNivelDetalhe = (nivelKey: string) => {
@@ -648,10 +658,13 @@ export const Vacancies: React.FC = () => {
                     </div>
                     <div className="vagas-detail-meta">
                       <span>
-                        {item.total > item.capacidade
-                          ? `${item.total - item.capacidade} excedente${item.total - item.capacidade > 1 ? "s" : ""}`
-                          : `${item.vagas} vagas`}
+                        {item.vagasPorPeriodo > 0
+                          ? `${item.vagasPorPeriodo} vagas`
+                          : `${item.excedentesPorPeriodo} excedente${item.excedentesPorPeriodo > 1 ? "s" : ""}`}
                       </span>
+                      {item.vagasPorPeriodo > 0 && item.excedentesPorPeriodo > 0 && (
+                        <span>{item.excedentesPorPeriodo} excedente{item.excedentesPorPeriodo > 1 ? "s" : ""}</span>
+                      )}
                       <span>{item.total}/{item.capacidade}</span>
                     </div>
                   </button>
