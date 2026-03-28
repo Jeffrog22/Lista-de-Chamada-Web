@@ -392,14 +392,6 @@ export const Vacancies: React.FC = () => {
     [turmasFiltradas, studentsCountByClassKey]
   );
 
-  const vagasDisponiveis = useMemo(() => {
-    return Math.max(0, capacidadeTotal - alunosAtivos);
-  }, [capacidadeTotal, alunosAtivos]);
-
-  const vagasExcedentes = useMemo(() => {
-    return Math.max(0, alunosAtivos - capacidadeTotal);
-  }, [alunosAtivos, capacidadeTotal]);
-
   const vagasDetalhadasPorNivel = useMemo(() => {
     type NivelDetail = {
       nivelKey: string;
@@ -484,6 +476,20 @@ export const Vacancies: React.FC = () => {
         return a.nivel.localeCompare(b.nivel);
       });
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+
+  const vagasDisponiveisBrutas = useMemo(() => {
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.capacidade - item.total), 0);
+  }, [vagasDetalhadasPorNivel]);
+
+  const vagasExcedentes = useMemo(() => {
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + Math.max(0, item.total - item.capacidade), 0);
+  }, [vagasDetalhadasPorNivel]);
+
+  const vagasDisponiveis = useMemo(() => {
+    // Havendo excedente em qualquer nível, a visão executiva prioriza bloqueio de realocação.
+    if (vagasExcedentes > 0) return 0;
+    return vagasDisponiveisBrutas;
+  }, [vagasDisponiveisBrutas, vagasExcedentes]);
 
   const toggleNivelDetalhe = (nivelKey: string) => {
     setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
@@ -605,7 +611,13 @@ export const Vacancies: React.FC = () => {
         >
           <span className="label">Vagas Disponíveis</span>
           <strong>{vagasDisponiveis}</strong>
-          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por nível"}</small>
+          <small>
+            {vagasExcedentes > 0
+              ? "Existem excedentes: prioridade de ajuste por nível"
+              : vagasDisponiveis <= 0
+                ? "Turmas lotadas"
+                : "Clique para ver por nível"}
+          </small>
         </button>
         <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
           <span className="label">Vagas Excedentes</span>
