@@ -1739,12 +1739,7 @@ export const Students: React.FC = () => {
                 onClick={() => handleSort("nome")}
                 style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
               >
-                <div style={{ display: "grid", gap: "2px" }}>
-                  <span>Nome{getSortIndicator("nome")}</span>
-                  <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}>
-                    Total: {displayedStudents.length}
-                  </span>
-                </div>
+                Nome{getSortIndicator("nome")}
               </th>
               <th
                 onClick={() => handleSort("nivel")}
@@ -1789,7 +1784,20 @@ export const Students: React.FC = () => {
             {/* filtro acumulativo */}
             <tr className="filter-row">
               {selectionMode && <th style={{ padding: "8px" }}></th>}
-              <th style={{ padding: "8px" }}></th>
+              <th style={{ padding: "8px" }}>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "#64748b",
+                    fontWeight: 600,
+                    textAlign: "left",
+                    whiteSpace: "nowrap",
+                  }}
+                  title="Total de alunos listados conforme filtros"
+                >
+                  Total: {displayedStudents.length}
+                </div>
+              </th>
               <th style={{ padding: "8px" }}>
                 <select
                   value={filters.nivel}
