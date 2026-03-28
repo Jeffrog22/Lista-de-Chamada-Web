@@ -176,6 +176,16 @@
   color: var(--vagas-text);
 }
 
+.vagas-detail-filter-hint {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--vagas-text);
+  background: #ecfeff;
+  border: 1px solid #bae6fd;
+}
+
 .vagas-detail-list {
   display: grid;
   gap: 8px;
@@ -253,6 +263,22 @@
 
 .vagas-detail-subrow strong {
   font-weight: 700;
+}
+
+.vagas-detail-subrow-button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.vagas-detail-subrow-button.active {
+  background: #dbeafe;
+  border-radius: 6px;
+  border-top-color: #93c5fd;
 }
 
 .vagas-list {

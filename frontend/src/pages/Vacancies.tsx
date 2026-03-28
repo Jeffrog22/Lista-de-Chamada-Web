@@ -107,6 +107,7 @@ export const Vacancies: React.FC = () => {
   const [excludedSnapshot, setExcludedSnapshot] = useState<ExclusionLite[]>([]);
   const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
   const [expandedNiveis, setExpandedNiveis] = useState<Record<string, boolean>>({});
+  const [selectedNivelDetailFilter, setSelectedNivelDetailFilter] = useState<{ nivelKey: string; subdivKey: string | null } | null>(null);
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
 
   const [nivelFiltro, setNivelFiltro] = useState<string>("Todos");
@@ -138,6 +139,15 @@ export const Vacancies: React.FC = () => {
       return {
         simpleKey: "iniciacao",
         simpleLabel: "Iniciação",
+        subdivisao: subMatch ? subMatch[1].toUpperCase() : "",
+      };
+    }
+
+    if (lowered.includes("adult")) {
+      const subMatch = lowered.match(/(?:adult[a-z]*)\s*([a-z])$/i);
+      return {
+        simpleKey: "adulto",
+        simpleLabel: "Adulto",
         subdivisao: subMatch ? subMatch[1].toUpperCase() : "",
       };
     }
@@ -175,6 +185,7 @@ export const Vacancies: React.FC = () => {
     if (simpleKey === "iniciacao") return 0;
     const match = simpleKey.match(/^nivel-(\d+)$/i);
     if (match) return Number.parseInt(match[1], 10);
+    if (simpleKey === "adulto") return 5;
     if (simpleKey === "sem-nivel") return 999;
     return 500 + normalizeText(simpleLabel).charCodeAt(0);
   };
@@ -504,7 +515,34 @@ export const Vacancies: React.FC = () => {
 
   const toggleNivelDetalhe = (nivelKey: string) => {
     setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
+    setSelectedNivelDetailFilter((prev) => {
+      if (prev?.nivelKey === nivelKey && prev?.subdivKey === null) return null;
+      return { nivelKey, subdivKey: null };
+    });
   };
+
+  const toggleSubdivisaoDetalhe = (nivelKey: string, subdivKey: string) => {
+    setSelectedNivelDetailFilter((prev) => {
+      if (prev?.nivelKey === nivelKey && prev?.subdivKey === subdivKey) return null;
+      return { nivelKey, subdivKey };
+    });
+  };
+
+  const turmasFiltradasDetalhe = useMemo(() => {
+    if (!selectedNivelDetailFilter) return turmasFiltradas;
+
+    return turmasFiltradas.filter((turma) => {
+      const meta = turmaMeta[turma];
+      if (!meta) return false;
+
+      const details = getNivelDetails(meta.nivel || "");
+      if (details.simpleKey !== selectedNivelDetailFilter.nivelKey) return false;
+
+      if (!selectedNivelDetailFilter.subdivKey) return true;
+      const turmaSubdiv = details.subdivisao || "Sem subdivisão";
+      return turmaSubdiv === selectedNivelDetailFilter.subdivKey;
+    });
+  }, [selectedNivelDetailFilter, turmasFiltradas, turmaMeta]);
 
   return (
     <div className="vagas-root">
@@ -596,6 +634,14 @@ export const Vacancies: React.FC = () => {
         <div className="vagas-detail-box">
           <h3>Relação total de vagas/capacidade</h3>
           <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
+          {selectedNivelDetailFilter && (
+            <div className="vagas-detail-filter-hint">
+              Filtro aplicado nas aulas abaixo: <strong>
+                {vagasDetalhadasPorNivel.find((item) => item.nivelKey === selectedNivelDetailFilter.nivelKey)?.nivel || "Nível"}
+                {selectedNivelDetailFilter.subdivKey ? ` ${selectedNivelDetailFilter.subdivKey}` : ""}
+              </strong>
+            </div>
+          )}
           {vagasDetalhadasPorNivel.length === 0 ? (
             <div className="empty-state">Nenhum nível com vaga para os filtros selecionados.</div>
           ) : (
@@ -624,12 +670,22 @@ export const Vacancies: React.FC = () => {
                         <span>Tarde: <strong>{item.periodos["Tarde"].total}/{item.periodos["Tarde"].capacidade}</strong></span>
                       </div>
 
-                      {item.subdivisoes.map((sub) => (
-                        <div key={`${item.nivelKey}-${sub.key}`} className="vagas-detail-subrow">
-                          <strong>{sub.label}</strong>
-                          <span>{sub.total}/{sub.capacidade}</span>
-                        </div>
-                      ))}
+                      {item.subdivisoes.map((sub) => {
+                        const isActive =
+                          selectedNivelDetailFilter?.nivelKey === item.nivelKey &&
+                          selectedNivelDetailFilter?.subdivKey === sub.key;
+                        return (
+                          <button
+                            key={`${item.nivelKey}-${sub.key}`}
+                            type="button"
+                            className={`vagas-detail-subrow vagas-detail-subrow-button ${isActive ? "active" : ""}`}
+                            onClick={() => toggleSubdivisaoDetalhe(item.nivelKey, sub.key)}
+                          >
+                            <strong>{sub.label}</strong>
+                            <span>{sub.total}/{sub.capacidade}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -640,10 +696,10 @@ export const Vacancies: React.FC = () => {
       )}
 
       <div className="vagas-list">
-        {turmasFiltradas.length === 0 ? (
+        {turmasFiltradasDetalhe.length === 0 ? (
           <div className="empty-state">Nenhuma turma encontrada com os filtros selecionados.</div>
         ) : (
-          turmasFiltradas.map((turma) => {
+          turmasFiltradasDetalhe.map((turma) => {
             const meta = turmaMeta[turma];
             const total = studentsCountByClassKey[turma] || 0;
             const capacity = meta?.capacidade || 0;
