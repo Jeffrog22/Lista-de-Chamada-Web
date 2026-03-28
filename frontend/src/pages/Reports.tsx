@@ -852,10 +852,12 @@ const resolvePlanningDateRange = (label: string, fallbackYear: number) => {
 
   const explicitDateTokens = clean.match(/\b\d{1,2}\/\d{1,2}(?:\/20\d{2})?\b/g) || [];
   if (explicitDateTokens.length >= 2) {
-    const start = parseDateTokenInLabel(explicitDateTokens[0], fallbackYear);
-    let end = parseDateTokenInLabel(explicitDateTokens[1], fallbackYear);
+    const firstToken = explicitDateTokens[0] || "";
+    const secondToken = explicitDateTokens[1] || "";
+    const start = parseDateTokenInLabel(firstToken, fallbackYear);
+    let end = parseDateTokenInLabel(secondToken, fallbackYear);
     if (!start || !end) return null;
-    if (end.getTime() < start.getTime() && !/\/20\d{2}\b/.test(explicitDateTokens[1])) {
+    if (end.getTime() < start.getTime() && !/\/20\d{2}\b/.test(secondToken)) {
       end = new Date(end.getFullYear() + 1, end.getMonth(), end.getDate());
     }
     return { start, end };
