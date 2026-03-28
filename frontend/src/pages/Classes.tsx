@@ -393,6 +393,11 @@ export const Classes: React.FC = () => {
     });
   };
 
+  const handleClearView = () => {
+    setSearchTerm("");
+    setSortRules([]);
+  };
+
   const getSortIndicator = (key: SortColumn) => {
     const idx = sortRules.findIndex((rule) => rule.key === key);
     if (idx < 0) return "";
@@ -616,6 +621,9 @@ export const Classes: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <button onClick={handleClearView} className="btn-secondary">
+            Limpar filtros
+          </button>
           <button onClick={handleAddClick} className="btn-primary btn-gradient">
             ➕ Nova Turma
           </button>
