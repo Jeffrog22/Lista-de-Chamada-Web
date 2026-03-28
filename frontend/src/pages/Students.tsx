@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, addExclusionsBulk, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
+import { addExclusion, bulkAllocateImportStudents, createImportStudent, getBootstrap, getExcludedStudents, updateImportStudent } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 interface Student {
@@ -308,7 +308,6 @@ export const Students: React.FC = () => {
   };
   const [students, setStudents] = useState<Student[]>([]);
   const [allocationTarget, setAllocationTarget] = useState<AllocationTarget | null>(null);
-  const [bulkExcludeMode, setBulkExcludeMode] = useState(false);
   const [selectedPendingIds, setSelectedPendingIds] = useState<string[]>([]);
   const [isAllocatingBulk, setIsAllocatingBulk] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -786,6 +785,14 @@ export const Students: React.FC = () => {
     return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER - 1;
   };
 
+  const getNivelFilterKey = (nivel: string) => {
+    const normalized = normalizeText(nivel || "").replace(/\s+/g, " ").trim();
+    const compact = normalized.replace(/\s+/g, "");
+    const match = compact.match(/^nivel(1|2|3|4)([a-z])?$/i);
+    if (match) return `nivel ${match[1]}`;
+    return normalized;
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -1124,16 +1131,13 @@ export const Students: React.FC = () => {
       return;
     }
 
-    const selectedIds = studentPendingExclusion
-      ? [String(studentPendingExclusion.id)]
-      : [...selectedPendingIds];
-    const selectedStudents = students.filter((student) => selectedIds.includes(String(student.id)));
-    if (selectedStudents.length === 0) {
-      alert("Selecione pelo menos um aluno para excluir.");
+    const student = studentPendingExclusion;
+    if (!student) {
+      alert("Aluno não encontrado para exclusão.");
       return;
     }
 
-    const payloads = selectedStudents.map((student) => ({
+    const payload = {
       ...student,
       student_uid: student.studentUid || "",
       grupo: student.grupo || student.turmaCodigo || "",
@@ -1142,15 +1146,11 @@ export const Students: React.FC = () => {
       turmaCodigo: student.turmaCodigo || "",
       dataExclusao: new Date().toLocaleDateString("pt-BR"),
       motivo_exclusao: reason,
-    }));
+    };
 
-    if (payloads.length > 1) {
-      await addExclusionsBulk(payloads, false).catch(() => undefined);
-    } else if (payloads.length === 1) {
-      await addExclusion(payloads[0]).catch(() => {
-        alert("Falha ao enviar exclusão ao backend. Tente novamente.");
-      });
-    }
+    await addExclusion(payload).catch(() => {
+      alert("Falha ao enviar exclusão ao backend. Tente novamente.");
+    });
 
     await getExcludedStudents()
       .then((response) => {
@@ -1160,20 +1160,12 @@ export const Students: React.FC = () => {
       })
       .catch(() => undefined);
 
-    setStudents((prev) => prev.filter((s) => !selectedIds.includes(String(s.id))));
+    setStudents((prev) => prev.filter((s) => String(s.id) !== String(student.id)));
 
     setShowExcludeReasonModal(false);
     setStudentPendingExclusion(null);
     setExcludeReason("");
-    setSelectedPendingIds([]);
-    if (!studentPendingExclusion) {
-      setBulkExcludeMode(false);
-    }
-    alert(
-      selectedStudents.length === 1
-        ? "Aluno movido para a lista de exclusão."
-        : `${selectedStudents.length} alunos movidos para a lista de exclusão.`
-    );
+    alert("Aluno movido para a lista de exclusão.");
   };
 
   const handleGoToAttendance = (student: Student) => {
@@ -1193,7 +1185,7 @@ export const Students: React.FC = () => {
   const nivelExtras = Array.from(
     new Set(
       students
-        .map((s) => s.nivel)
+        .map((s) => getNivelFilterKey(s.nivel))
         .filter(Boolean)
         .filter((nivel) => !nivelOrder.some((item) => normalizeText(item) === normalizeText(nivel)))
     )
@@ -1210,7 +1202,7 @@ export const Students: React.FC = () => {
       s.idade.toString().includes(term) ||
       normalizeText(s.professor).includes(term);
 
-    const matchesNivel = !filters.nivel || normalizeText(s.nivel) === normalizeText(filters.nivel);
+    const matchesNivel = !filters.nivel || getNivelFilterKey(s.nivel) === getNivelFilterKey(filters.nivel);
     const turmaValue = getTurmaDisplayLabel(s);
     const matchesTurma = !filters.turma || turmaValue === filters.turma;
     const matchesHorario =
@@ -1267,7 +1259,7 @@ export const Students: React.FC = () => {
   const displayedStudents = allocationTarget
     ? [...pendingStudents].sort((a, b) => a.nome.localeCompare(b.nome))
     : sortedStudents;
-  const selectionMode = Boolean(allocationTarget) || bulkExcludeMode;
+  const selectionMode = Boolean(allocationTarget);
 
   const selectablePendingIds = displayedStudents
     .map((student) => {
@@ -1342,24 +1334,7 @@ export const Students: React.FC = () => {
 
   const handleCancelAllocationMode = () => {
     setAllocationTarget(null);
-    setBulkExcludeMode(false);
     setSelectedPendingIds([]);
-  };
-
-  const handleStartBulkExcludeMode = () => {
-    setBulkExcludeMode(true);
-    setAllocationTarget(null);
-    setSelectedPendingIds([]);
-  };
-
-  const handleConfirmBulkExclude = () => {
-    if (selectedPendingIds.length === 0) {
-      alert("Selecione pelo menos um aluno para excluir.");
-      return;
-    }
-    setStudentPendingExclusion(null);
-    setExcludeReason("");
-    setShowExcludeReasonModal(true);
   };
 
   const handleBulkAllocate = async () => {
@@ -1539,79 +1514,6 @@ export const Students: React.FC = () => {
           </div>
         </div>
       )}
-      {bulkExcludeMode && !allocationTarget && (
-        <div
-          style={{
-            marginBottom: "16px",
-            padding: "14px 16px",
-            borderRadius: "10px",
-            background: "#fff1f2",
-            border: "1px solid #fda4af",
-            display: "flex",
-            justifyContent: "space-between",
-            gap: "12px",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: "#9f1239", textTransform: "uppercase" }}>
-              modo de exclusão em massa
-            </div>
-            <div style={{ fontSize: "13px", color: "#9f1239", marginTop: "4px" }}>
-              Marque os alunos e confirme a exclusão de uma vez.
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={toggleSelectAllPending}
-              style={{
-                background: "#fecdd3",
-                color: "#9f1239",
-                border: "none",
-                padding: "10px 14px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              {allPendingSelected ? "Desmarcar todos" : "Selecionar todos"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelAllocationMode}
-              style={{
-                background: "#e5e7eb",
-                color: "#111827",
-                border: "none",
-                padding: "10px 14px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmBulkExclude}
-              disabled={selectedPendingIds.length === 0}
-              style={{
-                background: selectedPendingIds.length === 0 ? "#cbd5e1" : "#dc2626",
-                color: "white",
-                border: "none",
-                padding: "10px 14px",
-                borderRadius: "8px",
-                cursor: selectedPendingIds.length === 0 ? "not-allowed" : "pointer",
-                fontWeight: 700,
-              }}
-            >
-              {`Excluir selecionados (${selectedPendingIds.length})`}
-            </button>
-          </div>
-        </div>
-      )}
       <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center" }}>
         <div style={{ flex: 1, position: "relative" }}>
           <input
@@ -1660,24 +1562,6 @@ export const Students: React.FC = () => {
         )}
         {!allocationTarget && (
           <>
-            {!bulkExcludeMode && (
-              <button
-                onClick={handleStartBulkExcludeMode}
-                style={{
-                  background: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  padding: "12px 24px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Excluir em massa
-              </button>
-            )}
             <button
               onClick={() => {
                 setFilters({ nivel: "", categoria: "", turma: "", horario: "", professor: "" });
@@ -2026,7 +1910,7 @@ export const Students: React.FC = () => {
           >
             <h3 style={{ margin: "0 0 10px", color: "#2c3e50" }}>Motivo da exclusão</h3>
             <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#555" }}>
-              Informe o motivo para excluir <strong>{studentPendingExclusion ? getDisplayStudentName(studentPendingExclusion) : `${selectedPendingIds.length} alunos selecionados`}</strong>.
+              Informe o motivo para excluir <strong>{studentPendingExclusion ? getDisplayStudentName(studentPendingExclusion) : "o aluno selecionado"}</strong>.
             </p>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px" }}>
               {exclusionReasonOptions.map((option) => (
