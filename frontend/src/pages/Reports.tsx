@@ -144,6 +144,73 @@ interface ExclusionLite {
   Professor?: string;
 }
 
+const safeParseArray = <T,>(raw: string | null): T[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const toFiniteNumber = (value: unknown) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const exclusionMergeKey = (item: ExclusionLite) => {
+  const uid = String(item?.student_uid || item?.studentUid || "").trim();
+  if (uid) return `uid:${uid}`;
+  const id = String(item?.id || "").trim();
+  if (id) return `id:${id}`;
+  const name = normalizeText(String(item?.nome || item?.Nome || ""));
+  const turma = normalizeText(
+    String(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.grupo || item?.Grupo || item?.turmaCodigo || item?.TurmaCodigo || "")
+  );
+  const horario = normalizeHorarioSelectionKey(String(item?.horario || item?.Horario || ""));
+  const professor = normalizeText(String(item?.professor || item?.Professor || ""));
+  return `ctx:${name}|${turma}|${horario}|${professor}`;
+};
+
+const readLocalVacancySnapshot = () => {
+  const localStudentsRaw = safeParseArray<any>(localStorage.getItem("activeStudents"));
+  const localClassesRaw = safeParseArray<any>(localStorage.getItem("activeClasses"));
+  const localExcludedRaw = safeParseArray<any>(localStorage.getItem("excludedStudents"));
+
+  const students: ActiveStudentLite[] = localStudentsRaw.map((student) => ({
+    id: String(student?.id || ""),
+    studentUid: String(student?.studentUid || student?.student_uid || ""),
+    nome: String(student?.nome || ""),
+    turma: String(student?.turma || student?.turmaLabel || ""),
+    turmaCodigo: String(student?.turmaCodigo || student?.grupo || ""),
+    grupo: String(student?.grupo || student?.turmaCodigo || ""),
+    horario: String(student?.horario || ""),
+    professor: String(student?.professor || ""),
+    nivel: String(student?.nivel || ""),
+    whatsapp: String(student?.whatsapp || ""),
+    dataNascimento: String(student?.dataNascimento || student?.data_nascimento || ""),
+    dataAtestado: String(student?.dataAtestado || student?.data_atestado || ""),
+    parQ: String(student?.parQ || student?.parq || ""),
+    atestado: Boolean(student?.atestado),
+  }));
+
+  const classes: BootstrapClassLite[] = localClassesRaw.map((cls) => ({
+    grupo: String(cls?.Grupo || cls?.grupo || cls?.TurmaCodigo || cls?.turmaCodigo || cls?.Atalho || cls?.codigo || ""),
+    codigo: String(cls?.Atalho || cls?.codigo || cls?.TurmaCodigo || cls?.turmaCodigo || ""),
+    turmaLabel: String(cls?.Turma || cls?.turmaLabel || cls?.turma || cls?.codigo || ""),
+    horario: String(cls?.Horario || cls?.horario || ""),
+    professor: String(cls?.Professor || cls?.professor || ""),
+    nivel: String(cls?.Nivel || cls?.nivel || ""),
+    capacidade: toFiniteNumber(cls?.CapacidadeMaxima ?? cls?.Capacidade ?? cls?.capacidade ?? 0),
+    diasSemana: String(cls?.DiasSemana || cls?.dias_semana || cls?.diasSemana || ""),
+  }));
+
+  const exclusions = localExcludedRaw as ExclusionLite[];
+
+  return { students, classes, exclusions };
+};
+
 interface CalendarEventForm {
   date: string;
   type: "feriado" | "ponte" | "reuniao" | "evento";
@@ -1033,19 +1100,20 @@ export const Reports: React.FC = () => {
   }, []);
 
   const refreshExcludedStudentsFromBackend = useCallback(async () => {
+    const localSnapshot = readLocalVacancySnapshot();
+    setExcludedSnapshot(localSnapshot.exclusions);
+
     try {
       const response = await getExcludedStudents();
-      const payload = Array.isArray(response?.data) ? response.data : [];
-      setExcludedSnapshot(payload as ExclusionLite[]);
-      localStorage.setItem("excludedStudents", JSON.stringify(payload));
+      const backendPayload = Array.isArray(response?.data) ? (response.data as ExclusionLite[]) : [];
+      const mergedMap = new Map<string, ExclusionLite>();
+      [...localSnapshot.exclusions, ...backendPayload].forEach((item) => {
+        mergedMap.set(exclusionMergeKey(item), item);
+      });
+      const merged = Array.from(mergedMap.values());
+      setExcludedSnapshot(merged);
+      localStorage.setItem("excludedStudents", JSON.stringify(merged));
     } catch {
-      try {
-        const raw = localStorage.getItem("excludedStudents");
-        const parsed = raw ? JSON.parse(raw) : [];
-        setExcludedSnapshot(Array.isArray(parsed) ? (parsed as ExclusionLite[]) : []);
-      } catch {
-        setExcludedSnapshot([]);
-      }
       // keep cached data when backend is unavailable
     }
   }, []);
@@ -1403,6 +1471,7 @@ export const Reports: React.FC = () => {
     getBootstrap()
       .then((response) => {
         if (isMounted && !isMounted()) return;
+        const localSnapshot = readLocalVacancySnapshot();
         const data = response.data as {
           classes: Array<{
             id: number;
@@ -1464,13 +1533,18 @@ export const Reports: React.FC = () => {
           diasSemana: String(cls.dias_semana || ""),
         }));
 
-        setStudentsSnapshot(mapped);
-        setBootstrapClasses(mappedClasses);
+        setStudentsSnapshot(localSnapshot.students.length > 0 ? localSnapshot.students : mapped);
+        setBootstrapClasses(localSnapshot.classes.length > 0 ? localSnapshot.classes : mappedClasses);
+        if (localSnapshot.exclusions.length > 0) {
+          setExcludedSnapshot(localSnapshot.exclusions);
+        }
       })
       .catch(() => {
         if (isMounted && !isMounted()) return;
-        setStudentsSnapshot([]);
-        setBootstrapClasses([]);
+        const localSnapshot = readLocalVacancySnapshot();
+        setStudentsSnapshot(localSnapshot.students);
+        setBootstrapClasses(localSnapshot.classes);
+        setExcludedSnapshot(localSnapshot.exclusions);
       });
   };
 

@@ -43,16 +43,77 @@ interface ExclusionLite {
   nome?: string;
   Nome?: string;
   turma?: string;
+  turmaLabel?: string;
   grupo?: string;
   turmaCodigo?: string;
   horario?: string;
   professor?: string;
   Turma?: string;
+  TurmaLabel?: string;
   Grupo?: string;
   TurmaCodigo?: string;
   Horario?: string;
   Professor?: string;
 }
+
+const safeParseArray = <T,>(raw: string | null): T[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const exclusionMergeKey = (item: ExclusionLite) => {
+  const uid = String(item?.student_uid || item?.studentUid || "").trim();
+  if (uid) return `uid:${uid}`;
+  const id = String(item?.id || "").trim();
+  if (id) return `id:${id}`;
+  const name = normalizeText(String(item?.nome || item?.Nome || ""));
+  const turma = normalizeText(
+    String(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.grupo || item?.Grupo || item?.turmaCodigo || item?.TurmaCodigo || "")
+  );
+  const horario = normalizeHorarioKey(String(item?.horario || item?.Horario || ""));
+  const professor = normalizeText(String(item?.professor || item?.Professor || ""));
+  return `ctx:${name}|${turma}|${horario}|${professor}`;
+};
+
+const readLocalVacancySnapshot = () => {
+  const localStudentsRaw = safeParseArray<any>(localStorage.getItem("activeStudents"));
+  const localClassesRaw = safeParseArray<any>(localStorage.getItem("activeClasses"));
+  const localExcludedRaw = safeParseArray<any>(localStorage.getItem("excludedStudents"));
+
+  const students: ActiveStudentLite[] = localStudentsRaw.map((student) => ({
+    id: String(student?.id || ""),
+    studentUid: String(student?.studentUid || student?.student_uid || ""),
+    nome: String(student?.nome || ""),
+    nivel: String(student?.nivel || ""),
+    turma: String(student?.turma || student?.turmaLabel || ""),
+    grupo: String(student?.grupo || student?.turmaCodigo || ""),
+    turmaCodigo: String(student?.turmaCodigo || student?.grupo || ""),
+    horario: String(student?.horario || ""),
+    professor: String(student?.professor || ""),
+  }));
+
+  const classes: BootstrapClassLite[] = localClassesRaw.map((cls) => ({
+    id: Number(cls?.id || 0),
+    grupo: String(cls?.Grupo || cls?.grupo || cls?.TurmaCodigo || cls?.turmaCodigo || cls?.Atalho || cls?.codigo || ""),
+    codigo: String(cls?.Atalho || cls?.codigo || cls?.TurmaCodigo || cls?.turmaCodigo || ""),
+    turmaLabel: String(cls?.Turma || cls?.turmaLabel || cls?.turma || cls?.codigo || ""),
+    horario: String(cls?.Horario || cls?.horario || ""),
+    nivel: String(cls?.Nivel || cls?.nivel || ""),
+    professor: String(cls?.Professor || cls?.professor || ""),
+    capacidade: Math.max(0, Number(cls?.CapacidadeMaxima ?? cls?.Capacidade ?? cls?.capacidade ?? 0)),
+  }));
+
+  return {
+    students,
+    classes,
+    exclusions: localExcludedRaw as ExclusionLite[],
+  };
+};
 
 const formatHorario = (value: string) => {
   if (!value) return "";
@@ -198,6 +259,7 @@ export const Vacancies: React.FC = () => {
     setLoadingBootstrap(true);
     return Promise.all([getBootstrap(), getExcludedStudents()])
       .then(([bootstrapResponse, exclusionsResponse]) => {
+        const localSnapshot = readLocalVacancySnapshot();
         const data = bootstrapResponse.data as {
           classes: Array<{
             id: number;
@@ -221,9 +283,14 @@ export const Vacancies: React.FC = () => {
           }>;
         };
 
-        const exclusions = Array.isArray(exclusionsResponse?.data)
+        const backendExclusions = Array.isArray(exclusionsResponse?.data)
           ? (exclusionsResponse.data as ExclusionLite[])
           : [];
+        const mergedExclusionsMap = new Map<string, ExclusionLite>();
+        [...localSnapshot.exclusions, ...backendExclusions].forEach((item) => {
+          mergedExclusionsMap.set(exclusionMergeKey(item), item);
+        });
+        const mergedExclusions = Array.from(mergedExclusionsMap.values());
 
         const classById = new Map<number, (typeof data.classes)[number]>();
         data.classes.forEach((cls) => classById.set(cls.id, cls));
@@ -254,14 +321,16 @@ export const Vacancies: React.FC = () => {
           capacidade: Number(cls.capacidade || 0),
         }));
 
-        setStudentsSnapshot(mappedStudents);
-        setClassesSnapshot(mappedClasses);
-        setExcludedSnapshot(exclusions);
+        setStudentsSnapshot(localSnapshot.students.length > 0 ? localSnapshot.students : mappedStudents);
+        setClassesSnapshot(localSnapshot.classes.length > 0 ? localSnapshot.classes : mappedClasses);
+        setExcludedSnapshot(mergedExclusions);
+        localStorage.setItem("excludedStudents", JSON.stringify(mergedExclusions));
       })
       .catch(() => {
-        setStudentsSnapshot([]);
-        setClassesSnapshot([]);
-        setExcludedSnapshot([]);
+        const localSnapshot = readLocalVacancySnapshot();
+        setStudentsSnapshot(localSnapshot.students);
+        setClassesSnapshot(localSnapshot.classes);
+        setExcludedSnapshot(localSnapshot.exclusions);
       })
       .finally(() => {
         setLoadingBootstrap(false);
