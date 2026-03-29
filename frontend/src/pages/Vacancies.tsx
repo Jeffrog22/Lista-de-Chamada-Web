@@ -519,6 +519,8 @@ export const Vacancies: React.FC = () => {
       const subdiv = details.subdivisao || "Sem subdivisão";
       const capacidade = Math.max(0, Number(meta.capacidade || 0));
       const total = studentsCountByClassKey[turma] || 0;
+      const vagasTurma = Math.max(0, capacidade - total);
+      const excedentesTurma = Math.max(0, total - capacidade);
 
       const existing = grouped.get(nivelKey) || {
         nivelKey,
@@ -538,6 +540,8 @@ export const Vacancies: React.FC = () => {
 
       existing.total += total;
       existing.capacidade += capacidade;
+      existing.vagasPorPeriodo += vagasTurma;
+      existing.excedentesPorPeriodo += excedentesTurma;
       if (periodo === "Manhã" || periodo === "Tarde") {
         existing.periodos[periodo].total += total;
         existing.periodos[periodo].capacidade += capacidade;
@@ -574,12 +578,8 @@ export const Vacancies: React.FC = () => {
           return a.key.localeCompare(b.key);
         }),
         vagas: Math.max(0, item.capacidade - item.total),
-        vagasPorPeriodo:
-          Math.max(0, item.periodos["Manhã"].capacidade - item.periodos["Manhã"].total) +
-          Math.max(0, item.periodos["Tarde"].capacidade - item.periodos["Tarde"].total),
-        excedentesPorPeriodo:
-          Math.max(0, item.periodos["Manhã"].total - item.periodos["Manhã"].capacidade) +
-          Math.max(0, item.periodos["Tarde"].total - item.periodos["Tarde"].capacidade),
+        vagasPorPeriodo: item.vagasPorPeriodo,
+        excedentesPorPeriodo: item.excedentesPorPeriodo,
       }))
       .sort((a, b) => {
         const byRank = getNivelRank(a.nivelKey, a.nivel) - getNivelRank(b.nivelKey, b.nivel);
