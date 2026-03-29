@@ -13,6 +13,7 @@ interface ClassOption {
   horario: string;
   professor: string;
   nivel: string;
+  capacidade?: number;
   faixaEtaria?: string;
   diasSemana: string[]; // Ex: ["Terça", "Quinta"]
 }
@@ -474,6 +475,21 @@ export const Attendance: React.FC = () => {
     return "";
   };
 
+  const getNumberField = (item: any, ...keys: string[]) => {
+    if (!item) return undefined as number | undefined;
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) {
+        const value = item[key];
+        if (value === undefined || value === null || value === "") continue;
+        const normalized = Number(String(value).replace(",", ".").trim());
+        if (Number.isFinite(normalized)) {
+          return normalized;
+        }
+      }
+    }
+    return undefined as number | undefined;
+  };
+
   const normalizeHorarioDigits = (value?: string) => {
     const digits = String(value || "").replace(/\D/g, "");
     if (!digits) return "";
@@ -557,6 +573,7 @@ export const Attendance: React.FC = () => {
         horario: canonicalHorario || horarioRaw,
         professor,
         nivel,
+        capacidade: getNumberField(raw, "Capacidade", "capacidade", "capacidade_maxima", "capacidadeMaxima"),
         faixaEtaria,
         diasSemana: parseDiasSemana(diasSemanaRaw),
       });
@@ -919,6 +936,7 @@ export const Attendance: React.FC = () => {
     horario: "",
     professor: "",
     nivel: "",
+    capacidade: 0,
     faixaEtaria: "",
     diasSemana: [],
   };
@@ -1742,6 +1760,9 @@ export const Attendance: React.FC = () => {
   });
 
   const sortedAttendance = useMemo(() => {
+
+      const currentClassCapacity = Math.max(0, Number(selectedClass.capacidade || 0));
+      const currentClassLotacao = sortedAttendance.length;
     return [...attendance].sort((a, b) => {
       const res = a.aluno.localeCompare(b.aluno);
       return sortDir === "asc" ? res : -res;
@@ -4656,6 +4677,36 @@ export const Attendance: React.FC = () => {
                 </tr>
                 );
               })}
+              <tr>
+                <td
+                  style={{
+                    padding: "8px 12px 10px",
+                    textAlign: "left",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    color: "#64748b",
+                    borderTop: "1px dashed #e2e8f0",
+                    background: "#f8fafc",
+                  }}
+                >
+                  lotação/capacidade (da turma): {currentClassLotacao}/{currentClassCapacity}
+                </td>
+                {dateDates.map((date) => (
+                  <td
+                    key={`summary-${date}`}
+                    style={{
+                      borderTop: "1px dashed #e2e8f0",
+                      background: "#f8fafc",
+                    }}
+                  />
+                ))}
+                <td
+                  style={{
+                    borderTop: "1px dashed #e2e8f0",
+                    background: "#f8fafc",
+                  }}
+                />
+              </tr>
             </tbody>
           </table>
         </div>
