@@ -1767,7 +1767,26 @@ export const Attendance: React.FC = () => {
   }, [attendance, sortDir]);
 
   const currentClassCapacity = Math.max(0, Number(selectedClass.capacidade || 0));
-  const currentClassLotacao = sortedAttendance.length;
+  
+  // Calculate lotação filtering out excluded students
+  const currentClassLotacao = useMemo(() => {
+    const excludedRaw = localStorage.getItem("excludedStudents");
+    const excluded = excludedRaw ? (JSON.parse(excludedRaw) as any[]) : [];
+    
+    if (excluded.length === 0) {
+      return sortedAttendance.length;
+    }
+    
+    const isExcludedName = (studentName: string, exclusions: any[]): boolean => {
+      const normalizedName = normalizeText(studentName);
+      return exclusions.some((exclusion) => {
+        const exclusionName = normalizeText(exclusion?.nome || exclusion?.Nome || "");
+        return exclusionName && normalizedName === exclusionName;
+      });
+    };
+    
+    return sortedAttendance.filter((record) => !isExcludedName(record.aluno, excluded)).length;
+  }, [sortedAttendance]);
 
   useEffect(() => {
     hasUnsavedLocalChangesRef.current = hasUnsavedLocalChanges;

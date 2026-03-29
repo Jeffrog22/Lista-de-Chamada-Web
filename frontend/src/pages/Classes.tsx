@@ -299,9 +299,24 @@ export const Classes: React.FC = () => {
         setStudentCounts(counts);
       }
     };
+    
+    // Initial count
     updateCounts();
+    
+    // Recalculate when localStorage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "excludedStudents" || e.key === "activeStudents") {
+        updateCounts();
+      }
+    };
+    
+    window.addEventListener("storage", handleStorageChange);
     const intervalId = window.setInterval(updateCounts, 2000);
-    return () => window.clearInterval(intervalId);
+    
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
