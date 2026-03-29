@@ -589,7 +589,7 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.vagas, 0);
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.vagasPorPeriodo, 0);
   }, [vagasDetalhadasPorNivel]);
 
   const vagasExcedentes = useMemo(() => {
