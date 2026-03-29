@@ -1557,12 +1557,22 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let lastExclusionCount = excludedSnapshot.length;
+    
     const checkForUpdates = () => {
       const localSnapshot = readLocalVacancySnapshot();
-      setExcludedSnapshot(localSnapshot.exclusions);
+      const currentExclusionCount = localSnapshot.exclusions.length;
+      
+      // If exclusion count changed, force full update
+      if (currentExclusionCount !== lastExclusionCount) {
+        lastExclusionCount = currentExclusionCount;
+        setStudentsSnapshot(localSnapshot.students);
+        setBootstrapClasses(localSnapshot.classes);
+        setExcludedSnapshot(localSnapshot.exclusions);
+      }
     };
 
-    const intervalId = window.setInterval(checkForUpdates, 2000);
+    const intervalId = window.setInterval(checkForUpdates, 1000);
     return () => window.clearInterval(intervalId);
   }, []);
 
