@@ -409,9 +409,11 @@ export const Vacancies: React.FC = () => {
       const nivelDetails = getNivelDetails(item.nivel || "");
       if (nivelFiltro !== "Todos" && nivelDetails.simpleLabel !== nivelFiltro) return false;
       if (turmaLabelFiltro !== "Todos" && item.turmaLabel !== turmaLabelFiltro) return false;
-      if (periodoFiltro !== "Todos") {
-        const periodo = parsePeriodo(item.horario || "");
-        if (periodo !== periodoFiltro) return false;
+      const periodo = parsePeriodo(item.horario || "");
+      if (periodoFiltro === "Todos") {
+        if (periodo !== "Manhã" && periodo !== "Tarde") return false;
+      } else if (periodo !== periodoFiltro) {
+        return false;
       }
       return true;
     });
