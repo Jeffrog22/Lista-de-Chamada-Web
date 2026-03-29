@@ -1760,14 +1760,14 @@ export const Attendance: React.FC = () => {
   });
 
   const sortedAttendance = useMemo(() => {
-
-      const currentClassCapacity = Math.max(0, Number(selectedClass.capacidade || 0));
-      const currentClassLotacao = sortedAttendance.length;
     return [...attendance].sort((a, b) => {
       const res = a.aluno.localeCompare(b.aluno);
       return sortDir === "asc" ? res : -res;
     });
   }, [attendance, sortDir]);
+
+  const currentClassCapacity = Math.max(0, Number(selectedClass.capacidade || 0));
+  const currentClassLotacao = sortedAttendance.length;
 
   useEffect(() => {
     hasUnsavedLocalChangesRef.current = hasUnsavedLocalChanges;
