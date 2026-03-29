@@ -21,6 +21,7 @@ import {
   isDateClosedForAttendance,
   isWithinRange,
 } from "../utils/academicCalendar";
+import { subscribeLocalStorageKeys } from "../utils/localStorageEvents";
 import type { AcademicCalendarEvent, AcademicCalendarSettings } from "../utils/academicCalendar";
 import "./Reports.css";
 const DashboardCharts = React.lazy(() => import('./DashboardCharts'));
@@ -1557,33 +1558,14 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let lastStudentsRaw = localStorage.getItem("activeStudents") || "";
-    let lastClassesRaw = localStorage.getItem("activeClasses") || "";
-    let lastExcludedRaw = localStorage.getItem("excludedStudents") || "";
-    
-    const checkForUpdates = () => {
-      const nextStudentsRaw = localStorage.getItem("activeStudents") || "";
-      const nextClassesRaw = localStorage.getItem("activeClasses") || "";
-      const nextExcludedRaw = localStorage.getItem("excludedStudents") || "";
-
-      const changed =
-        nextStudentsRaw !== lastStudentsRaw ||
-        nextClassesRaw !== lastClassesRaw ||
-        nextExcludedRaw !== lastExcludedRaw;
-
-      if (changed) {
-        lastStudentsRaw = nextStudentsRaw;
-        lastClassesRaw = nextClassesRaw;
-        lastExcludedRaw = nextExcludedRaw;
-        const localSnapshot = readLocalVacancySnapshot();
-        setStudentsSnapshot(localSnapshot.students);
-        setBootstrapClasses(localSnapshot.classes);
-        setExcludedSnapshot(localSnapshot.exclusions);
-      }
+    const syncFromLocal = () => {
+      const localSnapshot = readLocalVacancySnapshot();
+      setStudentsSnapshot(localSnapshot.students);
+      setBootstrapClasses(localSnapshot.classes);
+      setExcludedSnapshot(localSnapshot.exclusions);
     };
 
-    const intervalId = window.setInterval(checkForUpdates, 1000);
-    return () => window.clearInterval(intervalId);
+    return subscribeLocalStorageKeys(["activeStudents", "activeClasses", "excludedStudents"], syncFromLocal);
   }, []);
 
   const turmaOptions = Array.from(new Set(classesData.map((c) => c.turma))).sort();

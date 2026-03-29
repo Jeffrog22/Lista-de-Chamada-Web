@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getBootstrap, getExcludedStudents } from "../api";
+import { subscribeLocalStorageKeys } from "../utils/localStorageEvents";
 import "./Vacancies.css";
 
 type Periodo = "Todos" | "Manhã" | "Tarde";
@@ -343,33 +344,14 @@ export const Vacancies: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let lastStudentsRaw = localStorage.getItem("activeStudents") || "";
-    let lastClassesRaw = localStorage.getItem("activeClasses") || "";
-    let lastExcludedRaw = localStorage.getItem("excludedStudents") || "";
-    
-    const checkForUpdates = () => {
-      const nextStudentsRaw = localStorage.getItem("activeStudents") || "";
-      const nextClassesRaw = localStorage.getItem("activeClasses") || "";
-      const nextExcludedRaw = localStorage.getItem("excludedStudents") || "";
-
-      const changed =
-        nextStudentsRaw !== lastStudentsRaw ||
-        nextClassesRaw !== lastClassesRaw ||
-        nextExcludedRaw !== lastExcludedRaw;
-
-      if (changed) {
-        lastStudentsRaw = nextStudentsRaw;
-        lastClassesRaw = nextClassesRaw;
-        lastExcludedRaw = nextExcludedRaw;
-        const localSnapshot = readLocalVacancySnapshot();
-        setStudentsSnapshot(localSnapshot.students);
-        setClassesSnapshot(localSnapshot.classes);
-        setExcludedSnapshot(localSnapshot.exclusions);
-      }
+    const syncFromLocal = () => {
+      const localSnapshot = readLocalVacancySnapshot();
+      setStudentsSnapshot(localSnapshot.students);
+      setClassesSnapshot(localSnapshot.classes);
+      setExcludedSnapshot(localSnapshot.exclusions);
     };
 
-    const intervalId = window.setInterval(checkForUpdates, 1000);
-    return () => window.clearInterval(intervalId);
+    return subscribeLocalStorageKeys(["activeStudents", "activeClasses", "excludedStudents"], syncFromLocal);
   }, []);
 
   const turmaMeta = useMemo(() => {
