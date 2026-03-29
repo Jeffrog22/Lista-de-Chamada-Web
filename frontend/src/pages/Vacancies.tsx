@@ -409,11 +409,9 @@ export const Vacancies: React.FC = () => {
       const nivelDetails = getNivelDetails(item.nivel || "");
       if (nivelFiltro !== "Todos" && nivelDetails.simpleLabel !== nivelFiltro) return false;
       if (turmaLabelFiltro !== "Todos" && item.turmaLabel !== turmaLabelFiltro) return false;
-      const periodo = parsePeriodo(item.horario || "");
-      if (periodoFiltro === "Todos") {
-        if (periodo !== "Manhã" && periodo !== "Tarde") return false;
-      } else if (periodo !== periodoFiltro) {
-        return false;
+      if (periodoFiltro !== "Todos") {
+        const periodo = parsePeriodo(item.horario || "");
+        if (periodo !== periodoFiltro) return false;
       }
       return true;
     });
@@ -591,12 +589,20 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return turmasFiltradas.reduce((acc, turma) => {
-      const capacidade = Math.max(0, Number(turmaMeta[turma]?.capacidade || 0));
-      const total = Number(studentsCountByClassKey[turma] || 0);
-      return acc + Math.max(0, capacidade - total);
+    return vagasDetalhadasPorNivel.reduce((acc, item) => {
+      const vagasManha = Math.max(0, item.periodos["Manhã"].capacidade - item.periodos["Manhã"].total);
+      const vagasTarde = Math.max(0, item.periodos["Tarde"].capacidade - item.periodos["Tarde"].total);
+
+      if (periodoFiltro === "Manhã") {
+        return acc + vagasManha;
+      }
+      if (periodoFiltro === "Tarde") {
+        return acc + vagasTarde;
+      }
+      // Em "Todos", refletir estritamente a soma Manhã + Tarde
+      return acc + vagasManha + vagasTarde;
     }, 0);
-  }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
+  }, [vagasDetalhadasPorNivel, periodoFiltro]);
 
   const vagasExcedentes = useMemo(() => {
     return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.excedentesPorPeriodo, 0);
