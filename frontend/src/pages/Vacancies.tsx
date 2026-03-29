@@ -343,15 +343,25 @@ export const Vacancies: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let lastExclusionCount = excludedSnapshot.length;
+    let lastStudentsRaw = localStorage.getItem("activeStudents") || "";
+    let lastClassesRaw = localStorage.getItem("activeClasses") || "";
+    let lastExcludedRaw = localStorage.getItem("excludedStudents") || "";
     
     const checkForUpdates = () => {
-      const localSnapshot = readLocalVacancySnapshot();
-      const currentExclusionCount = localSnapshot.exclusions.length;
-      
-      // If exclusion count changed, force full update
-      if (currentExclusionCount !== lastExclusionCount) {
-        lastExclusionCount = currentExclusionCount;
+      const nextStudentsRaw = localStorage.getItem("activeStudents") || "";
+      const nextClassesRaw = localStorage.getItem("activeClasses") || "";
+      const nextExcludedRaw = localStorage.getItem("excludedStudents") || "";
+
+      const changed =
+        nextStudentsRaw !== lastStudentsRaw ||
+        nextClassesRaw !== lastClassesRaw ||
+        nextExcludedRaw !== lastExcludedRaw;
+
+      if (changed) {
+        lastStudentsRaw = nextStudentsRaw;
+        lastClassesRaw = nextClassesRaw;
+        lastExcludedRaw = nextExcludedRaw;
+        const localSnapshot = readLocalVacancySnapshot();
         setStudentsSnapshot(localSnapshot.students);
         setClassesSnapshot(localSnapshot.classes);
         setExcludedSnapshot(localSnapshot.exclusions);
@@ -446,8 +456,8 @@ export const Vacancies: React.FC = () => {
     const isExcludedStudent = (student: ActiveStudentLite, exclusion: ExclusionLite) => {
       const studentUid = String(student?.studentUid || "").trim();
       const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
-      if (studentUid && exclusionUid) {
-        return studentUid === exclusionUid;
+      if (studentUid && exclusionUid && studentUid === exclusionUid) {
+        return true;
       }
 
       const studentId = String(student?.id || "").trim();
@@ -465,7 +475,9 @@ export const Vacancies: React.FC = () => {
       const studentHorario = normalizeHorarioKey(student?.horario || "");
       const studentProfessor = normalizeText(student?.professor || "");
 
-      const exclusionTurma = normalizeText(exclusion?.turma || exclusion?.Turma || "");
+      const exclusionTurma = normalizeText(
+        exclusion?.turma || exclusion?.Turma || exclusion?.turmaLabel || exclusion?.TurmaLabel || ""
+      );
       const exclusionTurmaCodigo = normalizeText(exclusion?.grupo || exclusion?.Grupo || exclusion?.turmaCodigo || exclusion?.TurmaCodigo || "");
       const exclusionHorario = normalizeHorarioKey(exclusion?.horario || exclusion?.Horario || "");
       const exclusionProfessor = normalizeText(exclusion?.professor || exclusion?.Professor || "");

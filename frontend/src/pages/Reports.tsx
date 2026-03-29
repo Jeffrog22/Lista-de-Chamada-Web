@@ -1557,15 +1557,25 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    let lastExclusionCount = excludedSnapshot.length;
+    let lastStudentsRaw = localStorage.getItem("activeStudents") || "";
+    let lastClassesRaw = localStorage.getItem("activeClasses") || "";
+    let lastExcludedRaw = localStorage.getItem("excludedStudents") || "";
     
     const checkForUpdates = () => {
-      const localSnapshot = readLocalVacancySnapshot();
-      const currentExclusionCount = localSnapshot.exclusions.length;
-      
-      // If exclusion count changed, force full update
-      if (currentExclusionCount !== lastExclusionCount) {
-        lastExclusionCount = currentExclusionCount;
+      const nextStudentsRaw = localStorage.getItem("activeStudents") || "";
+      const nextClassesRaw = localStorage.getItem("activeClasses") || "";
+      const nextExcludedRaw = localStorage.getItem("excludedStudents") || "";
+
+      const changed =
+        nextStudentsRaw !== lastStudentsRaw ||
+        nextClassesRaw !== lastClassesRaw ||
+        nextExcludedRaw !== lastExcludedRaw;
+
+      if (changed) {
+        lastStudentsRaw = nextStudentsRaw;
+        lastClassesRaw = nextClassesRaw;
+        lastExcludedRaw = nextExcludedRaw;
+        const localSnapshot = readLocalVacancySnapshot();
         setStudentsSnapshot(localSnapshot.students);
         setBootstrapClasses(localSnapshot.classes);
         setExcludedSnapshot(localSnapshot.exclusions);
@@ -2187,8 +2197,8 @@ export const Reports: React.FC = () => {
   const isExcludedStudentForVacancy = (student: ActiveStudentLite, exclusion: ExclusionLite) => {
     const studentUid = String(student?.studentUid || "").trim();
     const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
-    if (studentUid && exclusionUid) {
-      return studentUid === exclusionUid;
+    if (studentUid && exclusionUid && studentUid === exclusionUid) {
+      return true;
     }
 
     const studentId = String(student?.id || "").trim();
