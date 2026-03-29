@@ -573,7 +573,7 @@ export const Attendance: React.FC = () => {
         horario: canonicalHorario || horarioRaw,
         professor,
         nivel,
-        capacidade: getNumberField(raw, "Capacidade", "capacidade", "capacidade_maxima", "capacidadeMaxima"),
+        capacidade: getNumberField(raw, "Capacidade", "capacidade", "capacidade_maxima", "capacidadeMaxima", "CapacidadeMaxima"),
         faixaEtaria,
         diasSemana: parseDiasSemana(diasSemanaRaw),
       });
