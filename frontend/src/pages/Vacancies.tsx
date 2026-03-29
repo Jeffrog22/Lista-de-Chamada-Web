@@ -589,7 +589,7 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.vagasPorPeriodo, 0);
+    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.vagas, 0);
   }, [vagasDetalhadasPorNivel]);
 
   const vagasExcedentes = useMemo(() => {
@@ -724,7 +724,7 @@ export const Vacancies: React.FC = () => {
           <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por nível"}</small>
         </button>
         <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
-          <span className="label">Vagas Excedentes</span>
+          <span className="label">Alunos Excedentes</span>
           <strong>{vagasExcedentes}</strong>
           <small>{vagasExcedentes > 0 ? "Acima da capacidade" : "Sem excedentes"}</small>
         </div>
@@ -759,11 +759,11 @@ export const Vacancies: React.FC = () => {
                     </div>
                     <div className="vagas-detail-meta">
                       <span>
-                        {item.vagasPorPeriodo > 0
-                          ? `${item.vagasPorPeriodo} vagas`
+                        {item.vagas > 0
+                          ? `${item.vagas} vagas`
                           : `${item.excedentesPorPeriodo} excedente${item.excedentesPorPeriodo > 1 ? "s" : ""}`}
                       </span>
-                      {item.vagasPorPeriodo > 0 && item.excedentesPorPeriodo > 0 && (
+                      {item.vagas > 0 && item.excedentesPorPeriodo > 0 && (
                         <span>{item.excedentesPorPeriodo} excedente{item.excedentesPorPeriodo > 1 ? "s" : ""}</span>
                       )}
                       <span>{item.total}/{item.capacidade}</span>
