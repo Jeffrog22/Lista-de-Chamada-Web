@@ -2235,7 +2235,10 @@ export const Reports: React.FC = () => {
     const hasProfessorContext = Boolean(studentProfessor && exclusionProfessor);
     if (hasProfessorContext && studentProfessor !== exclusionProfessor) return false;
 
-    return hasTurmaContext || hasHorarioContext || hasProfessorContext;
+    // Backward compatibility: legacy exclusions may have only student name.
+    // If name (or uid/id) matched and no contextual conflict was found above,
+    // consider the student excluded.
+    return true;
   };
 
   const vacancyRows = useMemo(() => {
