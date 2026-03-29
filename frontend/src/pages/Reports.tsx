@@ -1556,6 +1556,16 @@ export const Reports: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const checkForUpdates = () => {
+      const localSnapshot = readLocalVacancySnapshot();
+      setExcludedSnapshot(localSnapshot.exclusions);
+    };
+
+    const intervalId = window.setInterval(checkForUpdates, 2000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const turmaOptions = Array.from(new Set(classesData.map((c) => c.turma))).sort();
 
   const horarioOptions = Array.from(

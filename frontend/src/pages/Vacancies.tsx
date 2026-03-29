@@ -342,6 +342,16 @@ export const Vacancies: React.FC = () => {
     loadBootstrap();
   }, []);
 
+  useEffect(() => {
+    const checkForUpdates = () => {
+      const localSnapshot = readLocalVacancySnapshot();
+      setExcludedSnapshot(localSnapshot.exclusions);
+    };
+
+    const intervalId = window.setInterval(checkForUpdates, 2000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const turmaMeta = useMemo(() => {
     const meta: Record<string, TurmaMeta> = {};
     classesSnapshot.forEach((cls) => {
