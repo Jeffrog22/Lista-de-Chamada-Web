@@ -63,6 +63,14 @@ const normalizeSimple = (value: string) =>
     .toLowerCase()
     .trim();
 
+const normalizeHorarioDigits = (value?: string) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 3) return `0${digits}`;
+  if (digits.length >= 4) return digits.slice(0, 4);
+  return digits;
+};
+
 const sortDays = (days: WeekdayValue[]) =>
   [...days].sort((a, b) => WEEKDAY_ORDER[a] - WEEKDAY_ORDER[b]);
 
@@ -230,8 +238,59 @@ export const Classes: React.FC = () => {
       const studentsStr = localStorage.getItem("activeStudents");
       if (studentsStr) {
         const students = JSON.parse(studentsStr);
+        const excludedRaw = localStorage.getItem("excludedStudents");
+        const excluded = excludedRaw ? JSON.parse(excludedRaw) : [];
+
+        const isExcludedStudent = (student: any, exclusion: any) => {
+          const studentUid = String(student?.studentUid || student?.student_uid || "").trim();
+          const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
+          if (studentUid && exclusionUid && studentUid === exclusionUid) {
+            return true;
+          }
+
+          const studentId = String(student?.id || "").trim();
+          const exclusionId = String(exclusion?.id || "").trim();
+          if (studentId && exclusionId && studentId === exclusionId) {
+            return true;
+          }
+
+          const studentName = normalizeSimple(student?.nome || "");
+          const exclusionName = normalizeSimple(exclusion?.nome || exclusion?.Nome || "");
+          if (!studentName || !exclusionName || studentName !== exclusionName) {
+            return false;
+          }
+
+          const studentTurma = normalizeSimple(student?.turmaLabel || student?.turma || "");
+          const studentTurmaCodigo = normalizeSimple(student?.grupo || student?.turmaCodigo || "");
+          const studentHorario = normalizeHorarioDigits(student?.horario || "");
+          const studentProfessor = normalizeSimple(student?.professor || "");
+
+          const exclusionTurma = normalizeSimple(
+            exclusion?.turmaLabel || exclusion?.TurmaLabel || exclusion?.turma || exclusion?.Turma || ""
+          );
+          const exclusionTurmaCodigo = normalizeSimple(
+            exclusion?.grupo || exclusion?.Grupo || exclusion?.turmaCodigo || exclusion?.TurmaCodigo || ""
+          );
+          const exclusionHorario = normalizeHorarioDigits(exclusion?.horario || exclusion?.Horario || "");
+          const exclusionProfessor = normalizeSimple(exclusion?.professor || exclusion?.Professor || "");
+
+          const turmaMatches =
+            !exclusionTurma && !exclusionTurmaCodigo
+              ? true
+              : [studentTurma, studentTurmaCodigo].includes(exclusionTurma) ||
+                [studentTurma, studentTurmaCodigo].includes(exclusionTurmaCodigo);
+          const horarioMatches = !exclusionHorario || !studentHorario || exclusionHorario === studentHorario;
+          const professorMatches = !exclusionProfessor || !studentProfessor || exclusionProfessor === studentProfessor;
+
+          return turmaMatches && horarioMatches && professorMatches;
+        };
+
+        const filteredStudents = Array.isArray(students)
+          ? students.filter((student: any) => !excluded.some((exclusion: any) => isExcludedStudent(student, exclusion)))
+          : [];
+
         const counts: { [key: string]: number } = {};
-        students.forEach((s: any) => {
+        filteredStudents.forEach((s: any) => {
           const key = s.grupo || s.turmaCodigo || s.turma;
           if (key) {
             counts[key] = (counts[key] || 0) + 1;
