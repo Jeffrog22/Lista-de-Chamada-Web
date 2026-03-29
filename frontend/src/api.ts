@@ -797,8 +797,8 @@ export const clearTransferOverrides = () =>
   API.post("/maintenance/clear-transfer-overrides", {}).catch(() => ({ data: { ok: false, removed: 0 } }));
 
 // Login
-export const login = (username: string, password: string) =>
-  API.post("/token", new URLSearchParams({ username, password }), {
+export const login = (username: string, password: string, unitName?: string) =>
+  API.post("/token", new URLSearchParams({ username, password, unit_name: String(unitName || "") }), {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
 

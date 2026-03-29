@@ -11,6 +11,23 @@ interface TeacherProfile {
   whatsapp: string;
 }
 
+const expectedUnitName = String(import.meta.env.VITE_UNIT_NAME || "").trim();
+const envName = String(import.meta.env.VITE_ENV_NAME || "").trim();
+
+const normalizeUnitName = (value: string) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const isUnitAllowedForEnvironment = (typedUnit: string) => {
+  if (!expectedUnitName) {
+    return true;
+  }
+  return normalizeUnitName(typedUnit) === normalizeUnitName(expectedUnitName);
+};
+
 export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
   const teacherProfileStorageKey = "teacherProfile";
   const [profile, setProfile] = useState<TeacherProfile>({
@@ -153,6 +170,15 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       return;
     }
 
+    if (!isUnitAllowedForEnvironment(profile.unit)) {
+      setError(
+        expectedUnitName
+          ? `Login bloqueado: esta aplicação aceita apenas a unidade \"${expectedUnitName}\".`
+          : "Login bloqueado: unidade inválida para este ambiente."
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       if (file) {
@@ -186,7 +212,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       const normalizedProfile = {
         ...profile,
         name: String(profile.name || "").trim(),
-        unit: String(profile.unit || "").trim(),
+        unit: expectedUnitName || String(profile.unit || "").trim(),
         email: String(profile.email || "").trim(),
         whatsapp: String(profile.whatsapp || "").trim(),
       };
@@ -215,9 +241,21 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setStatus("Entrando com perfil rápido...");
     setLoading(true);
 
+    const unitForQuickLogin = expectedUnitName || String(profile.unit || "Piscina Bela Vista").trim() || "Piscina Bela Vista";
+    if (!isUnitAllowedForEnvironment(unitForQuickLogin)) {
+      setError(
+        expectedUnitName
+          ? `Login bloqueado: esta aplicação aceita apenas a unidade \"${expectedUnitName}\".`
+          : "Login bloqueado: unidade inválida para este ambiente."
+      );
+      setStatus(null);
+      setLoading(false);
+      return;
+    }
+
     const normalizedProfile = {
       name: normalizedName,
-      unit: String(profile.unit || "Piscina Bela Vista").trim() || "Piscina Bela Vista",
+      unit: unitForQuickLogin,
       email: String(profile.email || "").trim(),
       whatsapp: String(profile.whatsapp || "").trim(),
     };
@@ -304,6 +342,11 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             onChange={(e) => setProfile((prev) => ({ ...prev, unit: e.target.value }))}
             style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
+          {expectedUnitName && (
+            <span style={{ marginTop: 6, color: "#555", fontSize: 12 }}>
+              Unidade oficial deste ambiente{envName ? ` (${envName})` : ""}: <strong>{expectedUnitName}</strong>
+            </span>
+          )}
         </label>
 
         <label style={{ display: "flex", flexDirection: "column" }}>
