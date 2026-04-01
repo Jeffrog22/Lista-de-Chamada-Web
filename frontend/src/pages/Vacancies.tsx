@@ -870,10 +870,10 @@ export const Vacancies: React.FC = () => {
 
       {showVagasDisponiveisDetalhe && (
         <div className="vagas-detail-box">
-          <h3>Relação total de vagas/capacidade</h3>
+          <h3>Blocos com vagas disponíveis</h3>
           <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
           <div className="vagas-detail-list" style={{ marginBottom: 16 }}>
-            {vagasPorPeriodoHorario.map((item) => (
+            {vagasPorPeriodoHorario.filter(item => item.vagas > 0).map((item) => (
               <div key={`${item.scheduleGroup}-${item.horario}`} className="vagas-detail-row">
                 <div>
                   <strong>{scheduleGroupLabel(item.scheduleGroup)} {formatHorario(item.horario)}</strong>
