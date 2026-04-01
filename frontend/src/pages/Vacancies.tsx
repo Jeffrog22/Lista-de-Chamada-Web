@@ -899,7 +899,7 @@ export const Vacancies: React.FC = () => {
             <div className="empty-state">Nenhum nível encontrado para os filtros selecionados.</div>
           ) : (
             <div className="vagas-detail-list">
-              {vagasDetalhadasPorNivel.map((item) => (
+              {vagasDetalhadasPorNivel.filter(item => item.vagas > 0).map((item) => (
                 <div key={item.nivelKey} className="vagas-detail-row-block">
                   <button
                     type="button"
