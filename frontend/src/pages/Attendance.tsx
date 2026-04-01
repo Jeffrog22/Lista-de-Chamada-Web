@@ -3290,6 +3290,7 @@ export const Attendance: React.FC = () => {
         notes: string[];
       }>();
       let backendSnapshotTrusted = false;
+      let backendHasAnyMark = false;
 
       try {
         const response = await getReports({ month: monthKey });
@@ -3427,7 +3428,7 @@ export const Attendance: React.FC = () => {
           });
         });
 
-        const backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
+        backendHasAnyMark = Array.from(backendCandidateByName.values()).some((entry) =>
           Object.values(entry.attendance || {}).some((value) => Boolean(value))
         );
         const canTrustBackendSnapshot = backendHasAnyMark || !storedHasAnyMark;
@@ -3524,7 +3525,7 @@ export const Attendance: React.FC = () => {
 
           const backend = backendByName.get(studentKey);
           const stored = storedByName.get(studentKey);
-          const allowStoredMerge = !backendSnapshotTrusted || !backend;
+          const shouldPreferStoredSnapshot = storedHasAnyMark && backendHasAnyMark;
 
           return {
             id: idx + 1,
@@ -3536,7 +3537,12 @@ export const Attendance: React.FC = () => {
               };
 
               const storedAttendance = stored?.attendance || {};
-              if (allowStoredMerge) {
+              if (shouldPreferStoredSnapshot) {
+                Object.entries(storedAttendance).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  merged[date] = value;
+                });
+              } else if (!backendSnapshotTrusted || !backend) {
                 Object.entries(storedAttendance).forEach(([date, value]) => {
                   if (!newDates.includes(date)) return;
                   if (value && !merged[date]) {
@@ -3553,7 +3559,17 @@ export const Attendance: React.FC = () => {
               };
 
               const storedJustifications = stored?.justifications || {};
-              if (allowStoredMerge) {
+              if (shouldPreferStoredSnapshot) {
+                Object.entries(storedJustifications).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  const normalized = String(value || "").trim();
+                  if (!normalized) {
+                    delete merged[date];
+                    return;
+                  }
+                  merged[date] = normalized;
+                });
+              } else if (!backendSnapshotTrusted || !backend) {
                 Object.entries(storedJustifications).forEach(([date, value]) => {
                   if (!newDates.includes(date)) return;
                   const normalized = String(value || "").trim();
@@ -3574,6 +3590,7 @@ export const Attendance: React.FC = () => {
                 ? stored!.notes.map((note) => String(note || "").trim()).filter(Boolean)
                 : [];
 
+              if (shouldPreferStoredSnapshot) return storedNotes;
               if (backendSnapshotTrusted) return backendNotes;
               if (backendNotes.length > 0) return backendNotes;
               return storedNotes;
