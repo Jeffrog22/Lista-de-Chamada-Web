@@ -276,7 +276,7 @@ const shouldJustifyByWeather = (conditionCode?: string, conditionLabel?: string,
   }
 
   const normalizedSensations = normalizeSensationList(sensations || []);
-  if (normalizedSensations.includes("Frio") || normalizedSensations.includes("Vento")) return true;
+  if (normalizedSensations.includes("Frio")) return true;
 
   return false;
 };
@@ -290,8 +290,6 @@ type SuggestedClassDecision = {
 
 const WEATHER_NORMAL_KEYWORDS = [
   "encoberto",
-  "nublado",
-  "possibilidade de chuva",
   "variacao de nebulosidade",
   "ceu claro",
   "predominio de sol",
@@ -309,6 +307,15 @@ const WEATHER_JUSTIFIED_KEYWORDS_CSV = [
   "trovoad",
   "raios",
 ];
+
+const isAlwaysJustifiedWeatherLabel = (normalizedLabel: string) => {
+  if (!normalizedLabel) return false;
+  if (normalizedLabel === "nublado") return true;
+  if (normalizedLabel.includes("nublado com possibilidade de chuva pela manha")) return true;
+  if (normalizedLabel.includes("nublado com possibilidade de chuva")) return true;
+  if (normalizedLabel.includes("chuvisco")) return true;
+  return false;
+};
 
 const parseTemperatureNumber = (value: string) => {
   const normalized = String(value || "").replace(/[^\d,.-]/g, "").replace(",", ".").trim();
@@ -380,25 +387,22 @@ const getSuggestedDecisionFromRules = (params: {
 
   const normalizedLabel = normalizeWeatherText(String(params.conditionLabel || ""));
   const normalizedSensations = normalizeSensationList(params.sensations || []);
-  const hasColdOrWind = normalizedSensations.includes("Frio") || normalizedSensations.includes("Vento");
-  
-  // Verificar sensações compostas PRIMEIRO (prioridade alta)
+  const hasFrio = normalizedSensations.includes("Frio");
+  const hasVento = normalizedSensations.includes("Vento");
+
+  if (hasFrio && hasVento) {
+    return { status: "justificada", reason: "Frio com vento" };
+  }
+  if (hasFrio) {
+    return { status: "justificada", reason: "Frio" };
+  }
+
+  // Regras explícitas de clima para justificativa em todas as aulas
   if (normalizedLabel) {
-    // Nublado + Frio/Vento = Justificada
-    if (normalizedLabel.includes("nublado") && hasColdOrWind) {
-      return { status: "justificada", reason: "Nublado com frio/vento" };
+    if (isAlwaysJustifiedWeatherLabel(normalizedLabel)) {
+      return { status: "justificada", reason: "Condição climática desfavorável" };
     }
-    // Encoberto + Frio/Vento = Justificada
-    if (normalizedLabel.includes("encoberto") && hasColdOrWind) {
-      return { status: "justificada", reason: "Encoberto com frio/vento" };
-    }
-    // Chuvisco com frio/vento = Justificada
-    if (normalizedLabel.includes("chuvisco")) {
-      if (hasColdOrWind) {
-        return { status: "justificada", reason: "Chuvisco com frio/vento" };
-      }
-      return { status: "normal", reason: "Chuvisco leve sem frio/vento" };
-    }
+
     // Condições justificadas simples
     if (WEATHER_JUSTIFIED_KEYWORDS_CSV.some((keyword) => normalizedLabel.includes(keyword))) {
       return { status: "justificada", reason: "Condição climática desfavorável" };
