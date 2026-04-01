@@ -159,6 +159,8 @@ const normalizeHorarioKey = (value: string) => {
 const buildClassKey = (turmaLabel: string, horario: string, nivel: string, professor: string) =>
   `${normalizeText(turmaLabel)}||${normalizeHorarioKey(horario)}||${normalizeText(nivel)}||${normalizeText(professor)}`;
 
+const buildHorarioAggregateKey = (horario: string) => normalizeHorarioKey(horario);
+
 const formatNivelLabel = (nivel: string) => {
   const raw = String(nivel || "").trim();
   if (!raw) return "-";
@@ -589,20 +591,33 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => {
-      const vagasManha = Math.max(0, item.periodos["Manhã"].capacidade - item.periodos["Manhã"].total);
-      const vagasTarde = Math.max(0, item.periodos["Tarde"].capacidade - item.periodos["Tarde"].total);
+    const groupedByHorario = new Map<string, { capacidade: number; total: number; periodo: Periodo }>();
 
-      if (periodoFiltro === "Manhã") {
-        return acc + vagasManha;
+    turmasFiltradas.forEach((turma) => {
+      const meta = turmaMeta[turma];
+      if (!meta) return;
+
+      const horarioKey = buildHorarioAggregateKey(meta.horario || "");
+      if (!horarioKey) return;
+
+      const current = groupedByHorario.get(horarioKey) || {
+        capacidade: 0,
+        total: 0,
+        periodo: parsePeriodo(meta.horario || ""),
+      };
+
+      current.capacidade += Math.max(0, Number(meta.capacidade || 0));
+      current.total += studentsCountByClassKey[turma] || 0;
+      groupedByHorario.set(horarioKey, current);
+    });
+
+    return Array.from(groupedByHorario.values()).reduce((acc, item) => {
+      if (periodoFiltro !== "Todos" && item.periodo !== periodoFiltro) {
+        return acc;
       }
-      if (periodoFiltro === "Tarde") {
-        return acc + vagasTarde;
-      }
-      // Em "Todos", refletir estritamente a soma Manhã + Tarde
-      return acc + vagasManha + vagasTarde;
+      return acc + Math.max(0, item.capacidade - item.total);
     }, 0);
-  }, [vagasDetalhadasPorNivel, periodoFiltro]);
+  }, [periodoFiltro, studentsCountByClassKey, turmaMeta, turmasFiltradas]);
 
   const vagasExcedentes = useMemo(() => {
     return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.excedentesPorPeriodo, 0);
