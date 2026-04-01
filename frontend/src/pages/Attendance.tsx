@@ -5187,9 +5187,11 @@ export const Attendance: React.FC = () => {
                             <option value="Predomínio de Sol">Predomínio de Sol</option>
                             <option value="Sol entre Nuvens">Sol entre Nuvens</option>
                             <option value="Parcialmente Nublado">Parcialmente Nublado</option>
-                            <option value="Nublado">Nublado</option>
                           </optgroup>
                           <optgroup label="Condições que Justificam">
+                            <option value="Nublado">Nublado</option>
+                            <option value="Nublado com Possibilidade de Chuva pela Manhã">Nublado com Possibilidade de Chuva pela Manhã</option>
+                            <option value="Nublado com Possibilidade de Chuva">Nublado com Possibilidade de Chuva</option>
                             <option value="Encoberto">Encoberto</option>
                             <option value="Instável">Instável</option>
                             <option value="Chuvas Isoladas">Chuvas Isoladas</option>
