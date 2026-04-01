@@ -1307,13 +1307,17 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 for date_key, status_value in normalized_incoming_attendance.items():
                     if status_value:
                         merged_attendance[date_key] = status_value
-                    else:
-                        merged_attendance.pop(date_key, None)
+
+                non_empty_attendance_dates = {
+                    date_key
+                    for date_key, status_value in normalized_incoming_attendance.items()
+                    if status_value
+                }
 
                 merged_justifications = {
                     **existing_justifications,
                 }
-                for date_key in normalized_incoming_attendance.keys():
+                for date_key in non_empty_attendance_dates:
                     status_value = str(merged_attendance.get(date_key) or "").strip()
                     incoming_reason = normalized_incoming_justifications.get(date_key, "")
                     if status_value == "Justificado" and incoming_reason:
