@@ -228,6 +228,7 @@ export const Vacancies: React.FC = () => {
   const [excludedSnapshot, setExcludedSnapshot] = useState<ExclusionLite[]>([]);
   const [showVagasDisponiveisDetalhe, setShowVagasDisponiveisDetalhe] = useState(false);
   const [expandedNiveis, setExpandedNiveis] = useState<Record<string, boolean>>({});
+  const [selectedPeriodoHorarioKey, setSelectedPeriodoHorarioKey] = useState<string | null>(null);
   const [selectedNivelDetailFilter, setSelectedNivelDetailFilter] = useState<{ nivelKey: string; subdivKey: string | null } | null>(null);
   const [loadingBootstrap, setLoadingBootstrap] = useState(false);
 
@@ -735,23 +736,32 @@ export const Vacancies: React.FC = () => {
   }, [vagasPorPeriodoHorario]);
 
   useEffect(() => {
+    setSelectedPeriodoHorarioKey(null);
     setSelectedNivelDetailFilter(null);
     setExpandedNiveis({});
   }, [nivelFiltro, turmaLabelFiltro, periodoFiltro]);
 
   useEffect(() => {
     if (!showVagasDisponiveisDetalhe) {
+      setSelectedPeriodoHorarioKey(null);
       setSelectedNivelDetailFilter(null);
       setExpandedNiveis({});
     }
   }, [showVagasDisponiveisDetalhe]);
 
   const turmasFiltradasDetalhe = useMemo(() => {
-    if (!selectedNivelDetailFilter) return turmasFiltradas;
-
-    return turmasFiltradas.filter((turma) => {
+    const filtered = turmasFiltradas.filter((turma) => {
       const meta = turmaMeta[turma];
       if (!meta) return false;
+
+      if (selectedPeriodoHorarioKey) {
+        const [selectedScheduleGroup, selectedHorarioKey] = selectedPeriodoHorarioKey.split("||");
+        const turmaScheduleGroup = getScheduleGroupKey(meta.turmaLabel || "", meta.diasSemana || "");
+        const turmaHorarioKey = normalizeHorarioKey(meta.horario || "");
+        if (turmaScheduleGroup !== selectedScheduleGroup || turmaHorarioKey !== selectedHorarioKey) return false;
+      }
+
+      if (!selectedNivelDetailFilter) return true;
 
       const details = getNivelDetails(meta.nivel || "");
       if (details.simpleKey !== selectedNivelDetailFilter.nivelKey) return false;
@@ -760,7 +770,15 @@ export const Vacancies: React.FC = () => {
       const turmaSubdiv = details.subdivisao || "Sem subdivisão";
       return turmaSubdiv === selectedNivelDetailFilter.subdivKey;
     });
-  }, [selectedNivelDetailFilter, turmasFiltradas, turmaMeta]);
+
+    return filtered.sort((a, b) => {
+      const metaA = turmaMeta[a];
+      const metaB = turmaMeta[b];
+      const byHorario = getHorarioSortValue(metaA?.horario || "") - getHorarioSortValue(metaB?.horario || "");
+      if (byHorario !== 0) return byHorario;
+      return a.localeCompare(b);
+    });
+  }, [selectedNivelDetailFilter, selectedPeriodoHorarioKey, turmasFiltradas, turmaMeta]);
 
   return (
     <div className="vagas-root">
@@ -854,7 +872,7 @@ export const Vacancies: React.FC = () => {
           <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
           <div className="vagas-detail-list" style={{ marginBottom: 16 }}>
             {vagasPorPeriodoHorario.filter(item => item.vagas > 0).map((item) => {
-              const periodoHorarioKey = `${item.scheduleGroup}||${item.horario}`;
+              const periodoHorarioKey = `${item.scheduleGroup}||${normalizeHorarioKey(item.horario || "")}`;
               
               // Encontra as turmas que pertencem a este período/horário
               const turmasDoGrupo = turmasFiltradas.filter(turma => {
@@ -885,6 +903,8 @@ export const Vacancies: React.FC = () => {
                         ...prev,
                         [periodoHorarioKey]: !prev[periodoHorarioKey]
                       }));
+                      setSelectedPeriodoHorarioKey((prev) => (prev === periodoHorarioKey ? null : periodoHorarioKey));
+                      setSelectedNivelDetailFilter(null);
                     }}
                   >
                     <div>
@@ -921,12 +941,30 @@ export const Vacancies: React.FC = () => {
 
                             {isNivelActive && nivel.subdivisoes.length > 0 && (
                               <div style={{ marginLeft: 16, borderLeft: "2px solid #ccc", paddingLeft: 8 }}>
-                                {nivel.subdivisoes.map((sub) => (
-                                  <div key={`${nivel.nivelKey}-${sub.key}`} className="vagas-detail-subrow">
+                                {nivel.subdivisoes.map((sub) => {
+                                  const isSubdivActive =
+                                    selectedNivelDetailFilter?.nivelKey === nivel.nivelKey &&
+                                    selectedNivelDetailFilter?.subdivKey === sub.key;
+
+                                  return (
+                                  <button
+                                    key={`${nivel.nivelKey}-${sub.key}`}
+                                    type="button"
+                                    className={`vagas-detail-subrow vagas-detail-subrow-button ${isSubdivActive ? "active" : ""}`}
+                                    onClick={() => {
+                                      setSelectedNivelDetailFilter((prev) => {
+                                        if (prev?.nivelKey === nivel.nivelKey && prev?.subdivKey === sub.key) {
+                                          return { nivelKey: nivel.nivelKey, subdivKey: null };
+                                        }
+                                        return { nivelKey: nivel.nivelKey, subdivKey: sub.key };
+                                      });
+                                    }}
+                                  >
                                     <strong>{sub.label}</strong>
                                     <span>{sub.total}/{sub.capacidade}</span>
-                                  </div>
-                                ))}
+                                  </button>
+                                );
+                                })}
                               </div>
                             )}
                           </div>
