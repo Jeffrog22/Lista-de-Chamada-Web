@@ -2231,6 +2231,27 @@ export const Reports: React.FC = () => {
   const vacancyRows = useMemo(() => {
     const studentCountByPeriodoHorario = new Map<string, number>();
 
+    const scheduleGroupByTurmaHorario = new Map<string, "terca-quinta" | "quarta-sexta" | "outros">();
+    const scheduleGroupsByHorario = new Map<string, Set<"terca-quinta" | "quarta-sexta" | "outros">>();
+
+    bootstrapClasses.forEach((cls) => {
+      const horarioKey = normalizeHorarioSelectionKey(cls.horario || "");
+      if (!horarioKey) return;
+
+      const scheduleGroup = resolveScheduleGroupForVacancy(cls.diasSemana || "", cls.turmaLabel || "");
+      const candidates = [cls.turmaLabel, cls.codigo, cls.grupo]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean);
+
+      candidates.forEach((candidate) => {
+        scheduleGroupByTurmaHorario.set(`${candidate}||${horarioKey}`, scheduleGroup);
+      });
+
+      const groups = scheduleGroupsByHorario.get(horarioKey) || new Set<"terca-quinta" | "quarta-sexta" | "outros">();
+      groups.add(scheduleGroup);
+      scheduleGroupsByHorario.set(horarioKey, groups);
+    });
+
     const activeStudents = studentsSnapshot.filter(
       (student) => !excludedSnapshot.some((exclusion) => isExcludedStudentForVacancy(student, exclusion))
     );
@@ -2238,7 +2259,30 @@ export const Reports: React.FC = () => {
     activeStudents.forEach((student) => {
       const horarioKey = normalizeHorarioSelectionKey(student.horario || "");
       if (!horarioKey) return;
-      const scheduleGroup = resolveScheduleGroupForVacancy("", student.turma || "");
+
+      const studentTurmas = [student.turma, student.grupo, student.turmaCodigo]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean);
+
+      let scheduleGroup: "terca-quinta" | "quarta-sexta" | "outros" = "outros";
+
+      for (const turmaKey of studentTurmas) {
+        const mapped = scheduleGroupByTurmaHorario.get(`${turmaKey}||${horarioKey}`);
+        if (mapped) {
+          scheduleGroup = mapped;
+          break;
+        }
+      }
+
+      if (scheduleGroup === "outros") {
+        const knownGroups = scheduleGroupsByHorario.get(horarioKey);
+        if (knownGroups && knownGroups.size === 1) {
+          scheduleGroup = Array.from(knownGroups)[0];
+        } else {
+          scheduleGroup = resolveScheduleGroupForVacancy("", student.turma || "");
+        }
+      }
+
       const groupKey = `${scheduleGroup}||${horarioKey}`;
       studentCountByPeriodoHorario.set(groupKey, (studentCountByPeriodoHorario.get(groupKey) || 0) + 1);
     });
