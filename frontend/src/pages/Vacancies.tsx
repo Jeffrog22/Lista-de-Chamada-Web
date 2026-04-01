@@ -734,21 +734,6 @@ export const Vacancies: React.FC = () => {
     return vagasPorPeriodoHorario.reduce((acc, item) => acc + item.excedentes, 0);
   }, [vagasPorPeriodoHorario]);
 
-  const toggleNivelDetalhe = (nivelKey: string) => {
-    setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
-    setSelectedNivelDetailFilter((prev) => {
-      if (prev?.nivelKey === nivelKey && prev?.subdivKey === null) return null;
-      return { nivelKey, subdivKey: null };
-    });
-  };
-
-  const toggleSubdivisaoDetalhe = (nivelKey: string, subdivKey: string) => {
-    setSelectedNivelDetailFilter((prev) => {
-      if (prev?.nivelKey === nivelKey && prev?.subdivKey === subdivKey) return null;
-      return { nivelKey, subdivKey };
-    });
-  };
-
   useEffect(() => {
     setSelectedNivelDetailFilter(null);
     setExpandedNiveis({});
@@ -776,11 +761,6 @@ export const Vacancies: React.FC = () => {
       return turmaSubdiv === selectedNivelDetailFilter.subdivKey;
     });
   }, [selectedNivelDetailFilter, turmasFiltradas, turmaMeta]);
-
-  const getBalanceLabel = (total: number, capacidade: number) => {
-    if (total > capacidade) return `${total - capacidade} excedente${total - capacidade > 1 ? "s" : ""}`;
-    return `${capacidade - total} vaga${capacidade - total > 1 ? "s" : ""}`;
-  };
 
   return (
     <div className="vagas-root">
@@ -873,91 +853,91 @@ export const Vacancies: React.FC = () => {
           <h3>Blocos com vagas disponíveis</h3>
           <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
           <div className="vagas-detail-list" style={{ marginBottom: 16 }}>
-            {vagasPorPeriodoHorario.filter(item => item.vagas > 0).map((item) => (
-              <div key={`${item.scheduleGroup}-${item.horario}`} className="vagas-detail-row">
-                <div>
-                  <strong>{scheduleGroupLabel(item.scheduleGroup)} {formatHorario(item.horario)}</strong>
-                  <span>{item.nivelResumo || "Níveis não informados"}</span>
-                </div>
-                <div className="vagas-detail-meta">
-                  <span>{item.vagas} vaga{item.vagas === 1 ? "" : "s"}</span>
-                  <span>{item.excedentes} excedente{item.excedentes === 1 ? "" : "s"}</span>
-                  <span>{item.total}/{item.capacidade}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {selectedNivelDetailFilter && (
-            <div className="vagas-detail-filter-hint">
-              Filtro aplicado nas aulas abaixo: <strong>
-                {vagasDetalhadasPorNivel.find((item) => item.nivelKey === selectedNivelDetailFilter.nivelKey)?.nivel || "Nível"}
-                {selectedNivelDetailFilter.subdivKey ? ` ${selectedNivelDetailFilter.subdivKey}` : ""}
-              </strong>
-            </div>
-          )}
-          {vagasDetalhadasPorNivel.length === 0 ? (
-            <div className="empty-state">Nenhum nível encontrado para os filtros selecionados.</div>
-          ) : (
-            <div className="vagas-detail-list">
-              {vagasDetalhadasPorNivel.filter(item => item.vagas > 0).map((item) => (
-                <div key={item.nivelKey} className="vagas-detail-row-block">
+            {vagasPorPeriodoHorario.filter(item => item.vagas > 0).map((item) => {
+              const periodoHorarioKey = `${item.scheduleGroup}||${item.horario}`;
+              
+              // Encontra as turmas que pertencem a este período/horário
+              const turmasDoGrupo = turmasFiltradas.filter(turma => {
+                const meta = turmaMeta[turma];
+                if (!meta) return false;
+                if (normalizeHorarioKey(meta.horario || "") !== normalizeHorarioKey(item.horario || "")) return false;
+                const scheduleGroup = getScheduleGroupKey(meta.turmaLabel, meta.diasSemana || "");
+                return scheduleGroup === item.scheduleGroup;
+              });
+              
+              // Extrai os níveis únicos dessas turmas
+              const nivelsDagrupo = vagasDetalhadasPorNivel.filter(n => {
+                const temTurmaComEsseNivel = turmasDoGrupo.some(turma => {
+                  const meta = turmaMeta[turma];
+                  return meta && formatNivelLabel(meta.nivel || "") === n.nivel;
+                });
+                return temTurmaComEsseNivel && n.vagas > 0;
+              });
+              const isExpanded = expandedNiveis[periodoHorarioKey];
+
+              return (
+                <div key={periodoHorarioKey} className="vagas-detail-row-block">
                   <button
                     type="button"
-                    className={`vagas-detail-row vagas-detail-row-button ${expandedNiveis[item.nivelKey] ? "active" : ""}`}
-                    onClick={() => toggleNivelDetalhe(item.nivelKey)}
+                    className={`vagas-detail-row vagas-detail-row-button ${isExpanded ? "active" : ""}`}
+                    onClick={() => {
+                      setExpandedNiveis(prev => ({
+                        ...prev,
+                        [periodoHorarioKey]: !prev[periodoHorarioKey]
+                      }));
+                    }}
                   >
                     <div>
-                      <strong>{item.nivel}</strong>
-                      <span>Turmas (nível simples): {item.turmas.join(" | ")}</span>
+                      <strong>{scheduleGroupLabel(item.scheduleGroup)} {formatHorario(item.horario)}</strong>
+                      <span>{item.nivelResumo || "Níveis não informados"}</span>
                     </div>
                     <div className="vagas-detail-meta">
-                      <span>
-                        {item.vagas > 0
-                          ? `${item.vagas} vagas`
-                          : `${item.excedentesPorPeriodo} excedente${item.excedentesPorPeriodo > 1 ? "s" : ""}`}
-                      </span>
-                      {item.vagas > 0 && item.excedentesPorPeriodo > 0 && (
-                        <span>{item.excedentesPorPeriodo} excedente{item.excedentesPorPeriodo > 1 ? "s" : ""}</span>
-                      )}
+                      <span>{item.vagas} vaga{item.vagas === 1 ? "" : "s"}</span>
                       <span>{item.total}/{item.capacidade}</span>
                     </div>
                   </button>
 
-                  {expandedNiveis[item.nivelKey] && (
+                  {isExpanded && nivelsDagrupo.length > 0 && (
                     <div className="vagas-detail-subrows">
-                      <div className="vagas-detail-periodos">
-                        <span>
-                          Manhã: <strong>{item.periodos["Manhã"].total}/{item.periodos["Manhã"].capacidade}</strong>
-                          {` (${getBalanceLabel(item.periodos["Manhã"].total, item.periodos["Manhã"].capacidade)})`}
-                        </span>
-                        <span>
-                          Tarde: <strong>{item.periodos["Tarde"].total}/{item.periodos["Tarde"].capacidade}</strong>
-                          {` (${getBalanceLabel(item.periodos["Tarde"].total, item.periodos["Tarde"].capacidade)})`}
-                        </span>
-                      </div>
-
-                      {item.subdivisoes.map((sub) => {
-                        const isActive =
-                          selectedNivelDetailFilter?.nivelKey === item.nivelKey &&
-                          selectedNivelDetailFilter?.subdivKey === sub.key;
+                      {nivelsDagrupo.map((nivel) => {
+                        const isNivelActive = selectedNivelDetailFilter?.nivelKey === nivel.nivelKey && !selectedNivelDetailFilter?.subdivKey;
                         return (
-                          <button
-                            key={`${item.nivelKey}-${sub.key}`}
-                            type="button"
-                            className={`vagas-detail-subrow vagas-detail-subrow-button ${isActive ? "active" : ""}`}
-                            onClick={() => toggleSubdivisaoDetalhe(item.nivelKey, sub.key)}
-                          >
-                            <strong>{sub.label}</strong>
-                            <span>{sub.total}/{sub.capacidade}</span>
-                          </button>
+                          <div key={nivel.nivelKey}>
+                            <button
+                              type="button"
+                              className={`vagas-detail-subrow vagas-detail-subrow-button ${isNivelActive ? "active" : ""}`}
+                              onClick={() => {
+                                setSelectedNivelDetailFilter(prev => 
+                                  prev?.nivelKey === nivel.nivelKey && !prev?.subdivKey 
+                                    ? null 
+                                    : { nivelKey: nivel.nivelKey, subdivKey: null }
+                                );
+                              }}
+                            >
+                              <strong>{nivel.nivel}</strong>
+                              <span>{nivel.total}/{nivel.capacidade}</span>
+                              <span>{nivel.vagas} vagas</span>
+                            </button>
+
+                            {isNivelActive && nivel.subdivisoes.length > 0 && (
+                              <div style={{ marginLeft: 16, borderLeft: "2px solid #ccc", paddingLeft: 8 }}>
+                                {nivel.subdivisoes.map((sub) => (
+                                  <div key={`${nivel.nivelKey}-${sub.key}`} className="vagas-detail-subrow">
+                                    <strong>{sub.label}</strong>
+                                    <span>{sub.total}/{sub.capacidade}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       )}
 
