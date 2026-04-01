@@ -44,6 +44,25 @@ const getViewFromHash = (hash: string): ViewType => {
   return (candidates.find((view) => view === normalized) || "main");
 };
 
+const expectedUnitName = String(import.meta.env.VITE_UNIT_NAME || "").trim();
+
+const normalizeUnitName = (value: string) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const isUnitAllowedForEnvironment = (typedUnit: string) => {
+  if (!expectedUnitName) return true;
+  return normalizeUnitName(typedUnit) === normalizeUnitName(expectedUnitName);
+};
+
+const resolveValidatedUnit = (typedUnit: string) => {
+  if (!expectedUnitName) return String(typedUnit || "").trim();
+  return isUnitAllowedForEnvironment(typedUnit) ? expectedUnitName : "";
+};
+
 export default function App() {
   const appVersion = (typeof __APP_VERSION__ === "string" && __APP_VERSION__.trim()) ? __APP_VERSION__.trim() : "v.local";
   const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
@@ -184,7 +203,12 @@ export default function App() {
       try {
         const profile = JSON.parse(profileStr);
         setTeacherName(profile.name || "");
-        setTeacherUnit(profile.unit || "");
+        const validatedUnit = resolveValidatedUnit(profile.unit || "");
+        if (expectedUnitName && !validatedUnit) {
+          localStorage.removeItem("access_token");
+          setToken(null);
+        }
+        setTeacherUnit(validatedUnit || "");
       } catch {
         // ignore
       }
@@ -343,7 +367,7 @@ export default function App() {
       try {
         const profile = JSON.parse(profileStr);
         setTeacherName(profile.name || "");
-        setTeacherUnit(profile.unit || "");
+        setTeacherUnit(resolveValidatedUnit(profile.unit || ""));
       } catch {
         // ignore
       }
@@ -522,7 +546,7 @@ export default function App() {
           <span className="app-version-tag" title="Versão da aplicação">{appVersion}</span>
           <span className="user-info">
             {teacherName ? `Conectado: ${formatDisplayName(teacherName)}` : "Conectado"}
-            {teacherUnit ? ` - ${teacherUnit}` : ""}
+            {teacherUnit ? ` - Unidade validada: ${teacherUnit}` : ""}
           </span>
           {updateStatus && (
             <span className="user-info">{updateStatus}</span>

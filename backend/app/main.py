@@ -54,6 +54,9 @@ EXCLUSIONS_FILE_LOCK = RLock()
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
 
+ENV_NAME = os.getenv("ENV_NAME", "").strip()
+UNIT_NAME = os.getenv("UNIT_NAME", "").strip()
+
 cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
 
 
@@ -80,6 +83,40 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+def _normalize_unit_name(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+    normalized = unicodedata.normalize("NFD", raw)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def _validate_unit_for_environment(typed_unit: Optional[str]) -> None:
+    # UNIT_NAME vazio mantém comportamento legado (sem bloqueio por ambiente).
+    if not UNIT_NAME:
+        return
+
+    if not typed_unit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unidade obrigatória para este ambiente. Unidade oficial: {UNIT_NAME}",
+        )
+
+    if _normalize_unit_name(typed_unit) != _normalize_unit_name(UNIT_NAME):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Login bloqueado: este ambiente aceita apenas a unidade '{UNIT_NAME}'.",
+        )
+
+
+@app.get("/environment")
+def environment_info():
+    return {
+        "env_name": ENV_NAME,
+        "unit_name": UNIT_NAME,
+    }
 
 class PoolLogEntryModel(BaseModel):
     data: str
@@ -1270,13 +1307,17 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 for date_key, status_value in normalized_incoming_attendance.items():
                     if status_value:
                         merged_attendance[date_key] = status_value
-                    else:
-                        merged_attendance.pop(date_key, None)
+
+                non_empty_attendance_dates = {
+                    date_key
+                    for date_key, status_value in normalized_incoming_attendance.items()
+                    if status_value
+                }
 
                 merged_justifications = {
                     **existing_justifications,
                 }
-                for date_key in normalized_incoming_attendance.keys():
+                for date_key in non_empty_attendance_dates:
                     status_value = str(merged_attendance.get(date_key) or "").strip()
                     incoming_reason = normalized_incoming_justifications.get(date_key, "")
                     if status_value == "Justificado" and incoming_reason:
@@ -4090,12 +4131,22 @@ def register_user(username: str, password: str, session: Session = Depends(get_s
     return {"username": user.username, "id": user.id}
 
 @app.post("/token")
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    unit_name: Optional[str] = Form(None),
+    session: Session = Depends(get_session),
+):
+    _validate_unit_for_environment(unit_name)
     user = authenticate_user(session, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "unit_name": UNIT_NAME,
+        "env_name": ENV_NAME,
+    }
 
 # Data endpoints
 @app.get("/students", response_model=List[models.Student])

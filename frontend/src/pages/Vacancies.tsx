@@ -21,6 +21,7 @@ interface TurmaMeta {
   turma: string;
   turmaLabel: string;
   horario: string;
+  diasSemana?: string;
   nivel: string;
   professor: string;
   capacidade: number;
@@ -32,6 +33,7 @@ interface BootstrapClassLite {
   codigo: string;
   turmaLabel: string;
   horario: string;
+  diasSemana?: string;
   nivel: string;
   professor: string;
   capacidade: number;
@@ -104,6 +106,7 @@ const readLocalVacancySnapshot = () => {
     codigo: String(cls?.Atalho || cls?.codigo || cls?.TurmaCodigo || cls?.turmaCodigo || ""),
     turmaLabel: String(cls?.Turma || cls?.turmaLabel || cls?.turma || cls?.codigo || ""),
     horario: String(cls?.Horario || cls?.horario || ""),
+    diasSemana: String(cls?.DiasSemana || cls?.dias_semana || cls?.diasSemana || ""),
     nivel: String(cls?.Nivel || cls?.nivel || ""),
     professor: String(cls?.Professor || cls?.professor || ""),
     capacidade: Math.max(0, Number(cls?.CapacidadeMaxima ?? cls?.Capacidade ?? cls?.capacidade ?? 0)),
@@ -158,6 +161,58 @@ const normalizeHorarioKey = (value: string) => {
 
 const buildClassKey = (turmaLabel: string, horario: string, nivel: string, professor: string) =>
   `${normalizeText(turmaLabel)}||${normalizeHorarioKey(horario)}||${normalizeText(nivel)}||${normalizeText(professor)}`;
+
+const buildHorarioAggregateKey = (horario: string) => normalizeHorarioKey(horario);
+
+const parseWeekdaysFromDiasSemana = (value: string): number[] => {
+  const normalized = normalizeText(value).replace(/\s+/g, "");
+  if (!normalized) return [];
+
+  const isTq =
+    normalized.includes("tq") ||
+    (normalized.includes("terca") && normalized.includes("quinta")) ||
+    (normalized.includes("ter") && normalized.includes("qui"));
+
+  const isQs =
+    normalized.includes("qs") ||
+    (normalized.includes("quarta") && normalized.includes("sexta")) ||
+    (normalized.includes("qua") && normalized.includes("sex"));
+
+  if (isTq) return [2, 4];
+  if (isQs) return [3, 5];
+  return [];
+};
+
+const getScheduleGroupKey = (turmaLabel: string, diasSemana: string) => {
+  const weekdays = parseWeekdaysFromDiasSemana(diasSemana);
+  if (weekdays.length > 0) {
+    const signature = Array.from(new Set(weekdays)).sort((a, b) => a - b).join(",");
+    if (signature === "2,4") return "terca-quinta";
+    if (signature === "3,5") return "quarta-sexta";
+  }
+
+  const normalized = normalizeText(turmaLabel)
+    .replace(/[áàãâä]/g, "a")
+    .replace(/[éèêë]/g, "e")
+    .replace(/[íìîï]/g, "i")
+    .replace(/[óòõôö]/g, "o")
+    .replace(/[úùûü]/g, "u")
+    .replace(/ç/g, "c");
+
+  if ((normalized.includes("terca") || normalized.includes("ter")) && (normalized.includes("quinta") || normalized.includes("qui"))) {
+    return "terca-quinta";
+  }
+  if ((normalized.includes("quarta") || normalized.includes("qua")) && (normalized.includes("sexta") || normalized.includes("sex"))) {
+    return "quarta-sexta";
+  }
+  return "outros";
+};
+
+const scheduleGroupLabel = (value: string) => {
+  if (value === "terca-quinta") return "Ter/Qui";
+  if (value === "quarta-sexta") return "Qua/Sex";
+  return "Outros";
+};
 
 const formatNivelLabel = (nivel: string) => {
   const raw = String(nivel || "").trim();
@@ -268,6 +323,7 @@ export const Vacancies: React.FC = () => {
             codigo: string;
             turma_label: string;
             horario: string;
+            dias_semana?: string;
             professor: string;
             nivel: string;
             faixa_etaria: string;
@@ -317,6 +373,7 @@ export const Vacancies: React.FC = () => {
           codigo: cls.codigo || "",
           turmaLabel: cls.turma_label || cls.codigo || "",
           horario: cls.horario || "",
+          diasSemana: String(cls.dias_semana || ""),
           nivel: cls.nivel || "",
           professor: cls.professor || "",
           capacidade: Number(cls.capacidade || 0),
@@ -373,6 +430,7 @@ export const Vacancies: React.FC = () => {
         turma: key,
         turmaLabel,
         horario: cls.horario || "-",
+        diasSemana: cls.diasSemana || "",
         nivel: cls.nivel || "-",
         professor: resolvedProfessor,
         capacidade: Math.max(0, Number(cls.capacidade || 0)),
@@ -589,24 +647,92 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => {
-      const vagasManha = Math.max(0, item.periodos["Manhã"].capacidade - item.periodos["Manhã"].total);
-      const vagasTarde = Math.max(0, item.periodos["Tarde"].capacidade - item.periodos["Tarde"].total);
+    const groupedByPeriodoHorario = new Map<string, { capacidade: number; total: number; periodo: Periodo }>();
 
-      if (periodoFiltro === "Manhã") {
-        return acc + vagasManha;
+    turmasFiltradas.forEach((turma) => {
+      const meta = turmaMeta[turma];
+      if (!meta) return;
+
+      const horarioKey = buildHorarioAggregateKey(meta.horario || "");
+      if (!horarioKey) return;
+
+      const scheduleGroup = getScheduleGroupKey(meta.turmaLabel || "", meta.diasSemana || "");
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+
+      const current = groupedByPeriodoHorario.get(groupKey) || {
+        capacidade: 0,
+        total: 0,
+        periodo: parsePeriodo(meta.horario || ""),
+      };
+
+      current.capacidade += Math.max(0, Number(meta.capacidade || 0));
+      current.total += studentsCountByClassKey[turma] || 0;
+      groupedByPeriodoHorario.set(groupKey, current);
+    });
+
+    return Array.from(groupedByPeriodoHorario.values()).reduce((acc, item) => {
+      if (periodoFiltro !== "Todos" && item.periodo !== periodoFiltro) {
+        return acc;
       }
-      if (periodoFiltro === "Tarde") {
-        return acc + vagasTarde;
-      }
-      // Em "Todos", refletir estritamente a soma Manhã + Tarde
-      return acc + vagasManha + vagasTarde;
+      return acc + Math.max(0, item.capacidade - item.total);
     }, 0);
-  }, [vagasDetalhadasPorNivel, periodoFiltro]);
+  }, [periodoFiltro, studentsCountByClassKey, turmaMeta, turmasFiltradas]);
+
+  const vagasPorPeriodoHorario = useMemo(() => {
+    const grouped = new Map<string, {
+      scheduleGroup: string;
+      horario: string;
+      total: number;
+      capacidade: number;
+      niveis: Set<string>;
+    }>();
+
+    turmasFiltradas.forEach((turma) => {
+      const meta = turmaMeta[turma];
+      if (!meta) return;
+
+      const horarioKey = buildHorarioAggregateKey(meta.horario || "");
+      if (!horarioKey) return;
+
+      const scheduleGroup = getScheduleGroupKey(meta.turmaLabel || "", meta.diasSemana || "");
+      const key = `${scheduleGroup}||${horarioKey}`;
+
+      const current = grouped.get(key) || {
+        scheduleGroup,
+        horario: meta.horario || "",
+        total: 0,
+        capacidade: 0,
+        niveis: new Set<string>(),
+      };
+
+      current.total += studentsCountByClassKey[turma] || 0;
+      current.capacidade += Math.max(0, Number(meta.capacidade || 0));
+      if (meta.nivel) current.niveis.add(formatNivelLabel(meta.nivel));
+      grouped.set(key, current);
+    });
+
+    return Array.from(grouped.values())
+      .map((item) => ({
+        ...item,
+        vagas: Math.max(0, item.capacidade - item.total),
+        excedentes: Math.max(0, item.total - item.capacidade),
+        nivelResumo: Array.from(item.niveis).sort((a, b) => a.localeCompare(b)).join(" | "),
+      }))
+      .sort((a, b) => {
+        const rank = (value: string) => {
+          if (value === "terca-quinta") return 0;
+          if (value === "quarta-sexta") return 1;
+          return 2;
+        };
+        const byGroup = rank(a.scheduleGroup) - rank(b.scheduleGroup);
+        if (byGroup !== 0) return byGroup;
+        return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
+      });
+  }, [studentsCountByClassKey, turmaMeta, turmasFiltradas]);
 
   const vagasExcedentes = useMemo(() => {
-    return vagasDetalhadasPorNivel.reduce((acc, item) => acc + item.excedentesPorPeriodo, 0);
-  }, [vagasDetalhadasPorNivel]);
+    return vagasPorPeriodoHorario.reduce((acc, item) => acc + item.excedentes, 0);
+  }, [vagasPorPeriodoHorario]);
 
   const toggleNivelDetalhe = (nivelKey: string) => {
     setExpandedNiveis((prev) => ({ ...prev, [nivelKey]: !prev[nivelKey] }));
@@ -733,7 +859,7 @@ export const Vacancies: React.FC = () => {
         >
           <span className="label">Vagas Disponíveis</span>
           <strong>{vagasDisponiveis}</strong>
-          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por nível"}</small>
+          <small>{vagasDisponiveis <= 0 ? "Turmas lotadas" : "Clique para ver por bloco"}</small>
         </button>
         <div className={`vagas-card highlight ${vagasExcedentes > 0 ? "danger" : ""}`}>
           <span className="label">Alunos Excedentes</span>
@@ -746,6 +872,21 @@ export const Vacancies: React.FC = () => {
         <div className="vagas-detail-box">
           <h3>Relação total de vagas/capacidade</h3>
           <div className="vagas-detail-total">Total filtrado: <strong>{alunosAtivos}/{capacidadeTotal}</strong></div>
+          <div className="vagas-detail-list" style={{ marginBottom: 16 }}>
+            {vagasPorPeriodoHorario.map((item) => (
+              <div key={`${item.scheduleGroup}-${item.horario}`} className="vagas-detail-row">
+                <div>
+                  <strong>{scheduleGroupLabel(item.scheduleGroup)} {formatHorario(item.horario)}</strong>
+                  <span>{item.nivelResumo || "Níveis não informados"}</span>
+                </div>
+                <div className="vagas-detail-meta">
+                  <span>{item.vagas} vaga{item.vagas === 1 ? "" : "s"}</span>
+                  <span>{item.excedentes} excedente{item.excedentes === 1 ? "" : "s"}</span>
+                  <span>{item.total}/{item.capacidade}</span>
+                </div>
+              </div>
+            ))}
+          </div>
           {selectedNivelDetailFilter && (
             <div className="vagas-detail-filter-hint">
               Filtro aplicado nas aulas abaixo: <strong>

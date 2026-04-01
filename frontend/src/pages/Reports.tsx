@@ -471,6 +471,20 @@ const parseWeekdaysFromDiasSemana = (value: string): number[] => {
   return [];
 };
 
+const resolveScheduleGroupForVacancy = (diasSemana: string, turmaLabel: string): "terca-quinta" | "quarta-sexta" | "outros" => {
+  const weekdays = parseWeekdaysFromDiasSemana(diasSemana);
+  if (weekdays.length > 0) {
+    return getSummaryGroupFromWeekdays(weekdays);
+  }
+  return getSummaryScheduleGroup(turmaLabel);
+};
+
+const scheduleGroupLabel: Record<"terca-quinta" | "quarta-sexta" | "outros", string> = {
+  "terca-quinta": "Ter/Qui",
+  "quarta-sexta": "Qua/Sex",
+  outros: "Outros",
+};
+
 const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedMonthIndex: number) => {
   const raw = String(rawDay || "").trim();
   if (!raw) return null;
@@ -1339,25 +1353,6 @@ export const Reports: React.FC = () => {
     if (digits.length >= 4) return Number.parseInt(digits.slice(0, 4), 10);
     if (digits.length === 3) return Number.parseInt(`0${digits}`, 10);
     return Number.MAX_SAFE_INTEGER;
-  };
-
-  const getDayPriority = (diasSemana?: string): number => {
-    if (!diasSemana) return 100;
-    const raw = String(diasSemana || "").toLowerCase().trim();
-    
-    // Terça (3) and Quinta (5) = priority 0-1
-    // Quarta (4) and Sexta (6) = priority 2-3
-    // Others = priority 4+
-    
-    if (raw.includes("terça") || raw.includes("3ª") || raw.includes("3a")) return 0;
-    if (raw.includes("quinta") || raw.includes("5ª") || raw.includes("5a")) return 1;
-    if (raw.includes("quarta") || raw.includes("4ª") || raw.includes("4a")) return 2;
-    if (raw.includes("sexta") || raw.includes("6ª") || raw.includes("6a")) return 3;
-    if (raw.includes("segunda") || raw.includes("2ª") || raw.includes("2a")) return 4;
-    if (raw.includes("segunda-feira")) return 4;
-    if (raw.includes("saturday") || raw.includes("sábado")) return 5;
-    if (raw.includes("sunday") || raw.includes("domingo")) return 6;
-    return 100;
   };
 
   const [studentsSnapshot, setStudentsSnapshot] = useState<ActiveStudentLite[]>([]);
@@ -2234,33 +2229,127 @@ export const Reports: React.FC = () => {
   };
 
   const vacancyRows = useMemo(() => {
-    const classCountByKey = new Map<string, number>();
+    const studentCountByPeriodoHorario = new Map<string, number>();
+
+    const scheduleGroupByTurmaHorario = new Map<string, "terca-quinta" | "quarta-sexta" | "outros">();
+    const scheduleGroupsByHorario = new Map<string, Set<"terca-quinta" | "quarta-sexta" | "outros">>();
+
+    bootstrapClasses.forEach((cls) => {
+      const horarioKey = normalizeHorarioSelectionKey(cls.horario || "");
+      if (!horarioKey) return;
+
+      const scheduleGroup = resolveScheduleGroupForVacancy(cls.diasSemana || "", cls.turmaLabel || "");
+      const candidates = [cls.turmaLabel, cls.codigo, cls.grupo]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean);
+
+      candidates.forEach((candidate) => {
+        scheduleGroupByTurmaHorario.set(`${candidate}||${horarioKey}`, scheduleGroup);
+      });
+
+      const groups = scheduleGroupsByHorario.get(horarioKey) || new Set<"terca-quinta" | "quarta-sexta" | "outros">();
+      groups.add(scheduleGroup);
+      scheduleGroupsByHorario.set(horarioKey, groups);
+    });
 
     const activeStudents = studentsSnapshot.filter(
       (student) => !excludedSnapshot.some((exclusion) => isExcludedStudentForVacancy(student, exclusion))
     );
 
     activeStudents.forEach((student) => {
-      const key = `${normalizeText(student.turma || "")}||${normalizeHorarioSelectionKey(student.horario || "")}||${normalizeText(student.professor || "")}`;
-      classCountByKey.set(key, (classCountByKey.get(key) || 0) + 1);
+      const horarioKey = normalizeHorarioSelectionKey(student.horario || "");
+      if (!horarioKey) return;
+
+      const studentTurmas = [student.turma, student.grupo, student.turmaCodigo]
+        .map((value) => normalizeText(String(value || "")))
+        .filter(Boolean);
+
+      let scheduleGroup: "terca-quinta" | "quarta-sexta" | "outros" = "outros";
+
+      for (const turmaKey of studentTurmas) {
+        const mapped = scheduleGroupByTurmaHorario.get(`${turmaKey}||${horarioKey}`);
+        if (mapped) {
+          scheduleGroup = mapped;
+          break;
+        }
+      }
+
+      if (scheduleGroup === "outros") {
+        const knownGroups = scheduleGroupsByHorario.get(horarioKey);
+        if (knownGroups && knownGroups.size === 1) {
+          scheduleGroup = Array.from(knownGroups)[0];
+        } else {
+          scheduleGroup = resolveScheduleGroupForVacancy("", student.turma || "");
+        }
+      }
+
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+      studentCountByPeriodoHorario.set(groupKey, (studentCountByPeriodoHorario.get(groupKey) || 0) + 1);
     });
 
-    return [...bootstrapClasses]
-      .map((cls) => {
-        const key = bootstrapClassSelectionKey(cls);
-        const lotacao = Number(classCountByKey.get(key) || 0);
-        const capacidade = Math.max(0, Number(cls.capacidade || 0));
+    const groupedByPeriodoHorario = new Map<
+      string,
+      {
+        scheduleGroup: "terca-quinta" | "quarta-sexta" | "outros";
+        horario: string;
+        capacidade: number;
+        turmas: Set<string>;
+        niveis: Set<string>;
+        professores: Set<string>;
+        diasSemana: Set<string>;
+      }
+    >();
+
+    bootstrapClasses.forEach((cls) => {
+      const horarioKey = normalizeHorarioSelectionKey(cls.horario || "");
+      if (!horarioKey) return;
+
+      const scheduleGroup = resolveScheduleGroupForVacancy(cls.diasSemana || "", cls.turmaLabel || "");
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+
+      const current = groupedByPeriodoHorario.get(groupKey) || {
+        scheduleGroup,
+        horario: cls.horario || "",
+        capacidade: 0,
+        turmas: new Set<string>(),
+        niveis: new Set<string>(),
+        professores: new Set<string>(),
+        diasSemana: new Set<string>(),
+      };
+
+      current.capacidade += Math.max(0, Number(cls.capacidade || 0));
+      if (cls.turmaLabel) current.turmas.add(cls.turmaLabel);
+      if (cls.nivel) current.niveis.add(cls.nivel);
+      if (cls.professor) current.professores.add(cls.professor);
+      if (cls.diasSemana) current.diasSemana.add(cls.diasSemana);
+
+      groupedByPeriodoHorario.set(groupKey, current);
+    });
+
+    return Array.from(groupedByPeriodoHorario.entries())
+      .map(([groupKey, group]) => {
+        const lotacao = Number(studentCountByPeriodoHorario.get(groupKey) || 0);
+        const capacidade = Math.max(0, Number(group.capacidade || 0));
         const vagasDisponiveis = Math.max(0, capacidade - lotacao);
         const excesso = Math.max(0, lotacao - capacidade);
         const ocupacaoPct = capacidade > 0 ? Math.round((lotacao / capacidade) * 100) : 0;
 
+        const turmas = Array.from(group.turmas).sort((a, b) => a.localeCompare(b));
+        const niveis = Array.from(group.niveis).sort((a, b) => a.localeCompare(b));
+        const professores = Array.from(group.professores).sort((a, b) => a.localeCompare(b));
+        const diasSemana = Array.from(group.diasSemana).sort((a, b) => a.localeCompare(b));
+
         return {
-          key,
-          turma: cls.turmaLabel || "-",
-          nivel: cls.nivel || "-",
-          horario: cls.horario || "",
-          professor: cls.professor || "-",
-          diasSemana: cls.diasSemana || "",
+          key: `periodo-horario:${groupKey}`,
+          periodoGrupo: group.scheduleGroup,
+          periodoLabel: scheduleGroupLabel[group.scheduleGroup],
+          turma: turmas.join(" | ") || "-",
+          nivel: niveis.join(" | ") || "-",
+          horario: group.horario || "",
+          professor: professores.join(" | ") || "-",
+          diasSemana: diasSemana.join(" | "),
+          niveis,
+          professores,
           lotacao,
           capacidade,
           vagasDisponiveis,
@@ -2270,29 +2359,32 @@ export const Reports: React.FC = () => {
       })
       .sort(
         (a, b) => {
-          // Priority 1: Day of week (Tuesday/Thursday first, then Wednesday/Friday)
-          const dayPriorityA = getDayPriority(a.diasSemana);
-          const dayPriorityB = getDayPriority(b.diasSemana);
-          const byDayPriority = dayPriorityA - dayPriorityB;
-          if (byDayPriority !== 0) return byDayPriority;
-          
-          // Priority 2: Time of day
+          // Priority 1: Schedule period group
+          const periodRank = (value: string) => {
+            if (value === "terca-quinta") return 0;
+            if (value === "quarta-sexta") return 1;
+            return 2;
+          };
+          const byPeriod = periodRank(a.periodoGrupo) - periodRank(b.periodoGrupo);
+          if (byPeriod !== 0) return byPeriod;
+
+          // Priority 2: Time of day (horario)
           const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
           if (byHorario !== 0) return byHorario;
-          
-          // Priority 3: Turma name
-          return a.turma.localeCompare(b.turma);
+
+          // Priority 3: Grouped labels
+          return a.nivel.localeCompare(b.nivel);
         }
       );
   }, [bootstrapClasses, excludedSnapshot, studentsSnapshot]);
 
   const vacancyNivelOptions = useMemo(
-    () => Array.from(new Set(vacancyRows.map((row) => row.nivel).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    () => Array.from(new Set(vacancyRows.flatMap((row) => row.niveis || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [vacancyRows]
   );
 
   const vacancyProfessorOptions = useMemo(
-    () => Array.from(new Set(vacancyRows.map((row) => row.professor).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    () => Array.from(new Set(vacancyRows.flatMap((row) => row.professores || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
     [vacancyRows]
   );
 
@@ -2300,14 +2392,15 @@ export const Reports: React.FC = () => {
     const searchKey = normalizeText(vacancySearch || "");
 
     return vacancyRows.filter((row) => {
-      if (vacancyNivelFilter && row.nivel !== vacancyNivelFilter) return false;
-      if (vacancyProfessorFilter && row.professor !== vacancyProfessorFilter) return false;
+      if (vacancyNivelFilter && !(row.niveis || []).includes(vacancyNivelFilter)) return false;
+      if (vacancyProfessorFilter && !(row.professores || []).includes(vacancyProfessorFilter)) return false;
       if (!searchKey) return true;
 
       const rowSearch = [
         row.turma,
         row.nivel,
         row.professor,
+        row.periodoLabel,
         formatHorario(row.horario),
         `${row.lotacao}/${row.capacidade}`,
       ]
@@ -2341,12 +2434,13 @@ export const Reports: React.FC = () => {
     }
 
     const rows = filteredVacancyRows.map((row) => ({
-      Turma: row.turma,
+      Horário: formatHorario(row.horario),
+      Período: row.periodoLabel,
+      "Turmas agrupadas": row.turma,
       "Nível": row.nivel,
       "Lotação/Capacidade": `${row.lotacao}/${row.capacidade}`,
       "Vagas Disponíveis": row.vagasDisponiveis,
       Excesso: row.excesso,
-      Horário: formatHorario(row.horario),
       Professor: row.professor,
     }));
 
@@ -2372,12 +2466,13 @@ export const Reports: React.FC = () => {
       .map(
         (row) => `
           <tr>
-            <td>${escapeHtml(row.turma)}</td>
+            <td>${escapeHtml(row.periodoLabel)}</td>
+            <td>${escapeHtml(formatHorario(row.horario))}</td>
             <td>${escapeHtml(row.nivel)}</td>
             <td>${escapeHtml(`${row.lotacao}/${row.capacidade}`)}</td>
             <td>${escapeHtml(String(row.vagasDisponiveis))}</td>
             <td>${escapeHtml(String(row.excesso))}</td>
-            <td>${escapeHtml(formatHorario(row.horario))}</td>
+            <td>${escapeHtml(row.turma)}</td>
             <td>${escapeHtml(row.professor)}</td>
           </tr>
         `
@@ -2410,12 +2505,13 @@ export const Reports: React.FC = () => {
           <table>
             <thead>
               <tr>
-                <th>Turma</th>
+                <th>Período</th>
+                <th>Horário</th>
                 <th>Nível</th>
                 <th>Lotação/Capacidade</th>
                 <th>Vagas</th>
                 <th>Excesso</th>
-                <th>Horário</th>
+                <th>Turmas agrupadas</th>
                 <th>Professor</th>
               </tr>
             </thead>
@@ -3355,7 +3451,7 @@ export const Reports: React.FC = () => {
           <div className="reports-vacancy-header">
             <h3 style={{ margin: 0 }}>Gestão de Vagas</h3>
             <p style={{ margin: 0, color: "#4b5563", fontSize: 13 }}>
-              Visão consolidada por turma com lotação, capacidade e disponibilidade.
+              Visão consolidada por horário com lotação, capacidade e disponibilidade.
             </p>
           </div>
 
@@ -3409,7 +3505,7 @@ export const Reports: React.FC = () => {
           </div>
 
           <div className="reports-vacancy-summary-list">
-            <span><strong>{filteredVacancyRows.length}</strong> turmas</span>
+            <span><strong>{filteredVacancyRows.length}</strong> horários</span>
             <span>Lotação: <strong>{vacancySummary.totalLotacao}</strong></span>
             <span>Capacidade: <strong>{vacancySummary.totalCapacidade}</strong></span>
             <span>Vagas: <strong>{vacancySummary.totalVagas}</strong></span>
@@ -3429,14 +3525,15 @@ export const Reports: React.FC = () => {
             {filteredVacancyRows.map((row) => (
               <article key={row.key} className="reports-vacancy-card">
                 <div className="reports-vacancy-line">
-                  <strong>{row.turma}</strong>
-                  <span>| {row.nivel} - {row.lotacao}/{row.capacidade}</span>
+                  <strong>{row.periodoLabel} {formatHorario(row.horario)}</strong>
+                  <span>| {row.lotacao}/{row.capacidade}</span>
                 </div>
                 <div className="reports-vacancy-line">
-                  <strong>{formatHorario(row.horario)}</strong>
+                  <strong>{row.nivel}</strong>
                   <span>| {row.professor}</span>
                 </div>
                 <div className="reports-vacancy-list">
+                  <span>Turmas: {row.turma}</span>
                   <span>Vagas: {row.vagasDisponiveis}</span>
                   <span>Excesso: {row.excesso}</span>
                   <span>Ocupação: {row.ocupacaoPct}%</span>
