@@ -471,6 +471,20 @@ const parseWeekdaysFromDiasSemana = (value: string): number[] => {
   return [];
 };
 
+const resolveScheduleGroupForVacancy = (diasSemana: string, turmaLabel: string): "terca-quinta" | "quarta-sexta" | "outros" => {
+  const weekdays = parseWeekdaysFromDiasSemana(diasSemana);
+  if (weekdays.length > 0) {
+    return getSummaryGroupFromWeekdays(weekdays);
+  }
+  return getSummaryScheduleGroup(turmaLabel);
+};
+
+const scheduleGroupLabel: Record<"terca-quinta" | "quarta-sexta" | "outros", string> = {
+  "terca-quinta": "Ter/Qui",
+  "quarta-sexta": "Qua/Sex",
+  outros: "Outros",
+};
+
 const parseHistoricoDayToDate = (rawDay: string, selectedYear: number, selectedMonthIndex: number) => {
   const raw = String(rawDay || "").trim();
   if (!raw) return null;
@@ -2215,7 +2229,7 @@ export const Reports: React.FC = () => {
   };
 
   const vacancyRows = useMemo(() => {
-    const studentCountByHorario = new Map<string, number>();
+    const studentCountByPeriodoHorario = new Map<string, number>();
 
     const activeStudents = studentsSnapshot.filter(
       (student) => !excludedSnapshot.some((exclusion) => isExcludedStudentForVacancy(student, exclusion))
@@ -2224,12 +2238,15 @@ export const Reports: React.FC = () => {
     activeStudents.forEach((student) => {
       const horarioKey = normalizeHorarioSelectionKey(student.horario || "");
       if (!horarioKey) return;
-      studentCountByHorario.set(horarioKey, (studentCountByHorario.get(horarioKey) || 0) + 1);
+      const scheduleGroup = resolveScheduleGroupForVacancy("", student.turma || "");
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+      studentCountByPeriodoHorario.set(groupKey, (studentCountByPeriodoHorario.get(groupKey) || 0) + 1);
     });
 
-    const groupedByHorario = new Map<
+    const groupedByPeriodoHorario = new Map<
       string,
       {
+        scheduleGroup: "terca-quinta" | "quarta-sexta" | "outros";
         horario: string;
         capacidade: number;
         turmas: Set<string>;
@@ -2243,7 +2260,11 @@ export const Reports: React.FC = () => {
       const horarioKey = normalizeHorarioSelectionKey(cls.horario || "");
       if (!horarioKey) return;
 
-      const current = groupedByHorario.get(horarioKey) || {
+      const scheduleGroup = resolveScheduleGroupForVacancy(cls.diasSemana || "", cls.turmaLabel || "");
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+
+      const current = groupedByPeriodoHorario.get(groupKey) || {
+        scheduleGroup,
         horario: cls.horario || "",
         capacidade: 0,
         turmas: new Set<string>(),
@@ -2258,12 +2279,12 @@ export const Reports: React.FC = () => {
       if (cls.professor) current.professores.add(cls.professor);
       if (cls.diasSemana) current.diasSemana.add(cls.diasSemana);
 
-      groupedByHorario.set(horarioKey, current);
+      groupedByPeriodoHorario.set(groupKey, current);
     });
 
-    return Array.from(groupedByHorario.entries())
-      .map(([horarioKey, group]) => {
-        const lotacao = Number(studentCountByHorario.get(horarioKey) || 0);
+    return Array.from(groupedByPeriodoHorario.entries())
+      .map(([groupKey, group]) => {
+        const lotacao = Number(studentCountByPeriodoHorario.get(groupKey) || 0);
         const capacidade = Math.max(0, Number(group.capacidade || 0));
         const vagasDisponiveis = Math.max(0, capacidade - lotacao);
         const excesso = Math.max(0, lotacao - capacidade);
@@ -2275,7 +2296,9 @@ export const Reports: React.FC = () => {
         const diasSemana = Array.from(group.diasSemana).sort((a, b) => a.localeCompare(b));
 
         return {
-          key: `horario:${horarioKey}`,
+          key: `periodo-horario:${groupKey}`,
+          periodoGrupo: group.scheduleGroup,
+          periodoLabel: scheduleGroupLabel[group.scheduleGroup],
           turma: turmas.join(" | ") || "-",
           nivel: niveis.join(" | ") || "-",
           horario: group.horario || "",
@@ -2292,11 +2315,20 @@ export const Reports: React.FC = () => {
       })
       .sort(
         (a, b) => {
-          // Priority 1: Time of day (horario)
+          // Priority 1: Schedule period group
+          const periodRank = (value: string) => {
+            if (value === "terca-quinta") return 0;
+            if (value === "quarta-sexta") return 1;
+            return 2;
+          };
+          const byPeriod = periodRank(a.periodoGrupo) - periodRank(b.periodoGrupo);
+          if (byPeriod !== 0) return byPeriod;
+
+          // Priority 2: Time of day (horario)
           const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
           if (byHorario !== 0) return byHorario;
 
-          // Priority 2: Grouped labels
+          // Priority 3: Grouped labels
           return a.nivel.localeCompare(b.nivel);
         }
       );
@@ -2324,6 +2356,7 @@ export const Reports: React.FC = () => {
         row.turma,
         row.nivel,
         row.professor,
+        row.periodoLabel,
         formatHorario(row.horario),
         `${row.lotacao}/${row.capacidade}`,
       ]
@@ -2358,6 +2391,7 @@ export const Reports: React.FC = () => {
 
     const rows = filteredVacancyRows.map((row) => ({
       Horário: formatHorario(row.horario),
+      Período: row.periodoLabel,
       "Turmas agrupadas": row.turma,
       "Nível": row.nivel,
       "Lotação/Capacidade": `${row.lotacao}/${row.capacidade}`,
@@ -2388,6 +2422,7 @@ export const Reports: React.FC = () => {
       .map(
         (row) => `
           <tr>
+            <td>${escapeHtml(row.periodoLabel)}</td>
             <td>${escapeHtml(formatHorario(row.horario))}</td>
             <td>${escapeHtml(row.nivel)}</td>
             <td>${escapeHtml(`${row.lotacao}/${row.capacidade}`)}</td>
@@ -2426,6 +2461,7 @@ export const Reports: React.FC = () => {
           <table>
             <thead>
               <tr>
+                <th>Período</th>
                 <th>Horário</th>
                 <th>Nível</th>
                 <th>Lotação/Capacidade</th>
@@ -3445,7 +3481,7 @@ export const Reports: React.FC = () => {
             {filteredVacancyRows.map((row) => (
               <article key={row.key} className="reports-vacancy-card">
                 <div className="reports-vacancy-line">
-                  <strong>{formatHorario(row.horario)}</strong>
+                  <strong>{row.periodoLabel} {formatHorario(row.horario)}</strong>
                   <span>| {row.lotacao}/{row.capacidade}</span>
                 </div>
                 <div className="reports-vacancy-line">

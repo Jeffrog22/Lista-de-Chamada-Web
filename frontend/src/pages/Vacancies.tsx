@@ -161,6 +161,24 @@ const buildClassKey = (turmaLabel: string, horario: string, nivel: string, profe
 
 const buildHorarioAggregateKey = (horario: string) => normalizeHorarioKey(horario);
 
+const getScheduleGroupKey = (turmaLabel: string) => {
+  const normalized = normalizeText(turmaLabel)
+    .replace(/[áàãâä]/g, "a")
+    .replace(/[éèêë]/g, "e")
+    .replace(/[íìîï]/g, "i")
+    .replace(/[óòõôö]/g, "o")
+    .replace(/[úùûü]/g, "u")
+    .replace(/ç/g, "c");
+
+  if ((normalized.includes("terca") || normalized.includes("ter")) && (normalized.includes("quinta") || normalized.includes("qui"))) {
+    return "terca-quinta";
+  }
+  if ((normalized.includes("quarta") || normalized.includes("qua")) && (normalized.includes("sexta") || normalized.includes("sex"))) {
+    return "quarta-sexta";
+  }
+  return "outros";
+};
+
 const formatNivelLabel = (nivel: string) => {
   const raw = String(nivel || "").trim();
   if (!raw) return "-";
@@ -591,7 +609,7 @@ export const Vacancies: React.FC = () => {
   }, [turmasFiltradas, turmaMeta, studentsCountByClassKey]);
 
   const vagasDisponiveis = useMemo(() => {
-    const groupedByHorario = new Map<string, { capacidade: number; total: number; periodo: Periodo }>();
+    const groupedByPeriodoHorario = new Map<string, { capacidade: number; total: number; periodo: Periodo }>();
 
     turmasFiltradas.forEach((turma) => {
       const meta = turmaMeta[turma];
@@ -600,7 +618,10 @@ export const Vacancies: React.FC = () => {
       const horarioKey = buildHorarioAggregateKey(meta.horario || "");
       if (!horarioKey) return;
 
-      const current = groupedByHorario.get(horarioKey) || {
+      const scheduleGroup = getScheduleGroupKey(meta.turmaLabel || "");
+      const groupKey = `${scheduleGroup}||${horarioKey}`;
+
+      const current = groupedByPeriodoHorario.get(groupKey) || {
         capacidade: 0,
         total: 0,
         periodo: parsePeriodo(meta.horario || ""),
@@ -608,10 +629,10 @@ export const Vacancies: React.FC = () => {
 
       current.capacidade += Math.max(0, Number(meta.capacidade || 0));
       current.total += studentsCountByClassKey[turma] || 0;
-      groupedByHorario.set(horarioKey, current);
+      groupedByPeriodoHorario.set(groupKey, current);
     });
 
-    return Array.from(groupedByHorario.values()).reduce((acc, item) => {
+    return Array.from(groupedByPeriodoHorario.values()).reduce((acc, item) => {
       if (periodoFiltro !== "Todos" && item.periodo !== periodoFiltro) {
         return acc;
       }
