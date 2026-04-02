@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
-import * as XLSX from "xlsx";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
   downloadMultiClassExcelReport,
+  downloadVacanciesTemplateReport,
   getAcademicCalendar,
   getBootstrap,
   getExcludedStudents,
@@ -2537,99 +2537,47 @@ export const Reports: React.FC = () => {
     });
   }, [filteredVacancyRows]);
 
-  const handleExportVacanciesXlsx = () => {
+  const handleExportVacanciesXlsx = async () => {
     if (filteredVacancyRows.length === 0) {
       alert("Não há dados de vagas para exportar.");
       return;
     }
 
-    const aoa: (string | number)[][] = [];
-    const merges: XLSX.Range[] = [];
+    try {
+      const payload = {
+        generatedAt: new Date().toLocaleString("pt-BR"),
+        summary: vacancySummary,
+        blocks: vacancyPrintBlocks.map((block) => ({
+          periodoLabel: block.periodoLabel,
+          horario: formatHorario(block.horario),
+          lotacaoHorario: block.lotacaoHorario,
+          capacidadeHorario: block.capacidadeHorario,
+          vagasDisponiveis: block.vagasDisponiveis,
+          excesso: block.excesso,
+          rows: block.rows.map((detail) => ({
+            nivel: detail.nivel,
+            lotacao: detail.lotacao,
+            capacidade: detail.capacidade,
+            professor: detail.professor,
+          })),
+        })),
+      };
 
-    const ensureRow = (rowIndex: number, minCols = 9) => {
-      while (aoa.length <= rowIndex) aoa.push([]);
-      while (aoa[rowIndex].length < minCols) aoa[rowIndex].push("");
-    };
-
-    const setCell = (r: number, c: number, value: string | number) => {
-      ensureRow(r, c + 1);
-      aoa[r][c] = value;
-    };
-
-    setCell(0, 0, "Relatório de Vagas - Template");
-    setCell(1, 0, `Gerado em ${new Date().toLocaleString("pt-BR")}`);
-    setCell(
-      2,
-      0,
-      `Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`
-    );
-    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } });
-    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 8 } });
-    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 8 } });
-
-    const blocksPerRow = 2;
-    const blockWidth = 4;
-    const gapCols = 1;
-    let rowCursor = 4;
-
-    for (let i = 0; i < vacancyPrintBlocks.length; i += blocksPerRow) {
-      const pair = vacancyPrintBlocks.slice(i, i + blocksPerRow);
-      const pairHeight = Math.max(...pair.map((block) => block.rows.length + 3));
-
-      pair.forEach((block, pairIndex) => {
-        const colStart = pairIndex * (blockWidth + gapCols);
-
-        setCell(rowCursor, colStart, formatHorario(block.horario));
-        setCell(rowCursor, colStart + 1, block.periodoLabel);
-        merges.push({ s: { r: rowCursor, c: colStart + 1 }, e: { r: rowCursor, c: colStart + 3 } });
-
-        let localRow = rowCursor + 1;
-        block.rows.forEach((detail) => {
-          setCell(localRow, colStart, `${detail.nivel}:`);
-          setCell(localRow, colStart + 1, `${detail.lotacao}/${detail.capacidade}`);
-          setCell(localRow, colStart + 2, detail.professor);
-          merges.push({ s: { r: localRow, c: colStart + 2 }, e: { r: localRow, c: colStart + 3 } });
-          localRow += 1;
-        });
-
-        setCell(localRow, colStart, "Lotação:");
-        setCell(localRow, colStart + 1, `${block.lotacaoHorario}/${block.capacidadeHorario}`);
-        merges.push({ s: { r: localRow, c: colStart + 2 }, e: { r: localRow, c: colStart + 3 } });
-        localRow += 1;
-
-        setCell(localRow, colStart, "Vagas:");
-        // Mantém como texto para alinhar à esquerda no Excel.
-        setCell(localRow, colStart + 1, String(block.vagasDisponiveis));
-        setCell(localRow, colStart + 2, "Excesso:");
-        // Mantém como texto para alinhar à esquerda no Excel.
-        setCell(localRow, colStart + 3, String(block.excesso));
-
-        while (localRow < rowCursor + pairHeight - 1) {
-          localRow += 1;
-          ensureRow(localRow, 9);
-        }
+      const response = await downloadVacanciesTemplateReport(payload);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-
-      rowCursor += pairHeight + 1;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert("Falha ao gerar o XLSX no template de vagas.");
     }
-
-    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-    worksheet["!merges"] = merges;
-    worksheet["!cols"] = [
-      { wch: 18 },
-      { wch: 8 },
-      { wch: 14 },
-      { wch: 8 },
-      { wch: 3 },
-      { wch: 18 },
-      { wch: 8 },
-      { wch: 14 },
-      { wch: 8 },
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Vagas");
-    XLSX.writeFile(workbook, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
   };
 
   const handleDownloadVacanciesPdf = () => {
