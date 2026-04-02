@@ -3480,10 +3480,10 @@ export const Reports: React.FC = () => {
 
           <div className="reports-export-actions">
             <button className="btn-primary" onClick={handleExportVacanciesXlsx} disabled={filteredVacancyRows.length === 0}>
-              Imprimir vagas (.xlsx)
+              Exportar vagas (.xlsx)
             </button>
             <button className="btn-secondary" onClick={handleDownloadVacanciesPdf} disabled={filteredVacancyRows.length === 0}>
-              Baixar vagas (.pdf)
+              Exportar vagas (.pdf)
             </button>
           </div>
 
@@ -3503,7 +3503,7 @@ export const Reports: React.FC = () => {
                   <span>| {row.lotacaoHorario}/{row.capacidadeHorario}</span>
                 </div>
                 <div className="reports-vacancy-list">
-                  <span>Turmas detalhadas: {row.turma}</span>
+                  <span>{row.turma}</span>
                   <span>Vagas: {row.vagasDisponiveis}</span>
                   <span>Excesso: {row.excesso}</span>
                   <span>Ocupação: {row.ocupacaoPct}%</span>
