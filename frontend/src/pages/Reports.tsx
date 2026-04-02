@@ -2419,6 +2419,34 @@ export const Reports: React.FC = () => {
     return { totalCapacidade, totalLotacao, totalVagas, totalExcesso };
   }, [filteredVacancyRows]);
 
+  const getVacancyPeriodRank = (value: string) => {
+    const normalized = normalizeText(String(value || ""));
+    if (normalized.includes("ter") && normalized.includes("qui")) return 0;
+    if (normalized.includes("qua") && normalized.includes("sex")) return 1;
+    return 2;
+  };
+
+  const getVacancyLevelSortParts = (nivel: string) => {
+    const normalized = normalizeText(String(nivel || ""));
+    if (!normalized) return { bucket: 99, number: 999, suffix: "" };
+    if (normalized.includes("iniciac")) return { bucket: 0, number: 0, suffix: "" };
+    if (normalized.includes("adult")) {
+      const suffixMatch = normalized.match(/adult[a-z]*\s*([a-z])$/i);
+      return { bucket: 2, number: 0, suffix: suffixMatch ? suffixMatch[1].toUpperCase() : "" };
+    }
+
+    const numberMatch = normalized.match(/(\d+)\s*([a-z])?$/i);
+    if (numberMatch) {
+      return {
+        bucket: 1,
+        number: Number.parseInt(numberMatch[1], 10),
+        suffix: numberMatch[2] ? numberMatch[2].toUpperCase() : "",
+      };
+    }
+
+    return { bucket: 3, number: 999, suffix: normalized };
+  };
+
   const vacancyPrintBlocks = useMemo(() => {
     type VacancyPrintRow = {
       nivel: string;
@@ -2467,21 +2495,22 @@ export const Reports: React.FC = () => {
     ).map((block) => ({
       ...block,
       rows: [...block.rows].sort((a, b) => {
-        const byNivel = a.nivel.localeCompare(b.nivel);
-        if (byNivel !== 0) return byNivel;
+        const aSort = getVacancyLevelSortParts(a.nivel);
+        const bSort = getVacancyLevelSortParts(b.nivel);
+        const byBucket = aSort.bucket - bSort.bucket;
+        if (byBucket !== 0) return byBucket;
+        const byNumber = aSort.number - bSort.number;
+        if (byNumber !== 0) return byNumber;
+        const bySuffix = aSort.suffix.localeCompare(bSort.suffix);
+        if (bySuffix !== 0) return bySuffix;
+        const byNivelLabel = a.nivel.localeCompare(b.nivel);
+        if (byNivelLabel !== 0) return byNivelLabel;
         return a.professor.localeCompare(b.professor);
       }),
     }));
 
-    const periodRank = (value: string) => {
-      const normalized = normalizeText(String(value || ""));
-      if (normalized.includes("ter") && normalized.includes("qui")) return 0;
-      if (normalized.includes("qua") && normalized.includes("sex")) return 1;
-      return 2;
-    };
-
     return blocks.sort((a, b) => {
-      const byPeriod = periodRank(a.periodoLabel) - periodRank(b.periodoLabel);
+      const byPeriod = getVacancyPeriodRank(a.periodoLabel) - getVacancyPeriodRank(b.periodoLabel);
       if (byPeriod !== 0) return byPeriod;
       return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
     });
