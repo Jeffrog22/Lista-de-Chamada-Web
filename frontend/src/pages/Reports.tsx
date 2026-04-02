@@ -2412,39 +2412,7 @@ export const Reports: React.FC = () => {
     return { totalCapacidade, totalLotacao, totalVagas, totalExcesso };
   }, [filteredVacancyRows]);
 
-  const handleExportVacanciesXlsx = () => {
-    if (filteredVacancyRows.length === 0) {
-      alert("Não há dados de vagas para exportar.");
-      return;
-    }
-
-    const rows = filteredVacancyRows.map((row) => ({
-      Horário: formatHorario(row.horario),
-      "Turmas agrupadas": row.turmaAgrupada,
-      "Professor": row.professor,
-      "Nível": row.nivel,
-      "Lotação/Capacidade": `${row.lotacao}/${row.capacidade}`,
-      "Lotação/Horário": `${row.lotacaoHorario}/${row.capacidadeHorario}`,
-      "Vagas Disponíveis": row.vagasDisponiveis,
-      Excesso: row.excesso,
-      "Turmas detalhadas": row.turma,
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Vagas");
-    XLSX.writeFile(workbook, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
-  };
-
-  const handleDownloadVacanciesPdf = () => {
-    if (filteredVacancyRows.length === 0) {
-      alert("Não há dados de vagas para exportar em PDF.");
-      return;
-    }
-
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageHeight = doc.internal.pageSize.getHeight();
-
+  const vacancyPrintBlocks = useMemo(() => {
     type VacancyPrintRow = {
       nivel: string;
       lotacao: number;
@@ -2463,7 +2431,7 @@ export const Reports: React.FC = () => {
       rows: VacancyPrintRow[];
     };
 
-    const printBlocks = Array.from(
+    const blocks = Array.from(
       filteredVacancyRows.reduce((acc, row) => {
         const current =
           acc.get(row.groupKey) ||
@@ -2505,11 +2473,115 @@ export const Reports: React.FC = () => {
       return 2;
     };
 
-    printBlocks.sort((a, b) => {
+    return blocks.sort((a, b) => {
       const byPeriod = periodRank(a.periodoLabel) - periodRank(b.periodoLabel);
       if (byPeriod !== 0) return byPeriod;
       return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
     });
+  }, [filteredVacancyRows]);
+
+  const handleExportVacanciesXlsx = () => {
+    if (filteredVacancyRows.length === 0) {
+      alert("Não há dados de vagas para exportar.");
+      return;
+    }
+
+    const aoa: (string | number)[][] = [];
+    const merges: XLSX.Range[] = [];
+
+    const ensureRow = (rowIndex: number, minCols = 9) => {
+      while (aoa.length <= rowIndex) aoa.push([]);
+      while (aoa[rowIndex].length < minCols) aoa[rowIndex].push("");
+    };
+
+    const setCell = (r: number, c: number, value: string | number) => {
+      ensureRow(r, c + 1);
+      aoa[r][c] = value;
+    };
+
+    setCell(0, 0, "Relatório de Vagas - Template");
+    setCell(1, 0, `Gerado em ${new Date().toLocaleString("pt-BR")}`);
+    setCell(
+      2,
+      0,
+      `Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`
+    );
+    merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } });
+    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 8 } });
+    merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: 8 } });
+
+    const blocksPerRow = 2;
+    const blockWidth = 4;
+    const gapCols = 1;
+    let rowCursor = 4;
+
+    for (let i = 0; i < vacancyPrintBlocks.length; i += blocksPerRow) {
+      const pair = vacancyPrintBlocks.slice(i, i + blocksPerRow);
+      const pairHeight = Math.max(...pair.map((block) => block.rows.length + 3));
+
+      pair.forEach((block, pairIndex) => {
+        const colStart = pairIndex * (blockWidth + gapCols);
+
+        setCell(rowCursor, colStart, formatHorario(block.horario));
+        setCell(rowCursor, colStart + 1, block.periodoLabel);
+        merges.push({ s: { r: rowCursor, c: colStart + 1 }, e: { r: rowCursor, c: colStart + 3 } });
+
+        let localRow = rowCursor + 1;
+        block.rows.forEach((detail) => {
+          setCell(localRow, colStart, `${detail.nivel}:`);
+          setCell(localRow, colStart + 1, `${detail.lotacao}/${detail.capacidade}`);
+          setCell(localRow, colStart + 2, detail.professor);
+          merges.push({ s: { r: localRow, c: colStart + 2 }, e: { r: localRow, c: colStart + 3 } });
+          localRow += 1;
+        });
+
+        setCell(localRow, colStart, "Lotação:");
+        setCell(localRow, colStart + 1, `${block.lotacaoHorario}/${block.capacidadeHorario}`);
+        merges.push({ s: { r: localRow, c: colStart + 2 }, e: { r: localRow, c: colStart + 3 } });
+        localRow += 1;
+
+        setCell(localRow, colStart, "Vagas:");
+        setCell(localRow, colStart + 1, block.vagasDisponiveis);
+        setCell(localRow, colStart + 2, "Excesso:");
+        setCell(localRow, colStart + 3, block.excesso);
+
+        while (localRow < rowCursor + pairHeight - 1) {
+          localRow += 1;
+          ensureRow(localRow, 9);
+        }
+      });
+
+      rowCursor += pairHeight + 1;
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet["!merges"] = merges;
+    worksheet["!cols"] = [
+      { wch: 18 },
+      { wch: 8 },
+      { wch: 14 },
+      { wch: 8 },
+      { wch: 3 },
+      { wch: 18 },
+      { wch: 8 },
+      { wch: 14 },
+      { wch: 8 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Vagas");
+    XLSX.writeFile(workbook, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
+  };
+
+  const handleDownloadVacanciesPdf = () => {
+    if (filteredVacancyRows.length === 0) {
+      alert("Não há dados de vagas para exportar em PDF.");
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
@@ -2525,14 +2597,20 @@ export const Reports: React.FC = () => {
 
     const startX = 10;
     const startY = 24;
-    const blockWidth = 86;
-    const gapX = 5;
+    const cols = 2;
+    const gapX = 6;
+    const blockWidth = (pageWidth - startX * 2 - gapX * (cols - 1)) / cols;
     const gapY = 6;
-    const cols = 3;
-    const colLevel = 35;
-    const colRatio = 16;
+    const colLevel = 50;
+    const colRatio = 18;
     const rowHeight = 6;
     const headerHeight = 7;
+
+    const drawTextCentered = (text: string, left: number, right: number, y: number) => {
+      const width = doc.getTextWidth(text);
+      const x = left + (right - left - width) / 2;
+      doc.text(text, x, y);
+    };
 
     let currentX = startX;
     let currentY = startY;
@@ -2546,7 +2624,7 @@ export const Reports: React.FC = () => {
       colIndex = 0;
     };
 
-    printBlocks.forEach((block) => {
+    vacancyPrintBlocks.forEach((block) => {
       const detailRows = Math.max(1, block.rows.length);
       const blockHeight = headerHeight + detailRows * rowHeight + 2 * rowHeight;
       ensurePageForBlock(blockHeight);
@@ -2565,8 +2643,8 @@ export const Reports: React.FC = () => {
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(formatHorario(block.horario), x1 + 2, y1 + 4.8);
-      doc.text(block.periodoLabel, x1 + 22, y1 + 4.8);
+      drawTextCentered(formatHorario(block.horario), x1 + 1, x1 + 20, y1 + 4.8);
+      drawTextCentered(block.periodoLabel, x1 + 20, x2 - 1, y1 + 4.8);
 
       const ratioX = x1 + colLevel;
       const professorX = ratioX + colRatio;
@@ -2601,11 +2679,11 @@ export const Reports: React.FC = () => {
       doc.setFont("helvetica", "bold");
       doc.text("Vagas:", x1 + 1.5, lotacaoY + 4.3);
       doc.setFont("helvetica", "normal");
-      doc.text(String(block.vagasDisponiveis), middleFooterX - 8, lotacaoY + 4.3);
+      drawTextCentered(String(block.vagasDisponiveis), x1 + 16, middleFooterX - 1, lotacaoY + 4.3);
       doc.setFont("helvetica", "bold");
       doc.text("Excesso:", middleFooterX + 1.5, lotacaoY + 4.3);
       doc.setFont("helvetica", "normal");
-      doc.text(String(block.excesso), x2 - 6, lotacaoY + 4.3);
+      drawTextCentered(String(block.excesso), x2 - 12, x2 - 1, lotacaoY + 4.3);
 
       colIndex += 1;
       if (colIndex >= cols) {
