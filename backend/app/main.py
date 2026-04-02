@@ -48,11 +48,16 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Lista-de-Chamada - API", lifespan=lifespan)
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-EXCLUSIONS_FILE_LOCK = RLock()
-
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
+
+DATA_DIR = (
+    os.getenv("APP_DATA_DIR", "").strip()
+    or os.getenv("DATA_DIR", "").strip()
+    or os.path.join(BASE_DIR, "data")
+)
+EXCLUSIONS_FILE_LOCK = RLock()
+ACADEMIC_CALENDAR_FILE_LOCK = RLock()
 
 ENV_NAME = os.getenv("ENV_NAME", "").strip()
 UNIT_NAME = os.getenv("UNIT_NAME", "").strip()
@@ -392,25 +397,27 @@ def _academic_calendar_file() -> str:
 
 def _load_academic_calendar_state() -> Dict[str, Any]:
     file_path = _academic_calendar_file()
-    if not os.path.exists(file_path):
-        return {"settings": None, "events": [], "bankHours": []}
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            payload = json.load(f)
-        if not isinstance(payload, dict):
+    with ACADEMIC_CALENDAR_FILE_LOCK:
+        if not os.path.exists(file_path):
             return {"settings": None, "events": [], "bankHours": []}
-        settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else None
-        events = payload.get("events") if isinstance(payload.get("events"), list) else []
-        bank_hours = payload.get("bankHours") if isinstance(payload.get("bankHours"), list) else []
-        return {"settings": settings, "events": events, "bankHours": bank_hours}
-    except Exception:
-        return {"settings": None, "events": [], "bankHours": []}
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            if not isinstance(payload, dict):
+                return {"settings": None, "events": [], "bankHours": []}
+            settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else None
+            events = payload.get("events") if isinstance(payload.get("events"), list) else []
+            bank_hours = payload.get("bankHours") if isinstance(payload.get("bankHours"), list) else []
+            return {"settings": settings, "events": events, "bankHours": bank_hours}
+        except Exception:
+            return {"settings": None, "events": [], "bankHours": []}
 
 def _save_academic_calendar_state(state: Dict[str, Any]) -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
     file_path = _academic_calendar_file()
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    with ACADEMIC_CALENDAR_FILE_LOCK:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
 
 
 @app.get("/planning-files")
