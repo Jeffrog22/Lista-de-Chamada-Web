@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import {
   deleteAcademicCalendarEvent,
@@ -2419,14 +2420,6 @@ export const Reports: React.FC = () => {
     return { totalCapacidade, totalLotacao, totalVagas, totalExcesso };
   }, [filteredVacancyRows]);
 
-  const escapeHtml = (value: string) =>
-    String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
   const handleExportVacanciesXlsx = () => {
     if (filteredVacancyRows.length === 0) {
       alert("Não há dados de vagas para exportar.");
@@ -2450,79 +2443,59 @@ export const Reports: React.FC = () => {
     XLSX.writeFile(workbook, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
   };
 
-  const handlePrintVacanciesPdf = () => {
+  const handleDownloadVacanciesPdf = () => {
     if (filteredVacancyRows.length === 0) {
-      alert("Não há dados de vagas para imprimir.");
+      alert("Não há dados de vagas para exportar em PDF.");
       return;
     }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1080,height=760");
-    if (!printWindow) {
-      alert("Não foi possível abrir a janela de impressão. Verifique se há bloqueio de pop-up.");
-      return;
-    }
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 10;
+    const maxLineWidth = pageWidth - marginX * 2;
+    const lineHeight = 5;
+    let y = 12;
 
-    const rowsMarkup = filteredVacancyRows
-      .map(
-        (row) => `
-          <tr>
-            <td>${escapeHtml(row.periodoLabel)}</td>
-            <td>${escapeHtml(formatHorario(row.horario))}</td>
-            <td>${escapeHtml(row.nivel)}</td>
-            <td>${escapeHtml(`${row.lotacao}/${row.capacidade}`)}</td>
-            <td>${escapeHtml(String(row.vagasDisponiveis))}</td>
-            <td>${escapeHtml(String(row.excesso))}</td>
-            <td>${escapeHtml(row.turma)}</td>
-            <td>${escapeHtml(row.professor)}</td>
-          </tr>
-        `
-      )
-      .join("");
+    const addLine = (text: string, fontSize = 9, bold = false) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal");
+      doc.setFontSize(fontSize);
+      const lines = doc.splitTextToSize(text, maxLineWidth);
+      for (const line of lines) {
+        if (y > pageHeight - 10) {
+          doc.addPage();
+          y = 12;
+        }
+        doc.text(line, marginX, y);
+        y += lineHeight;
+      }
+    };
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Relatório de Vagas</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-            h1 { margin: 0 0 6px; font-size: 20px; }
-            p { margin: 0 0 14px; font-size: 12px; color: #444; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
-            th { background: #f3f4f6; }
-            .summary { margin: 10px 0 16px; display: flex; gap: 16px; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <h1>Relatório de Vagas</h1>
-          <p>Gerado em ${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
-          <div class="summary">
-            <span>Lotação total: <strong>${escapeHtml(String(vacancySummary.totalLotacao))}</strong></span>
-            <span>Capacidade total: <strong>${escapeHtml(String(vacancySummary.totalCapacidade))}</strong></span>
-            <span>Vagas disponíveis: <strong>${escapeHtml(String(vacancySummary.totalVagas))}</strong></span>
-            <span>Excesso: <strong>${escapeHtml(String(vacancySummary.totalExcesso))}</strong></span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Período</th>
-                <th>Horário</th>
-                <th>Nível</th>
-                <th>Lotação/Capacidade</th>
-                <th>Vagas</th>
-                <th>Excesso</th>
-                <th>Turmas agrupadas</th>
-                <th>Professor</th>
-              </tr>
-            </thead>
-            <tbody>${rowsMarkup}</tbody>
-          </table>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    addLine("Relatório de Vagas", 13, true);
+    addLine(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 9, false);
+    addLine(
+      `Totais - Lotação: ${vacancySummary.totalLotacao} | Capacidade: ${vacancySummary.totalCapacidade} | Vagas: ${vacancySummary.totalVagas} | Excesso: ${vacancySummary.totalExcesso}`,
+      9,
+      false
+    );
+    y += 1;
+    addLine("Período | Horário | Nível | Lotação/Capacidade | Vagas | Excesso | Turmas agrupadas | Professor", 9, true);
+
+    filteredVacancyRows.forEach((row) => {
+      const line = [
+        row.periodoLabel,
+        formatHorario(row.horario),
+        row.nivel,
+        `${row.lotacao}/${row.capacidade}`,
+        String(row.vagasDisponiveis),
+        String(row.excesso),
+        row.turma,
+        row.professor,
+      ].join(" | ");
+      addLine(line, 8, false);
+    });
+
+    doc.save(`Relatorio_Vagas_${getCurrentLocalDateKey()}.pdf`);
   };
 
   const handleGenerateExcel = async () => {
@@ -3516,8 +3489,8 @@ export const Reports: React.FC = () => {
             <button className="btn-primary" onClick={handleExportVacanciesXlsx} disabled={filteredVacancyRows.length === 0}>
               Imprimir vagas (.xlsx)
             </button>
-            <button className="btn-secondary" onClick={handlePrintVacanciesPdf} disabled={filteredVacancyRows.length === 0}>
-              Imprimir vagas (.pdf)
+            <button className="btn-secondary" onClick={handleDownloadVacanciesPdf} disabled={filteredVacancyRows.length === 0}>
+              Baixar vagas (.pdf)
             </button>
           </div>
 
