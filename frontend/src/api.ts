@@ -597,8 +597,6 @@ export const downloadMultiClassExcelReport = (data: any) =>
   API.post("/reports/excel-file", data, { responseType: "blob" });
 export const downloadChamadaPdfReport = (data: any) =>
   API.post("/reports/chamada-pdf-file", data, { responseType: "blob" });
-export const downloadVacanciesTemplateReport = (data: any) =>
-  API.post("/reports/vacancies-template-file", data, { responseType: "blob" });
 export const generateConsolidatedReport = (data: any) => API.post("/reports/consolidated", data).catch(() => ({ data: { ok: true } }));
 
 // Statistics

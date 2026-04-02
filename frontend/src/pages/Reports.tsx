@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import { jsPDF } from "jspdf";
+import * as XLSX from "xlsx";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
   downloadMultiClassExcelReport,
-  downloadVacanciesTemplateReport,
   getAcademicCalendar,
   getBootstrap,
   getExcludedStudents,
@@ -2543,41 +2543,81 @@ export const Reports: React.FC = () => {
       return;
     }
 
-    try {
-      const payload = {
-        generatedAt: new Date().toLocaleString("pt-BR"),
-        summary: vacancySummary,
-        blocks: vacancyPrintBlocks.map((block) => ({
-          periodoLabel: block.periodoLabel,
-          horario: formatHorario(block.horario),
-          lotacaoHorario: block.lotacaoHorario,
-          capacidadeHorario: block.capacidadeHorario,
-          vagasDisponiveis: block.vagasDisponiveis,
-          excesso: block.excesso,
-          rows: block.rows.map((detail) => ({
-            nivel: detail.nivel,
-            lotacao: detail.lotacao,
-            capacidade: detail.capacidade,
-            professor: detail.professor,
-          })),
-        })),
-      };
+    const ws = XLSX.utils.aoa_to_sheet([]);
+    const colStarts = [0, 5, 10];
+    const rowStarts = [4, 10, 16, 22, 28];
+    const slotsPerSheet = colStarts.length * rowStarts.length;
 
-      const response = await downloadVacanciesTemplateReport(payload);
-      const blob = new Blob([response.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    XLSX.utils.sheet_add_aoa(
+      ws,
+      [["Relatório de Vagas"], [`Gerado em ${new Date().toLocaleString("pt-BR")}`]],
+      { origin: "A1" }
+    );
+    XLSX.utils.sheet_add_aoa(
+      ws,
+      [[`Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`]],
+      { origin: "A3" }
+    );
+
+    vacancyPrintBlocks.slice(0, slotsPerSheet).forEach((block, slot) => {
+      const rowStart = rowStarts[Math.floor(slot / colStarts.length)];
+      const colStart = colStarts[slot % colStarts.length];
+
+      XLSX.utils.sheet_add_aoa(ws, [[formatHorario(block.horario), block.periodoLabel, "", ""]], {
+        origin: { r: rowStart, c: colStart },
       });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch {
-      alert("Falha ao gerar o XLSX no template de vagas.");
-    }
+
+      const first = block.rows[0];
+      const second = block.rows[1];
+      const extras = block.rows.slice(2);
+
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [[first ? `${first.nivel}:` : "", first ? `${first.lotacao}/${first.capacidade}` : "", first ? first.professor : "", ""]],
+        { origin: { r: rowStart + 1, c: colStart } }
+      );
+      XLSX.utils.sheet_add_aoa(
+        ws,
+        [[
+          second ? `${second.nivel}:` : "",
+          second ? `${second.lotacao}/${second.capacidade}` : "",
+          second
+            ? second.professor
+            : extras.length > 0
+              ? extras.map((item) => `${item.nivel} ${item.lotacao}/${item.capacidade}`).join(" | ")
+              : "",
+          "",
+        ]],
+        { origin: { r: rowStart + 2, c: colStart } }
+      );
+      XLSX.utils.sheet_add_aoa(ws, [["Lotação:", `${block.lotacaoHorario}/${block.capacidadeHorario}`, "", ""]], {
+        origin: { r: rowStart + 3, c: colStart },
+      });
+      XLSX.utils.sheet_add_aoa(ws, [["Vagas:", block.vagasDisponiveis, "Excesso:", block.excesso]], {
+        origin: { r: rowStart + 4, c: colStart },
+      });
+    });
+
+    ws["!cols"] = [
+      { wch: 11 },
+      { wch: 7 },
+      { wch: 9 },
+      { wch: 15 },
+      { wch: 2 },
+      { wch: 11 },
+      { wch: 7 },
+      { wch: 9 },
+      { wch: 15 },
+      { wch: 2 },
+      { wch: 11 },
+      { wch: 7 },
+      { wch: 9 },
+      { wch: 15 },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Vagas");
+    XLSX.writeFile(wb, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
   };
 
   const handleDownloadVacanciesPdf = () => {
