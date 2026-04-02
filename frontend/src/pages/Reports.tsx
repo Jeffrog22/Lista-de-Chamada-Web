@@ -2548,7 +2548,8 @@ export const Reports: React.FC = () => {
         localRow += 1;
 
         setCell(localRow, colStart, "Vagas:");
-        setCell(localRow, colStart + 1, block.vagasDisponiveis);
+        // Mantém como texto para alinhar à esquerda no Excel.
+        setCell(localRow, colStart + 1, String(block.vagasDisponiveis));
         setCell(localRow, colStart + 2, "Excesso:");
         // Mantém como texto para alinhar à esquerda no Excel.
         setCell(localRow, colStart + 3, String(block.excesso));
@@ -2687,7 +2688,7 @@ export const Reports: React.FC = () => {
       doc.setFont("helvetica", "bold");
       doc.text("Vagas:", x1 + 1.5, lotacaoY + 4.3);
       doc.setFont("helvetica", "normal");
-      drawTextCentered(String(block.vagasDisponiveis), x1 + 16, middleFooterX - 1, lotacaoY + 4.3);
+      doc.text(String(block.vagasDisponiveis), x1 + 16, lotacaoY + 4.3);
       doc.setFont("helvetica", "bold");
       doc.text("Excesso:", middleFooterX + 1.5, lotacaoY + 4.3);
       doc.setFont("helvetica", "normal");
