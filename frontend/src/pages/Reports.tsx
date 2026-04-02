@@ -2407,8 +2407,15 @@ export const Reports: React.FC = () => {
 
     const totalCapacidade = Array.from(uniqueHorario.values()).reduce((acc, row) => acc + row.capacidadeHorario, 0);
     const totalLotacao = Array.from(uniqueHorario.values()).reduce((acc, row) => acc + row.lotacaoHorario, 0);
-    const totalVagas = Math.max(0, totalCapacidade - totalLotacao);
-    const totalExcesso = Math.max(0, totalLotacao - totalCapacidade);
+    // "Vagas reais" e "Excesso real" devem somar por bloco (sem compensar um bloco pelo outro).
+    const totalVagas = Array.from(uniqueHorario.values()).reduce(
+      (acc, row) => acc + Math.max(0, row.capacidadeHorario - row.lotacaoHorario),
+      0
+    );
+    const totalExcesso = Array.from(uniqueHorario.values()).reduce(
+      (acc, row) => acc + Math.max(0, row.lotacaoHorario - row.capacidadeHorario),
+      0
+    );
     return { totalCapacidade, totalLotacao, totalVagas, totalExcesso };
   }, [filteredVacancyRows]);
 
@@ -2543,7 +2550,8 @@ export const Reports: React.FC = () => {
         setCell(localRow, colStart, "Vagas:");
         setCell(localRow, colStart + 1, block.vagasDisponiveis);
         setCell(localRow, colStart + 2, "Excesso:");
-        setCell(localRow, colStart + 3, block.excesso);
+        // Mantém como texto para alinhar à esquerda no Excel.
+        setCell(localRow, colStart + 3, String(block.excesso));
 
         while (localRow < rowCursor + pairHeight - 1) {
           localRow += 1;
@@ -2683,7 +2691,7 @@ export const Reports: React.FC = () => {
       doc.setFont("helvetica", "bold");
       doc.text("Excesso:", middleFooterX + 1.5, lotacaoY + 4.3);
       doc.setFont("helvetica", "normal");
-      drawTextCentered(String(block.excesso), x2 - 12, x2 - 1, lotacaoY + 4.3);
+      doc.text(String(block.excesso), middleFooterX + 18, lotacaoY + 4.3);
 
       colIndex += 1;
       if (colIndex >= cols) {
