@@ -2250,6 +2250,7 @@ export const Reports: React.FC = () => {
         nivel: string;
         lotacao: number;
         capacidade: number;
+        publicationOrder: number;
         professores: string[];
         niveis: string[];
       }
@@ -2260,6 +2261,7 @@ export const Reports: React.FC = () => {
       {
         lotacao: number;
         capacidade: number;
+        publicationOrder: number;
       }
     >();
 
@@ -2307,6 +2309,7 @@ export const Reports: React.FC = () => {
         nivel: cls.nivel || "-",
         lotacao: 0,
         capacidade: 0,
+        publicationOrder: clsIndex,
         professores: cls.professor ? [cls.professor] : [],
         niveis: cls.nivel ? [cls.nivel] : [],
       };
@@ -2316,18 +2319,22 @@ export const Reports: React.FC = () => {
       if (cls.turmaLabel) currentDetail.turmasDetalhe.add(cls.turmaLabel);
       if (!currentDetail.professor && cls.professor) currentDetail.professor = cls.professor;
       if (!currentDetail.nivel && cls.nivel) currentDetail.nivel = cls.nivel;
+      currentDetail.publicationOrder = Math.min(currentDetail.publicationOrder, clsIndex);
 
       detailByKey.set(detailKey, currentDetail);
 
-      const currentGrouped = groupedByHorario.get(groupKey) || { lotacao: 0, capacidade: 0 };
+      const currentGrouped = groupedByHorario.get(groupKey) || { lotacao: 0, capacidade: 0, publicationOrder: clsIndex };
       currentGrouped.lotacao += classLotacao;
       currentGrouped.capacidade += Math.max(0, Number(cls.capacidade || 0));
+      currentGrouped.publicationOrder = Math.min(currentGrouped.publicationOrder, clsIndex);
       groupedByHorario.set(groupKey, currentGrouped);
     });
 
     return Array.from(detailByKey.values())
       .map((row) => {
-        const grouped = groupedByHorario.get(row.groupKey) || { lotacao: row.lotacao, capacidade: row.capacidade };
+        const grouped =
+          groupedByHorario.get(row.groupKey) ||
+          { lotacao: row.lotacao, capacidade: row.capacidade, publicationOrder: row.publicationOrder };
         const vagasDisponiveis = Math.max(0, grouped.capacidade - grouped.lotacao);
         const excesso = Math.max(0, grouped.lotacao - grouped.capacidade);
         const ocupacaoPct = grouped.capacidade > 0 ? Math.round((grouped.lotacao / grouped.capacidade) * 100) : 0;
@@ -2337,6 +2344,8 @@ export const Reports: React.FC = () => {
           turma: Array.from(row.turmasDetalhe).sort((a, b) => a.localeCompare(b)).join(" | ") || "-",
           lotacaoHorario: grouped.lotacao,
           capacidadeHorario: grouped.capacidade,
+          publicationOrder: grouped.publicationOrder,
+          detailPublicationOrder: row.publicationOrder,
           vagasDisponiveis,
           excesso,
           ocupacaoPct,
@@ -2350,6 +2359,9 @@ export const Reports: React.FC = () => {
         };
         const byPeriod = periodRank(a.periodoGrupo) - periodRank(b.periodoGrupo);
         if (byPeriod !== 0) return byPeriod;
+
+        const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
+        if (byPublication !== 0) return byPublication;
 
         const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
         if (byHorario !== 0) return byHorario;
@@ -2453,12 +2465,14 @@ export const Reports: React.FC = () => {
       lotacao: number;
       capacidade: number;
       professor: string;
+      publicationOrder: number;
     };
 
     type VacancyPrintBlock = {
       groupKey: string;
       periodoLabel: string;
       horario: string;
+      publicationOrder: number;
       lotacaoHorario: number;
       capacidadeHorario: number;
       vagasDisponiveis: number;
@@ -2474,6 +2488,7 @@ export const Reports: React.FC = () => {
             groupKey: row.groupKey,
             periodoLabel: row.periodoLabel,
             horario: row.horario,
+            publicationOrder: Number(row.publicationOrder || 0),
             lotacaoHorario: row.lotacaoHorario,
             capacidadeHorario: row.capacidadeHorario,
             vagasDisponiveis: row.vagasDisponiveis,
@@ -2486,6 +2501,7 @@ export const Reports: React.FC = () => {
           lotacao: Number(row.lotacao || 0),
           capacidade: Number(row.capacidade || 0),
           professor: String(row.professor || "-").trim() || "-",
+          publicationOrder: Number(row.detailPublicationOrder || row.publicationOrder || 0),
         });
 
         acc.set(row.groupKey, current);
@@ -2495,6 +2511,9 @@ export const Reports: React.FC = () => {
     ).map((block) => ({
       ...block,
       rows: [...block.rows].sort((a, b) => {
+        const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
+        if (byPublication !== 0) return byPublication;
+
         const aSort = getVacancyLevelSortParts(a.nivel);
         const bSort = getVacancyLevelSortParts(b.nivel);
         const byBucket = aSort.bucket - bSort.bucket;
@@ -2512,6 +2531,8 @@ export const Reports: React.FC = () => {
     return blocks.sort((a, b) => {
       const byPeriod = getVacancyPeriodRank(a.periodoLabel) - getVacancyPeriodRank(b.periodoLabel);
       if (byPeriod !== 0) return byPeriod;
+      const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
+      if (byPublication !== 0) return byPublication;
       return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
     });
   }, [filteredVacancyRows]);
