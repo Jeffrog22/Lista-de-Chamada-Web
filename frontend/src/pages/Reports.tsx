@@ -2443,49 +2443,178 @@ export const Reports: React.FC = () => {
     }
 
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const marginX = 10;
-    const maxLineWidth = pageWidth - marginX * 2;
-    const lineHeight = 5;
-    let y = 12;
 
-    const addLine = (text: string, fontSize = 9, bold = false) => {
-      doc.setFont("helvetica", bold ? "bold" : "normal");
-      doc.setFontSize(fontSize);
-      const lines = doc.splitTextToSize(text, maxLineWidth);
-      for (const line of lines) {
-        if (y > pageHeight - 10) {
-          doc.addPage();
-          y = 12;
-        }
-        doc.text(line, marginX, y);
-        y += lineHeight;
-      }
+    type VacancyPrintRow = {
+      nivel: string;
+      lotacao: number;
+      capacidade: number;
+      professor: string;
     };
 
-    addLine("Relatório de Vagas", 13, true);
-    addLine(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 9, false);
-    addLine(
-      `Totais - Lotação: ${vacancySummary.totalLotacao} | Capacidade: ${vacancySummary.totalCapacidade} | Vagas: ${vacancySummary.totalVagas} | Excesso: ${vacancySummary.totalExcesso}`,
-      9,
-      false
-    );
-    y += 1;
-    addLine("Horário | Turmas agrupadas | Professor | Nível | Lotação/Capacidade | Lotação/Horário | Vagas Disponíveis | Excesso", 9, true);
+    type VacancyPrintBlock = {
+      groupKey: string;
+      periodoLabel: string;
+      horario: string;
+      lotacaoHorario: number;
+      capacidadeHorario: number;
+      vagasDisponiveis: number;
+      excesso: number;
+      rows: VacancyPrintRow[];
+    };
 
-    filteredVacancyRows.forEach((row) => {
-      const line = [
-        formatHorario(row.horario),
-        row.turmaAgrupada,
-        row.professor,
-        row.nivel,
-        `${row.lotacao}/${row.capacidade}`,
-        `${row.lotacaoHorario}/${row.capacidadeHorario}`,
-        String(row.vagasDisponiveis),
-        String(row.excesso),
-      ].join(" | ");
-      addLine(line, 8, false);
+    const printBlocks = Array.from(
+      filteredVacancyRows.reduce((acc, row) => {
+        const current =
+          acc.get(row.groupKey) ||
+          {
+            groupKey: row.groupKey,
+            periodoLabel: row.periodoLabel,
+            horario: row.horario,
+            lotacaoHorario: row.lotacaoHorario,
+            capacidadeHorario: row.capacidadeHorario,
+            vagasDisponiveis: row.vagasDisponiveis,
+            excesso: row.excesso,
+            rows: [] as VacancyPrintRow[],
+          };
+
+        current.rows.push({
+          nivel: String(row.nivel || "-").trim() || "-",
+          lotacao: Number(row.lotacao || 0),
+          capacidade: Number(row.capacidade || 0),
+          professor: String(row.professor || "-").trim() || "-",
+        });
+
+        acc.set(row.groupKey, current);
+        return acc;
+      }, new Map<string, VacancyPrintBlock>())
+        .values()
+    ).map((block) => ({
+      ...block,
+      rows: [...block.rows].sort((a, b) => {
+        const byNivel = a.nivel.localeCompare(b.nivel);
+        if (byNivel !== 0) return byNivel;
+        return a.professor.localeCompare(b.professor);
+      }),
+    }));
+
+    const periodRank = (value: string) => {
+      const normalized = normalizeText(String(value || ""));
+      if (normalized.includes("ter") && normalized.includes("qui")) return 0;
+      if (normalized.includes("qua") && normalized.includes("sex")) return 1;
+      return 2;
+    };
+
+    printBlocks.sort((a, b) => {
+      const byPeriod = periodRank(a.periodoLabel) - periodRank(b.periodoLabel);
+      if (byPeriod !== 0) return byPeriod;
+      return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
+    });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Relatório de Vagas - Template", 10, 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 10, 15);
+    doc.text(
+      `Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`,
+      10,
+      19
+    );
+
+    const startX = 10;
+    const startY = 24;
+    const blockWidth = 86;
+    const gapX = 5;
+    const gapY = 6;
+    const cols = 3;
+    const colLevel = 35;
+    const colRatio = 16;
+    const rowHeight = 6;
+    const headerHeight = 7;
+
+    let currentX = startX;
+    let currentY = startY;
+    let colIndex = 0;
+
+    const ensurePageForBlock = (blockHeight: number) => {
+      if (currentY + blockHeight <= pageHeight - 10) return;
+      doc.addPage();
+      currentY = 12;
+      currentX = startX;
+      colIndex = 0;
+    };
+
+    printBlocks.forEach((block) => {
+      const detailRows = Math.max(1, block.rows.length);
+      const blockHeight = headerHeight + detailRows * rowHeight + 2 * rowHeight;
+      ensurePageForBlock(blockHeight);
+
+      const x1 = currentX;
+      const y1 = currentY;
+      const x2 = x1 + blockWidth;
+      const y2 = y1 + blockHeight;
+
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.3);
+      doc.rect(x1, y1, blockWidth, blockHeight);
+
+      const headerY = y1 + headerHeight;
+      doc.line(x1, headerY, x2, headerY);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(formatHorario(block.horario), x1 + 2, y1 + 4.8);
+      doc.text(block.periodoLabel, x1 + 22, y1 + 4.8);
+
+      const ratioX = x1 + colLevel;
+      const professorX = ratioX + colRatio;
+      doc.line(ratioX, headerY, ratioX, y2);
+      doc.line(professorX, headerY, professorX, y2);
+
+      let rowY = headerY;
+      doc.setFontSize(9);
+      block.rows.forEach((detail) => {
+        const nextY = rowY + rowHeight;
+        doc.line(x1, nextY, x2, nextY);
+        doc.setFont("helvetica", "bold");
+        const levelLabel = detail.nivel.endsWith(":") ? detail.nivel : `${detail.nivel}:`;
+        doc.text(levelLabel, x1 + 1.5, rowY + 4.3);
+        doc.setFont("helvetica", "normal");
+        doc.text(`${detail.lotacao}/${detail.capacidade}`, ratioX + 2, rowY + 4.3);
+        doc.text(detail.professor, professorX + 1.5, rowY + 4.3);
+        rowY = nextY;
+      });
+
+      const lotacaoY = rowY + rowHeight;
+      doc.line(x1, lotacaoY, x2, lotacaoY);
+      doc.setFont("helvetica", "bold");
+      doc.text("Lotação:", x1 + 1.5, rowY + 4.3);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${block.lotacaoHorario}/${block.capacidadeHorario}`, ratioX + 2, rowY + 4.3);
+
+      const footerY = lotacaoY + rowHeight;
+      const middleFooterX = x1 + blockWidth / 2;
+      doc.line(x1, footerY, x2, footerY);
+      doc.line(middleFooterX, lotacaoY, middleFooterX, footerY);
+      doc.setFont("helvetica", "bold");
+      doc.text("Vagas:", x1 + 1.5, lotacaoY + 4.3);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(block.vagasDisponiveis), middleFooterX - 8, lotacaoY + 4.3);
+      doc.setFont("helvetica", "bold");
+      doc.text("Excesso:", middleFooterX + 1.5, lotacaoY + 4.3);
+      doc.setFont("helvetica", "normal");
+      doc.text(String(block.excesso), x2 - 6, lotacaoY + 4.3);
+
+      colIndex += 1;
+      if (colIndex >= cols) {
+        colIndex = 0;
+        currentX = startX;
+        currentY += blockHeight + gapY;
+      } else {
+        currentX += blockWidth + gapX;
+      }
     });
 
     doc.save(`Relatorio_Vagas_${getCurrentLocalDateKey()}.pdf`);
