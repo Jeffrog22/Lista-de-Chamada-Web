@@ -3478,6 +3478,14 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
     def _normalize_label(value: Any) -> str:
         return _normalize_text(str(value or ""))
 
+    def _format_period_label(value: str) -> str:
+        normalized = _normalize_text(value)
+        if "ter" in normalized and "qui" in normalized:
+            return "Ter/Qui"
+        if "qua" in normalized and "sex" in normalized:
+            return "Qua/Sex"
+        return str(value or "").strip()
+
     def _find_slot_rows(row_start: int, col_start: int) -> tuple[List[int], int, int]:
         scan_rows = list(range(row_start + 1, min(ws.max_row, row_start + 5) + 1))
         lotacao_row = -1
@@ -3504,17 +3512,23 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
         col_start = col_starts[slot % len(col_starts)]
         detail_rows, lotacao_row, vagas_row = _find_slot_rows(row_start, col_start)
 
-        # Limpa conteúdo prévio do template em todos os slots para evitar vazamento de dados antigos.
-        for row in [row_start, *detail_rows, lotacao_row, vagas_row]:
-            for col in range(col_start, col_start + 4):
-                ws.cell(row=row, column=col, value="")
+        # Limpa somente células variáveis, preservando labels estáticos e estilos do template.
+        ws.cell(row=row_start, column=col_start, value="")
+        ws.cell(row=row_start, column=col_start + 1, value="")
+        for row in detail_rows:
+            ws.cell(row=row, column=col_start, value="")
+            ws.cell(row=row, column=col_start + 1, value="")
+            ws.cell(row=row, column=col_start + 2, value="")
+        ws.cell(row=lotacao_row, column=col_start + 1, value="")
+        ws.cell(row=vagas_row, column=col_start + 1, value="")
+        ws.cell(row=vagas_row, column=col_start + 3, value="")
 
         if slot >= len(payload.blocks):
             continue
 
         block = payload.blocks[slot]
         ws.cell(row=row_start, column=col_start, value=_format_horario(block.horario or ""))
-        ws.cell(row=row_start, column=col_start + 1, value=block.periodoLabel or "")
+        ws.cell(row=row_start, column=col_start + 1, value=_format_period_label(block.periodoLabel or ""))
 
         visible_rows = block.rows[: len(detail_rows)]
         extra_rows = block.rows[len(detail_rows) :]
@@ -3541,15 +3555,12 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
                 value=(f"{current_prof} | {extra_text}" if current_prof else extra_text),
             )
 
-        ws.cell(row=lotacao_row, column=col_start, value="Lotação:")
         ws.cell(
             row=lotacao_row,
             column=col_start + 1,
             value=f"{block.lotacaoHorario}/{block.capacidadeHorario}",
         )
-        ws.cell(row=vagas_row, column=col_start, value="Vagas:")
         ws.cell(row=vagas_row, column=col_start + 1, value=block.vagasDisponiveis)
-        ws.cell(row=vagas_row, column=col_start + 2, value="Excesso:")
         ws.cell(row=vagas_row, column=col_start + 3, value=block.excesso)
 
     return workbook
