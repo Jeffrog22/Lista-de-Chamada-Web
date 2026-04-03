@@ -2538,9 +2538,6 @@ export const Reports: React.FC = () => {
       const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
       if (byPublication !== 0) return byPublication;
 
-      const byProfessor = a.professor.localeCompare(b.professor);
-      if (byProfessor !== 0) return byProfessor;
-
       return a.groupKey.localeCompare(b.groupKey);
     });
   }, [filteredVacancyRows]);
