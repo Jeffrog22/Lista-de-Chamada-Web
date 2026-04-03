@@ -250,6 +250,37 @@ class ExcelExportPayload(BaseModel):
     professor: Optional[str] = None
     classes: List[ExportClassSelection] = Field(default_factory=list)
 
+
+class VacancyExportDetail(BaseModel):
+    nivel: str
+    lotacao: int
+    capacidade: int
+    professor: str
+
+
+class VacancyExportBlock(BaseModel):
+    groupKey: str
+    periodoLabel: str
+    horario: str
+    lotacaoHorario: int
+    capacidadeHorario: int
+    vagasDisponiveis: int
+    excesso: int
+    rows: List[VacancyExportDetail] = Field(default_factory=list)
+
+
+class VacancyExportSummary(BaseModel):
+    totalCapacidade: int = 0
+    totalLotacao: int = 0
+    totalVagas: int = 0
+    totalExcesso: int = 0
+
+
+class VacancyExportPayload(BaseModel):
+    generatedAt: Optional[str] = None
+    summary: VacancyExportSummary
+    blocks: List[VacancyExportBlock] = Field(default_factory=list)
+
 class AcademicCalendarSettingsPayload(BaseModel):
     schoolYear: int
     inicioAulas: str
@@ -3409,6 +3440,266 @@ def generate_chamada_pdf_file(payload: ExcelExportPayload, session: Session = De
     os.makedirs(export_dir, exist_ok=True)
     safe_month = (month or "sem-mes").replace("/", "-")
     output_name = f"Relatorio_Multiturmas_{safe_month}.pdf"
+    output_path = os.path.join(export_dir, output_name)
+    with open(output_path, "wb") as f:
+        f.write(pdf_bytes)
+
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=output_name,
+    )
+
+
+def _build_vacancies_workbook(payload: VacancyExportPayload):
+    template_path = os.path.join(DATA_DIR, "templates", "vagasTemplate.xlsx")
+
+    if os.path.exists(template_path):
+        workbook = load_workbook(template_path)
+        ws = workbook.active
+    else:
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        ws = workbook.active
+        ws.title = "Vagas"
+
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
+    ws["A1"] = "Relatório de Vagas"
+    ws["A2"] = f"Gerado em {payload.generatedAt or datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A3"] = (
+        f"Totais: Lotação {payload.summary.totalLotacao}/{payload.summary.totalCapacidade}"
+        f" | Vagas {payload.summary.totalVagas} | Excesso {payload.summary.totalExcesso}"
+    )
+
+    col_starts = [1, 6, 11]
+    row_starts = [5, 11, 17, 23, 29]
+    slots_per_sheet = len(col_starts) * len(row_starts)
+
+    for slot, block in enumerate(payload.blocks[:slots_per_sheet]):
+        row_start = row_starts[slot // len(col_starts)]
+        col_start = col_starts[slot % len(col_starts)]
+
+        ws.cell(row=row_start, column=col_start, value=_format_horario(block.horario or ""))
+        ws.cell(row=row_start, column=col_start + 1, value=block.periodoLabel or "")
+
+        first = block.rows[0] if len(block.rows) > 0 else None
+        second = block.rows[1] if len(block.rows) > 1 else None
+        extras = block.rows[2:] if len(block.rows) > 2 else []
+
+        ws.cell(row=row_start + 1, column=col_start, value=f"{first.nivel}:" if first else "")
+        ws.cell(
+            row=row_start + 1,
+            column=col_start + 1,
+            value=f"{first.lotacao}/{first.capacidade}" if first else "",
+        )
+        ws.cell(row=row_start + 1, column=col_start + 2, value=first.professor if first else "")
+
+        ws.cell(row=row_start + 2, column=col_start, value=f"{second.nivel}:" if second else "")
+        ws.cell(
+            row=row_start + 2,
+            column=col_start + 1,
+            value=f"{second.lotacao}/{second.capacidade}" if second else "",
+        )
+        ws.cell(
+            row=row_start + 2,
+            column=col_start + 2,
+            value=(
+                second.professor
+                if second
+                else " | ".join(
+                    f"{item.nivel} {item.lotacao}/{item.capacidade}"
+                    for item in extras
+                )
+            ),
+        )
+
+        ws.cell(row=row_start + 3, column=col_start, value="Lotação:")
+        ws.cell(
+            row=row_start + 3,
+            column=col_start + 1,
+            value=f"{block.lotacaoHorario}/{block.capacidadeHorario}",
+        )
+        ws.cell(row=row_start + 4, column=col_start, value="Vagas:")
+        ws.cell(row=row_start + 4, column=col_start + 1, value=block.vagasDisponiveis)
+        ws.cell(row=row_start + 4, column=col_start + 2, value="Excesso:")
+        ws.cell(row=row_start + 4, column=col_start + 3, value=block.excesso)
+
+        for row in range(row_start, row_start + 5):
+            for col in range(col_start, col_start + 4):
+                cell = ws.cell(row=row, column=col)
+                cell.border = thin_border
+                if row == row_start:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                elif col in (col_start + 1, col_start + 3):
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.column_dimensions["A"].width = 11
+    ws.column_dimensions["B"].width = 7
+    ws.column_dimensions["C"].width = 9
+    ws.column_dimensions["D"].width = 15
+    ws.column_dimensions["E"].width = 2
+    ws.column_dimensions["F"].width = 11
+    ws.column_dimensions["G"].width = 7
+    ws.column_dimensions["H"].width = 9
+    ws.column_dimensions["I"].width = 15
+    ws.column_dimensions["J"].width = 2
+    ws.column_dimensions["K"].width = 11
+    ws.column_dimensions["L"].width = 7
+    ws.column_dimensions["M"].width = 9
+    ws.column_dimensions["N"].width = 15
+
+    return workbook
+
+
+def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
+    if not REPORTLAB_AVAILABLE:
+        raise HTTPException(status_code=500, detail="PDF export unavailable: install reportlab")
+
+    buffer = BytesIO()
+    page_width, page_height = landscape(A4)
+    pdf = canvas.Canvas(buffer, pagesize=(page_width, page_height))
+
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(24, page_height - 28, "Relatório de Vagas - Template")
+    pdf.setFont("Helvetica", 8)
+    generated_at = payload.generatedAt or datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    pdf.drawString(24, page_height - 40, f"Gerado em {generated_at}")
+    pdf.drawString(
+        24,
+        page_height - 50,
+        (
+            f"Totais: Lotação {payload.summary.totalLotacao}/{payload.summary.totalCapacidade}"
+            f" | Vagas {payload.summary.totalVagas} | Excesso {payload.summary.totalExcesso}"
+        ),
+    )
+
+    start_x = 24
+    start_y = page_height - 70
+    cols = 2
+    gap_x = 10
+    gap_y = 10
+    block_width = (page_width - start_x * 2 - gap_x * (cols - 1)) / cols
+    row_height = 11
+    header_height = 12
+    col_level = 140
+    col_ratio = 50
+
+    current_x = start_x
+    current_y = start_y
+    col_idx = 0
+
+    for block in payload.blocks:
+        detail_rows = max(1, len(block.rows))
+        block_height = header_height + (detail_rows + 2) * row_height
+
+        if current_y - block_height < 20:
+            pdf.showPage()
+            current_x = start_x
+            current_y = page_height - 28
+            col_idx = 0
+
+        x1 = current_x
+        y1 = current_y
+        x2 = x1 + block_width
+        y2 = y1 - block_height
+
+        pdf.setLineWidth(0.6)
+        pdf.rect(x1, y2, block_width, block_height)
+        pdf.line(x1, y1 - header_height, x2, y1 - header_height)
+
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(x1 + 4, y1 - 8, _format_horario(block.horario or ""))
+        pdf.drawString(x1 + 55, y1 - 8, block.periodoLabel or "")
+
+        ratio_x = x1 + col_level
+        professor_x = ratio_x + col_ratio
+        pdf.line(ratio_x, y1 - header_height, ratio_x, y2)
+        pdf.line(professor_x, y1 - header_height, professor_x, y2)
+
+        row_top = y1 - header_height
+        pdf.setFont("Helvetica", 8)
+        for detail in block.rows:
+            next_row = row_top - row_height
+            pdf.line(x1, next_row, x2, next_row)
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawString(x1 + 4, row_top - 8, f"{detail.nivel}:")
+            pdf.setFont("Helvetica", 8)
+            pdf.drawString(ratio_x + 4, row_top - 8, f"{detail.lotacao}/{detail.capacidade}")
+            pdf.drawString(professor_x + 4, row_top - 8, str(detail.professor or ""))
+            row_top = next_row
+
+        lotacao_row = row_top - row_height
+        pdf.line(x1, lotacao_row, x2, lotacao_row)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(x1 + 4, row_top - 8, "Lotação:")
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(ratio_x + 4, row_top - 8, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
+
+        footer_row = lotacao_row - row_height
+        middle_x = x1 + (block_width / 2)
+        pdf.line(x1, footer_row, x2, footer_row)
+        pdf.line(middle_x, lotacao_row, middle_x, footer_row)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(x1 + 4, lotacao_row - 8, "Vagas:")
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(x1 + 34, lotacao_row - 8, str(block.vagasDisponiveis))
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(middle_x + 4, lotacao_row - 8, "Excesso:")
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(middle_x + 40, lotacao_row - 8, str(block.excesso))
+
+        col_idx += 1
+        if col_idx >= cols:
+            col_idx = 0
+            current_x = start_x
+            current_y = y2 - gap_y
+        else:
+            current_x = x2 + gap_x
+
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+@app.post("/reports/vacancies-excel-file")
+def generate_vacancies_excel_file(payload: VacancyExportPayload):
+    if not payload.blocks:
+        raise HTTPException(status_code=400, detail="No vacancy data informed")
+
+    workbook = _build_vacancies_workbook(payload)
+
+    export_dir = os.path.join(DATA_DIR, "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    output_name = f"Relatorio_Vagas_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+    output_path = os.path.join(export_dir, output_name)
+    workbook.save(output_path)
+
+    return FileResponse(
+        output_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=output_name,
+    )
+
+
+@app.post("/reports/vacancies-pdf-file")
+def generate_vacancies_pdf_file(payload: VacancyExportPayload):
+    if not payload.blocks:
+        raise HTTPException(status_code=400, detail="No vacancy data informed")
+
+    pdf_bytes = _build_vacancies_pdf(payload)
+
+    export_dir = os.path.join(DATA_DIR, "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    output_name = f"Relatorio_Vagas_{datetime.now().strftime('%Y-%m-%d')}.pdf"
     output_path = os.path.join(export_dir, output_name)
     with open(output_path, "wb") as f:
         f.write(pdf_bytes)

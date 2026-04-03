@@ -1,11 +1,11 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
-import { jsPDF } from "jspdf";
-import * as XLSX from "xlsx";
 import {
   deleteAcademicCalendarEvent,
   downloadChamadaPdfReport,
   downloadMultiClassExcelReport,
+  downloadVacanciesExcelReport,
+  downloadVacanciesPdfReport,
   getAcademicCalendar,
   getBootstrap,
   getExcludedStudents,
@@ -2543,206 +2543,54 @@ export const Reports: React.FC = () => {
       return;
     }
 
-    const ws = XLSX.utils.aoa_to_sheet([]);
-    const colStarts = [0, 5, 10];
-    const rowStarts = [4, 10, 16, 22, 28];
-    const slotsPerSheet = colStarts.length * rowStarts.length;
-
-    XLSX.utils.sheet_add_aoa(
-      ws,
-      [["Relatório de Vagas"], [`Gerado em ${new Date().toLocaleString("pt-BR")}`]],
-      { origin: "A1" }
-    );
-    XLSX.utils.sheet_add_aoa(
-      ws,
-      [[`Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`]],
-      { origin: "A3" }
-    );
-
-    vacancyPrintBlocks.slice(0, slotsPerSheet).forEach((block, slot) => {
-      const rowStart = rowStarts[Math.floor(slot / colStarts.length)];
-      const colStart = colStarts[slot % colStarts.length];
-
-      XLSX.utils.sheet_add_aoa(ws, [[formatHorario(block.horario), block.periodoLabel, "", ""]], {
-        origin: { r: rowStart, c: colStart },
+    try {
+      const response = await downloadVacanciesExcelReport({
+        generatedAt: new Date().toLocaleString("pt-BR"),
+        summary: vacancySummary,
+        blocks: vacancyPrintBlocks,
       });
 
-      const first = block.rows[0];
-      const second = block.rows[1];
-      const extras = block.rows.slice(2);
-
-      XLSX.utils.sheet_add_aoa(
-        ws,
-        [[first ? `${first.nivel}:` : "", first ? `${first.lotacao}/${first.capacidade}` : "", first ? first.professor : "", ""]],
-        { origin: { r: rowStart + 1, c: colStart } }
-      );
-      XLSX.utils.sheet_add_aoa(
-        ws,
-        [[
-          second ? `${second.nivel}:` : "",
-          second ? `${second.lotacao}/${second.capacidade}` : "",
-          second
-            ? second.professor
-            : extras.length > 0
-              ? extras.map((item) => `${item.nivel} ${item.lotacao}/${item.capacidade}`).join(" | ")
-              : "",
-          "",
-        ]],
-        { origin: { r: rowStart + 2, c: colStart } }
-      );
-      XLSX.utils.sheet_add_aoa(ws, [["Lotação:", `${block.lotacaoHorario}/${block.capacidadeHorario}`, "", ""]], {
-        origin: { r: rowStart + 3, c: colStart },
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-      XLSX.utils.sheet_add_aoa(ws, [["Vagas:", block.vagasDisponiveis, "Excesso:", block.excesso]], {
-        origin: { r: rowStart + 4, c: colStart },
-      });
-    });
-
-    ws["!cols"] = [
-      { wch: 11 },
-      { wch: 7 },
-      { wch: 9 },
-      { wch: 15 },
-      { wch: 2 },
-      { wch: 11 },
-      { wch: 7 },
-      { wch: 9 },
-      { wch: 15 },
-      { wch: 2 },
-      { wch: 11 },
-      { wch: 7 },
-      { wch: 9 },
-      { wch: 15 },
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Vagas");
-    XLSX.writeFile(wb, `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_Vagas_${getCurrentLocalDateKey()}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert("Falha ao exportar vagas em XLSX pelo backend.");
+    }
   };
 
-  const handleDownloadVacanciesPdf = () => {
+  const handleDownloadVacanciesPdf = async () => {
     if (filteredVacancyRows.length === 0) {
       alert("Não há dados de vagas para exportar em PDF.");
       return;
     }
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text("Relatório de Vagas - Template", 10, 10);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 10, 15);
-    doc.text(
-      `Totais: Lotação ${vacancySummary.totalLotacao}/${vacancySummary.totalCapacidade} | Vagas ${vacancySummary.totalVagas} | Excesso ${vacancySummary.totalExcesso}`,
-      10,
-      19
-    );
-
-    const startX = 10;
-    const startY = 24;
-    const cols = 2;
-    const gapX = 6;
-    const blockWidth = (pageWidth - startX * 2 - gapX * (cols - 1)) / cols;
-    const gapY = 6;
-    const colLevel = 50;
-    const colRatio = 18;
-    const rowHeight = 6;
-    const headerHeight = 7;
-
-    const drawTextCentered = (text: string, left: number, right: number, y: number) => {
-      const width = doc.getTextWidth(text);
-      const x = left + (right - left - width) / 2;
-      doc.text(text, x, y);
-    };
-
-    let currentX = startX;
-    let currentY = startY;
-    let colIndex = 0;
-
-    const ensurePageForBlock = (blockHeight: number) => {
-      if (currentY + blockHeight <= pageHeight - 10) return;
-      doc.addPage();
-      currentY = 12;
-      currentX = startX;
-      colIndex = 0;
-    };
-
-    vacancyPrintBlocks.forEach((block) => {
-      const detailRows = Math.max(1, block.rows.length);
-      const blockHeight = headerHeight + detailRows * rowHeight + 2 * rowHeight;
-      ensurePageForBlock(blockHeight);
-
-      const x1 = currentX;
-      const y1 = currentY;
-      const x2 = x1 + blockWidth;
-      const y2 = y1 + blockHeight;
-
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.3);
-      doc.rect(x1, y1, blockWidth, blockHeight);
-
-      const headerY = y1 + headerHeight;
-      doc.line(x1, headerY, x2, headerY);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      drawTextCentered(formatHorario(block.horario), x1 + 1, x1 + 20, y1 + 4.8);
-      drawTextCentered(block.periodoLabel, x1 + 20, x2 - 1, y1 + 4.8);
-
-      const ratioX = x1 + colLevel;
-      const professorX = ratioX + colRatio;
-      doc.line(ratioX, headerY, ratioX, y2);
-      doc.line(professorX, headerY, professorX, y2);
-
-      let rowY = headerY;
-      doc.setFontSize(9);
-      block.rows.forEach((detail) => {
-        const nextY = rowY + rowHeight;
-        doc.line(x1, nextY, x2, nextY);
-        doc.setFont("helvetica", "bold");
-        const levelLabel = detail.nivel.endsWith(":") ? detail.nivel : `${detail.nivel}:`;
-        doc.text(levelLabel, x1 + 1.5, rowY + 4.3);
-        doc.setFont("helvetica", "normal");
-        doc.text(`${detail.lotacao}/${detail.capacidade}`, ratioX + 2, rowY + 4.3);
-        doc.text(detail.professor, professorX + 1.5, rowY + 4.3);
-        rowY = nextY;
+    try {
+      const response = await downloadVacanciesPdfReport({
+        generatedAt: new Date().toLocaleString("pt-BR"),
+        summary: vacancySummary,
+        blocks: vacancyPrintBlocks,
       });
 
-      const lotacaoY = rowY + rowHeight;
-      doc.line(x1, lotacaoY, x2, lotacaoY);
-      doc.setFont("helvetica", "bold");
-      doc.text("Lotação:", x1 + 1.5, rowY + 4.3);
-      doc.setFont("helvetica", "normal");
-      doc.text(`${block.lotacaoHorario}/${block.capacidadeHorario}`, ratioX + 2, rowY + 4.3);
-
-      const footerY = lotacaoY + rowHeight;
-      const middleFooterX = x1 + blockWidth / 2;
-      doc.line(x1, footerY, x2, footerY);
-      doc.line(middleFooterX, lotacaoY, middleFooterX, footerY);
-      doc.setFont("helvetica", "bold");
-      doc.text("Vagas:", x1 + 1.5, lotacaoY + 4.3);
-      doc.setFont("helvetica", "normal");
-      doc.text(String(block.vagasDisponiveis), x1 + 16, lotacaoY + 4.3);
-      doc.setFont("helvetica", "bold");
-      doc.text("Excesso:", middleFooterX + 1.5, lotacaoY + 4.3);
-      doc.setFont("helvetica", "normal");
-      doc.text(String(block.excesso), middleFooterX + 18, lotacaoY + 4.3);
-
-      colIndex += 1;
-      if (colIndex >= cols) {
-        colIndex = 0;
-        currentX = startX;
-        currentY += blockHeight + gapY;
-      } else {
-        currentX += blockWidth + gapX;
-      }
-    });
-
-    doc.save(`Relatorio_Vagas_${getCurrentLocalDateKey()}.pdf`);
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Relatorio_Vagas_${getCurrentLocalDateKey()}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert("Falha ao exportar vagas em PDF pelo backend.");
+    }
   };
 
   const handleGenerateExcel = async () => {
