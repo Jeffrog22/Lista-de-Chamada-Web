@@ -3464,13 +3464,6 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
         ws = workbook.active
         ws.title = "Vagas"
 
-    thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"),
-    )
-
     ws["A1"] = "Relatório de Vagas"
     ws["A2"] = f"Gerado em {payload.generatedAt or datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
     ws["A3"] = (
@@ -3479,83 +3472,85 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
     )
 
     col_starts = [1, 6, 11]
-    row_starts = [5, 11, 17, 23, 29]
+    row_starts = [5, 11, 17, 23, 28]
     slots_per_sheet = len(col_starts) * len(row_starts)
 
-    for slot, block in enumerate(payload.blocks[:slots_per_sheet]):
+    def _normalize_label(value: Any) -> str:
+        return _normalize_text(str(value or ""))
+
+    def _find_slot_rows(row_start: int, col_start: int) -> tuple[List[int], int, int]:
+        scan_rows = list(range(row_start + 1, min(ws.max_row, row_start + 5) + 1))
+        lotacao_row = -1
+        vagas_row = -1
+        for row in scan_rows:
+            label = _normalize_label(ws.cell(row=row, column=col_start).value)
+            if lotacao_row < 0 and label.startswith("lotacao"):
+                lotacao_row = row
+                continue
+            if lotacao_row > 0 and label.startswith("vagas"):
+                vagas_row = row
+                break
+
+        if lotacao_row < 0:
+            lotacao_row = row_start + 3
+        if vagas_row < 0:
+            vagas_row = lotacao_row + 1
+
+        detail_rows = [row for row in scan_rows if row < lotacao_row]
+        return detail_rows, lotacao_row, vagas_row
+
+    for slot in range(slots_per_sheet):
         row_start = row_starts[slot // len(col_starts)]
         col_start = col_starts[slot % len(col_starts)]
+        detail_rows, lotacao_row, vagas_row = _find_slot_rows(row_start, col_start)
 
+        # Limpa conteúdo prévio do template em todos os slots para evitar vazamento de dados antigos.
+        for row in [row_start, *detail_rows, lotacao_row, vagas_row]:
+            for col in range(col_start, col_start + 4):
+                ws.cell(row=row, column=col, value="")
+
+        if slot >= len(payload.blocks):
+            continue
+
+        block = payload.blocks[slot]
         ws.cell(row=row_start, column=col_start, value=_format_horario(block.horario or ""))
         ws.cell(row=row_start, column=col_start + 1, value=block.periodoLabel or "")
 
-        first = block.rows[0] if len(block.rows) > 0 else None
-        second = block.rows[1] if len(block.rows) > 1 else None
-        extras = block.rows[2:] if len(block.rows) > 2 else []
+        visible_rows = block.rows[: len(detail_rows)]
+        extra_rows = block.rows[len(detail_rows) :]
+        for idx, row in enumerate(detail_rows):
+            detail = visible_rows[idx] if idx < len(visible_rows) else None
+            ws.cell(row=row, column=col_start, value=(f"{detail.nivel}:" if detail else ""))
+            ws.cell(
+                row=row,
+                column=col_start + 1,
+                value=(f"{detail.lotacao}/{detail.capacidade}" if detail else ""),
+            )
+            ws.cell(row=row, column=col_start + 2, value=(detail.professor if detail else ""))
 
-        ws.cell(row=row_start + 1, column=col_start, value=f"{first.nivel}:" if first else "")
-        ws.cell(
-            row=row_start + 1,
-            column=col_start + 1,
-            value=f"{first.lotacao}/{first.capacidade}" if first else "",
-        )
-        ws.cell(row=row_start + 1, column=col_start + 2, value=first.professor if first else "")
+        if extra_rows and detail_rows:
+            last_detail_row = detail_rows[-1]
+            extra_text = " | ".join(
+                f"{item.nivel} {item.lotacao}/{item.capacidade} {item.professor}".strip()
+                for item in extra_rows
+            )
+            current_prof = str(ws.cell(row=last_detail_row, column=col_start + 2).value or "").strip()
+            ws.cell(
+                row=last_detail_row,
+                column=col_start + 2,
+                value=(f"{current_prof} | {extra_text}" if current_prof else extra_text),
+            )
 
-        ws.cell(row=row_start + 2, column=col_start, value=f"{second.nivel}:" if second else "")
+        ws.cell(row=lotacao_row, column=col_start, value="Lotação:")
         ws.cell(
-            row=row_start + 2,
-            column=col_start + 1,
-            value=f"{second.lotacao}/{second.capacidade}" if second else "",
-        )
-        ws.cell(
-            row=row_start + 2,
-            column=col_start + 2,
-            value=(
-                second.professor
-                if second
-                else " | ".join(
-                    f"{item.nivel} {item.lotacao}/{item.capacidade}"
-                    for item in extras
-                )
-            ),
-        )
-
-        ws.cell(row=row_start + 3, column=col_start, value="Lotação:")
-        ws.cell(
-            row=row_start + 3,
+            row=lotacao_row,
             column=col_start + 1,
             value=f"{block.lotacaoHorario}/{block.capacidadeHorario}",
         )
-        ws.cell(row=row_start + 4, column=col_start, value="Vagas:")
-        ws.cell(row=row_start + 4, column=col_start + 1, value=block.vagasDisponiveis)
-        ws.cell(row=row_start + 4, column=col_start + 2, value="Excesso:")
-        ws.cell(row=row_start + 4, column=col_start + 3, value=block.excesso)
-
-        for row in range(row_start, row_start + 5):
-            for col in range(col_start, col_start + 4):
-                cell = ws.cell(row=row, column=col)
-                cell.border = thin_border
-                if row == row_start:
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                elif col in (col_start + 1, col_start + 3):
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                else:
-                    cell.alignment = Alignment(horizontal="left", vertical="center")
-
-    ws.column_dimensions["A"].width = 11
-    ws.column_dimensions["B"].width = 7
-    ws.column_dimensions["C"].width = 9
-    ws.column_dimensions["D"].width = 15
-    ws.column_dimensions["E"].width = 2
-    ws.column_dimensions["F"].width = 11
-    ws.column_dimensions["G"].width = 7
-    ws.column_dimensions["H"].width = 9
-    ws.column_dimensions["I"].width = 15
-    ws.column_dimensions["J"].width = 2
-    ws.column_dimensions["K"].width = 11
-    ws.column_dimensions["L"].width = 7
-    ws.column_dimensions["M"].width = 9
-    ws.column_dimensions["N"].width = 15
+        ws.cell(row=vagas_row, column=col_start, value="Vagas:")
+        ws.cell(row=vagas_row, column=col_start + 1, value=block.vagasDisponiveis)
+        ws.cell(row=vagas_row, column=col_start + 2, value="Excesso:")
+        ws.cell(row=vagas_row, column=col_start + 3, value=block.excesso)
 
     return workbook
 
@@ -3584,31 +3579,26 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
 
     start_x = 24
     start_y = page_height - 70
-    cols = 2
-    gap_x = 10
-    gap_y = 10
-    block_width = (page_width - start_x * 2 - gap_x * (cols - 1)) / cols
-    row_height = 11
+    col_starts = [24, 190, 356]
+    row_starts = [start_y, start_y - 67, start_y - 134, start_y - 201, start_y - 268]
+    block_width = 156
     header_height = 12
-    col_level = 140
-    col_ratio = 50
+    row_height = 11
+    col_level = 78
+    col_ratio = 34
 
-    current_x = start_x
-    current_y = start_y
-    col_idx = 0
+    slots_per_page = len(col_starts) * len(row_starts)
+    blocks = payload.blocks[: slots_per_page]
 
-    for block in payload.blocks:
-        detail_rows = max(1, len(block.rows))
-        block_height = header_height + (detail_rows + 2) * row_height
+    for slot in range(slots_per_page):
+        row_idx = slot // len(col_starts)
+        col_idx = slot % len(col_starts)
+        x1 = col_starts[col_idx]
+        y1 = row_starts[row_idx]
 
-        if current_y - block_height < 20:
-            pdf.showPage()
-            current_x = start_x
-            current_y = page_height - 28
-            col_idx = 0
-
-        x1 = current_x
-        y1 = current_y
+        # Quarta linha do template tem somente 1 linha de detalhe; as demais usam 2.
+        detail_capacity = 1 if row_idx == 3 else 2
+        block_height = header_height + (detail_capacity + 2) * row_height
         x2 = x1 + block_width
         y2 = y1 - block_height
 
@@ -3616,25 +3606,44 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         pdf.rect(x1, y2, block_width, block_height)
         pdf.line(x1, y1 - header_height, x2, y1 - header_height)
 
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(x1 + 4, y1 - 8, _format_horario(block.horario or ""))
-        pdf.drawString(x1 + 55, y1 - 8, block.periodoLabel or "")
-
         ratio_x = x1 + col_level
         professor_x = ratio_x + col_ratio
         pdf.line(ratio_x, y1 - header_height, ratio_x, y2)
         pdf.line(professor_x, y1 - header_height, professor_x, y2)
 
+        if slot >= len(blocks):
+            continue
+
+        block = blocks[slot]
+
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(x1 + 4, y1 - 8, _format_horario(block.horario or ""))
+        pdf.drawString(x1 + 34, y1 - 8, block.periodoLabel or "")
+
+        visible_rows = block.rows[:detail_capacity]
+        extra_rows = block.rows[detail_capacity:]
         row_top = y1 - header_height
-        pdf.setFont("Helvetica", 8)
-        for detail in block.rows:
+        for idx in range(detail_capacity):
             next_row = row_top - row_height
             pdf.line(x1, next_row, x2, next_row)
+
+            detail = visible_rows[idx] if idx < len(visible_rows) else None
+            detail_label = f"{detail.nivel}:" if detail else ""
+            detail_ratio = f"{detail.lotacao}/{detail.capacidade}" if detail else ""
+            detail_prof = str(detail.professor or "") if detail else ""
+
+            if idx == detail_capacity - 1 and extra_rows:
+                suffix = " | ".join(
+                    f"{item.nivel} {item.lotacao}/{item.capacidade} {item.professor}".strip()
+                    for item in extra_rows
+                )
+                detail_prof = f"{detail_prof} | {suffix}" if detail_prof else suffix
+
             pdf.setFont("Helvetica-Bold", 8)
-            pdf.drawString(x1 + 4, row_top - 8, f"{detail.nivel}:")
+            pdf.drawString(x1 + 4, row_top - 8, detail_label)
             pdf.setFont("Helvetica", 8)
-            pdf.drawString(ratio_x + 4, row_top - 8, f"{detail.lotacao}/{detail.capacidade}")
-            pdf.drawString(professor_x + 4, row_top - 8, str(detail.professor or ""))
+            pdf.drawString(ratio_x + 4, row_top - 8, detail_ratio)
+            pdf.drawString(professor_x + 4, row_top - 8, detail_prof[:36])
             row_top = next_row
 
         lotacao_row = row_top - row_height
@@ -3656,14 +3665,6 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         pdf.drawString(middle_x + 4, lotacao_row - 8, "Excesso:")
         pdf.setFont("Helvetica", 8)
         pdf.drawString(middle_x + 40, lotacao_row - 8, str(block.excesso))
-
-        col_idx += 1
-        if col_idx >= cols:
-            col_idx = 0
-            current_x = start_x
-            current_y = y2 - gap_y
-        else:
-            current_x = x2 + gap_x
 
     pdf.save()
     buffer.seek(0)
