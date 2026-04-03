@@ -3555,8 +3555,11 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
             column=col_start + 1,
             value=f"{block.lotacaoHorario}/{block.capacidadeHorario}",
         )
+        ws.cell(row=lotacao_row, column=col_start + 1).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row=vagas_row, column=col_start + 1, value=block.vagasDisponiveis)
         ws.cell(row=vagas_row, column=col_start + 3, value=block.excesso)
+        ws.cell(row=vagas_row, column=col_start + 1).alignment = Alignment(horizontal="left", vertical="center")
+        ws.cell(row=vagas_row, column=col_start + 3).alignment = Alignment(horizontal="left", vertical="center")
 
     return workbook
 
@@ -3592,8 +3595,11 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     body_row_height = 12.75
     footer_row_height = 13.5
     header_height = body_row_height
-    col_level = 78
-    col_ratio = 34
+    left_padding = 4
+    header_time_x = 4
+    header_period_x = 34
+    detail_ratio_x = 50
+    detail_prof_x = 94
 
     slots_per_page = len(col_starts) * len(row_starts)
     blocks = payload.blocks[: slots_per_page]
@@ -3614,14 +3620,8 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         x2 = x1 + block_width
         y2 = y1 - block_height
 
-        pdf.setLineWidth(0.6)
+        pdf.setLineWidth(1.1)
         pdf.rect(x1, y2, block_width, block_height)
-        pdf.line(x1, y1 - header_height, x2, y1 - header_height)
-
-        ratio_x = x1 + col_level
-        professor_x = ratio_x + col_ratio
-        pdf.line(ratio_x, y1 - header_height, ratio_x, y2)
-        pdf.line(professor_x, y1 - header_height, professor_x, y2)
 
         if slot >= len(blocks):
             continue
@@ -3629,16 +3629,14 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         block = blocks[slot]
 
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(x1 + 4, y1 - 8, _format_horario(block.horario or ""))
-        pdf.drawString(x1 + 34, y1 - 8, block.periodoLabel or "")
+        pdf.drawString(x1 + header_time_x, y1 - 8, _format_horario(block.horario or ""))
+        pdf.drawString(x1 + header_period_x, y1 - 8, block.periodoLabel or "")
 
         visible_rows = block.rows[:detail_capacity]
         extra_rows = block.rows[detail_capacity:]
         row_top = y1 - header_height
         for idx in range(detail_capacity):
             next_row = row_top - body_row_height
-            pdf.line(x1, next_row, x2, next_row)
-
             detail = visible_rows[idx] if idx < len(visible_rows) else None
             detail_label = f"{detail.nivel}:" if detail else ""
             detail_ratio = f"{detail.lotacao}/{detail.capacidade}" if detail else ""
@@ -3652,31 +3650,28 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
                 detail_prof = f"{detail_prof} | {suffix}" if detail_prof else suffix
 
             pdf.setFont("Helvetica-Bold", 8)
-            pdf.drawString(x1 + 4, row_top - 8, detail_label)
+            pdf.drawString(x1 + left_padding, row_top - 8, detail_label)
             pdf.setFont("Helvetica", 8)
-            pdf.drawString(ratio_x + 4, row_top - 8, detail_ratio)
-            pdf.drawString(professor_x + 4, row_top - 8, detail_prof[:36])
+            pdf.drawString(x1 + detail_ratio_x, row_top - 8, detail_ratio)
+            pdf.drawString(x1 + detail_prof_x, row_top - 8, detail_prof[:36])
             row_top = next_row
 
         lotacao_row = row_top - body_row_height
-        pdf.line(x1, lotacao_row, x2, lotacao_row)
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(x1 + 4, row_top - 8, "Lotação:")
+        pdf.drawString(x1 + left_padding, row_top - 8, "Lotação:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(ratio_x + 4, row_top - 8, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
+        pdf.drawString(x1 + detail_ratio_x, row_top - 8, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
 
         footer_row = lotacao_row - footer_row_height
         middle_x = x1 + (block_width / 2)
-        pdf.line(x1, footer_row, x2, footer_row)
-        pdf.line(middle_x, lotacao_row, middle_x, footer_row)
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(x1 + 4, lotacao_row - 8, "Vagas:")
+        pdf.drawString(x1 + left_padding, lotacao_row - 8, "Vagas:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(x1 + 34, lotacao_row - 8, str(block.vagasDisponiveis))
+        pdf.drawString(x1 + 35, lotacao_row - 8, str(block.vagasDisponiveis))
         pdf.setFont("Helvetica-Bold", 8)
         pdf.drawString(middle_x + 4, lotacao_row - 8, "Excesso:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(middle_x + 40, lotacao_row - 8, str(block.excesso))
+        pdf.drawString(middle_x + 42, lotacao_row - 8, str(block.excesso))
 
     pdf.save()
     buffer.seek(0)
