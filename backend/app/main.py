@@ -3607,8 +3607,8 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         x1 = col_starts[col_idx]
         y1 = row_starts[row_idx]
 
-        # Quarta linha do template tem somente 1 linha de detalhe; as demais usam 2.
-        detail_capacity = 1 if row_idx == 3 else 2
+        # No template original, apenas o bloco final da primeira coluna usa 1 linha de detalhe.
+        detail_capacity = 1 if (row_idx == 4 and col_idx == 0) else 2
         block_height = header_height + (detail_capacity + 2) * row_height
         x2 = x1 + block_width
         y2 = y1 - block_height
