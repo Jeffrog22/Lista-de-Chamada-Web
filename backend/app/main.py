@@ -3486,31 +3486,26 @@ def _build_vacancies_workbook(payload: VacancyExportPayload):
             return "Qua/Sex"
         return str(value or "").strip()
 
-    def _find_slot_rows(row_start: int, col_start: int) -> tuple[List[int], int, int]:
-        scan_rows = list(range(row_start + 1, min(ws.max_row, row_start + 5) + 1))
-        lotacao_row = -1
-        vagas_row = -1
-        for row in scan_rows:
-            label = _normalize_label(ws.cell(row=row, column=col_start).value)
-            if lotacao_row < 0 and label.startswith("lotacao"):
-                lotacao_row = row
-                continue
-            if lotacao_row > 0 and label.startswith("vagas"):
-                vagas_row = row
-                break
-
-        if lotacao_row < 0:
-            lotacao_row = row_start + 3
-        if vagas_row < 0:
-            vagas_row = lotacao_row + 1
-
-        detail_rows = [row for row in scan_rows if row < lotacao_row]
-        return detail_rows, lotacao_row, vagas_row
+    def _slot_detail_capacity(row_idx: int, col_idx: int) -> int:
+        # Layout fixo do template:
+        # linhas 1-3: 2 detalhes em todas as colunas
+        # linha 4: 1 detalhe em todas as colunas
+        # linha 5: col 1 com 1 detalhe; col 2 e 3 com 2 detalhes
+        if row_idx <= 2:
+            return 2
+        if row_idx == 3:
+            return 1
+        return 1 if col_idx == 0 else 2
 
     for slot in range(slots_per_sheet):
-        row_start = row_starts[slot // len(col_starts)]
-        col_start = col_starts[slot % len(col_starts)]
-        detail_rows, lotacao_row, vagas_row = _find_slot_rows(row_start, col_start)
+        row_idx = slot // len(col_starts)
+        col_idx = slot % len(col_starts)
+        row_start = row_starts[row_idx]
+        col_start = col_starts[col_idx]
+        detail_capacity = _slot_detail_capacity(row_idx, col_idx)
+        detail_rows = [row_start + 1 + idx for idx in range(detail_capacity)]
+        lotacao_row = row_start + 1 + detail_capacity
+        vagas_row = lotacao_row + 1
 
         # Limpa somente células variáveis, preservando labels estáticos e estilos do template.
         ws.cell(row=row_start, column=col_start, value="")
@@ -3607,8 +3602,12 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         x1 = col_starts[col_idx]
         y1 = row_starts[row_idx]
 
-        # No template original, apenas o bloco final da primeira coluna usa 1 linha de detalhe.
-        detail_capacity = 1 if (row_idx == 4 and col_idx == 0) else 2
+        if row_idx <= 2:
+            detail_capacity = 2
+        elif row_idx == 3:
+            detail_capacity = 1
+        else:
+            detail_capacity = 1 if col_idx == 0 else 2
         block_height = header_height + (detail_capacity + 2) * row_height
         x2 = x1 + block_width
         y2 = y1 - block_height
