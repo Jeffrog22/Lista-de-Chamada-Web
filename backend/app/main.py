@@ -3586,10 +3586,12 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     start_x = 24
     start_y = page_height - 70
     col_starts = [24, 190, 356]
-    row_starts = [start_y, start_y - 67, start_y - 134, start_y - 201, start_y - 268]
+    # Mirror the workbook's actual row heights: default rows are 12.75 pt and footer/spacer rows are 13.5 pt.
+    row_starts = [start_y, start_y - 78.0, start_y - 156.0, start_y - 234.0, start_y - 299.25]
     block_width = 156
-    header_height = 12
-    row_height = 11
+    body_row_height = 12.75
+    footer_row_height = 13.5
+    header_height = body_row_height
     col_level = 78
     col_ratio = 34
 
@@ -3608,7 +3610,7 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             detail_capacity = 1
         else:
             detail_capacity = 1 if col_idx == 0 else 2
-        block_height = header_height + (detail_capacity + 2) * row_height
+        block_height = body_row_height * (detail_capacity + 2) + footer_row_height
         x2 = x1 + block_width
         y2 = y1 - block_height
 
@@ -3634,7 +3636,7 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         extra_rows = block.rows[detail_capacity:]
         row_top = y1 - header_height
         for idx in range(detail_capacity):
-            next_row = row_top - row_height
+            next_row = row_top - body_row_height
             pdf.line(x1, next_row, x2, next_row)
 
             detail = visible_rows[idx] if idx < len(visible_rows) else None
@@ -3656,14 +3658,14 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             pdf.drawString(professor_x + 4, row_top - 8, detail_prof[:36])
             row_top = next_row
 
-        lotacao_row = row_top - row_height
+        lotacao_row = row_top - body_row_height
         pdf.line(x1, lotacao_row, x2, lotacao_row)
         pdf.setFont("Helvetica-Bold", 8)
         pdf.drawString(x1 + 4, row_top - 8, "Lotação:")
         pdf.setFont("Helvetica", 8)
         pdf.drawString(ratio_x + 4, row_top - 8, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
 
-        footer_row = lotacao_row - row_height
+        footer_row = lotacao_row - footer_row_height
         middle_x = x1 + (block_width / 2)
         pdf.line(x1, footer_row, x2, footer_row)
         pdf.line(middle_x, lotacao_row, middle_x, footer_row)
