@@ -2360,11 +2360,11 @@ export const Reports: React.FC = () => {
         const byPeriod = periodRank(a.periodoGrupo) - periodRank(b.periodoGrupo);
         if (byPeriod !== 0) return byPeriod;
 
-        const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
-        if (byPublication !== 0) return byPublication;
-
         const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
         if (byHorario !== 0) return byHorario;
+
+        const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
+        if (byPublication !== 0) return byPublication;
 
         const byProfessor = a.professor.localeCompare(b.professor);
         if (byProfessor !== 0) return byProfessor;
@@ -2531,9 +2531,17 @@ export const Reports: React.FC = () => {
     return blocks.sort((a, b) => {
       const byPeriod = getVacancyPeriodRank(a.periodoLabel) - getVacancyPeriodRank(b.periodoLabel);
       if (byPeriod !== 0) return byPeriod;
+
+      const byHorario = getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
+      if (byHorario !== 0) return byHorario;
+
       const byPublication = (a.publicationOrder || 0) - (b.publicationOrder || 0);
       if (byPublication !== 0) return byPublication;
-      return getHorarioSortValue(a.horario) - getHorarioSortValue(b.horario);
+
+      const byProfessor = a.professor.localeCompare(b.professor);
+      if (byProfessor !== 0) return byProfessor;
+
+      return a.groupKey.localeCompare(b.groupKey);
     });
   }, [filteredVacancyRows]);
 
