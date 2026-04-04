@@ -3625,7 +3625,6 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     body_row_height = 12.75
     footer_row_height = 13.5
     header_height = body_row_height
-    detail_capacity = 2
     left_padding = 4
     header_time_x = 4
     header_period_x = 34
@@ -3641,6 +3640,13 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         col_idx = slot % len(col_starts)
         x1 = col_starts[col_idx]
         y1 = row_starts[row_idx]
+
+        if row_idx <= 2:
+            detail_capacity = 2
+        elif row_idx == 3:
+            detail_capacity = 1
+        else:
+            detail_capacity = 1 if col_idx == 0 else 2
 
         block_height = body_row_height * (detail_capacity + 2) + footer_row_height
         y2 = y1 - block_height
