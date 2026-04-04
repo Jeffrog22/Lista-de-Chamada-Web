@@ -23,7 +23,6 @@ from copy import copy
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from pypdf import PdfReader, PdfWriter
 from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
 from fastapi.security import OAuth2PasswordRequestForm
@@ -3569,33 +3568,14 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     if not REPORTLAB_AVAILABLE:
         raise HTTPException(status_code=500, detail="PDF export unavailable: install reportlab")
 
-    template_path = os.path.join(DATA_DIR, "templates", "VagasTemplate.pdf")
-    if not os.path.exists(template_path):
-        raise HTTPException(status_code=404, detail=f"Template PDF not found: {template_path}")
+    buffer = BytesIO()
+    page_width, page_height = landscape(A4)
+    pdf = canvas.Canvas(buffer, pagesize=(page_width, page_height))
 
-    template_reader = PdfReader(template_path)
-    if len(template_reader.pages) == 0:
-        raise HTTPException(status_code=500, detail="Template PDF is empty")
-
-    template_page = template_reader.pages[0]
-    page_width = float(template_page.mediabox.width)
-    page_height = float(template_page.mediabox.height)
-
-    overlay_buffer = BytesIO()
-    pdf = canvas.Canvas(overlay_buffer, pagesize=(page_width, page_height))
-
-    def _format_period_label(value: str) -> str:
-        normalized = _normalize_text(value)
-        if "ter" in normalized and "qui" in normalized:
-            return "Ter/Qui"
-        if "qua" in normalized and "sex" in normalized:
-            return "Qua/Sex"
-        return str(value or "").strip()
-
-    generated_at = payload.generatedAt or datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(24, page_height - 28, "Relatório de Vagas")
+    pdf.drawString(24, page_height - 28, "Relatório de Vagas - Template")
     pdf.setFont("Helvetica", 8)
+    generated_at = payload.generatedAt or datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     pdf.drawString(24, page_height - 40, f"Gerado em {generated_at}")
     pdf.drawString(
         24,
@@ -3609,7 +3589,9 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     start_x = 24
     start_y = page_height - 70
     col_starts = [24, 190, 356]
+    # Mirror the workbook's actual row heights: default rows are 12.75 pt and footer/spacer rows are 13.5 pt.
     row_starts = [start_y, start_y - 78.0, start_y - 156.0, start_y - 234.0, start_y - 299.25]
+    block_width = 156
     body_row_height = 12.75
     footer_row_height = 13.5
     header_height = body_row_height
@@ -3622,7 +3604,7 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     slots_per_page = len(col_starts) * len(row_starts)
     blocks = payload.blocks[: slots_per_page]
 
-    for slot, block in enumerate(blocks):
+    for slot in range(slots_per_page):
         row_idx = slot // len(col_starts)
         col_idx = slot % len(col_starts)
         x1 = col_starts[col_idx]
@@ -3634,15 +3616,27 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             detail_capacity = 1
         else:
             detail_capacity = 1 if col_idx == 0 else 2
+        block_height = body_row_height * (detail_capacity + 2) + footer_row_height
+        x2 = x1 + block_width
+        y2 = y1 - block_height
+
+        pdf.setLineWidth(1.1)
+        pdf.rect(x1, y2, block_width, block_height)
+
+        if slot >= len(blocks):
+            continue
+
+        block = blocks[slot]
 
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(x1 + header_time_x, y1 - 8, _format_horario(block.horario or ""))
-        pdf.drawString(x1 + header_period_x, y1 - 8, _format_period_label(block.periodoLabel or ""))
+        pdf.drawString(x1 + header_period_x, y1 - 8, block.periodoLabel or "")
 
         visible_rows = block.rows[:detail_capacity]
         extra_rows = block.rows[detail_capacity:]
         row_top = y1 - header_height
         for idx in range(detail_capacity):
+            next_row = row_top - body_row_height
             detail = visible_rows[idx] if idx < len(visible_rows) else None
             detail_label = f"{detail.nivel}:" if detail else ""
             detail_ratio = f"{detail.lotacao}/{detail.capacidade}" if detail else ""
@@ -3660,40 +3654,28 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             pdf.setFont("Helvetica", 8)
             pdf.drawString(x1 + detail_ratio_x, row_top - 8, detail_ratio)
             pdf.drawString(x1 + detail_prof_x, row_top - 8, detail_prof[:36])
-            row_top -= body_row_height
+            row_top = next_row
 
-        lotacao_baseline = row_top - 8
+        lotacao_row = row_top - body_row_height
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(x1 + left_padding, lotacao_baseline, "Lotação:")
+        pdf.drawString(x1 + left_padding, row_top - 8, "Lotação:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(x1 + detail_ratio_x, lotacao_baseline, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
+        pdf.drawString(x1 + detail_ratio_x, row_top - 8, f"{block.lotacaoHorario}/{block.capacidadeHorario}")
 
-        vagas_baseline = row_top - body_row_height - 8
-        middle_x = x1 + 78
+        footer_row = lotacao_row - footer_row_height
+        middle_x = x1 + (block_width / 2)
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(x1 + left_padding, vagas_baseline, "Vagas:")
+        pdf.drawString(x1 + left_padding, lotacao_row - 8, "Vagas:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(x1 + 35, vagas_baseline, str(block.vagasDisponiveis))
+        pdf.drawString(x1 + 35, lotacao_row - 8, str(block.vagasDisponiveis))
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(middle_x + 4, vagas_baseline, "Excesso:")
+        pdf.drawString(middle_x + 4, lotacao_row - 8, "Excesso:")
         pdf.setFont("Helvetica", 8)
-        pdf.drawString(middle_x + 42, vagas_baseline, str(block.excesso))
+        pdf.drawString(middle_x + 42, lotacao_row - 8, str(block.excesso))
 
     pdf.save()
-    overlay_buffer.seek(0)
-
-    overlay_reader = PdfReader(overlay_buffer)
-    overlay_page = overlay_reader.pages[0]
-
-    writer = PdfWriter()
-    merged_page = template_page
-    merged_page.merge_page(overlay_page)
-    writer.add_page(merged_page)
-
-    output = BytesIO()
-    writer.write(output)
-    output.seek(0)
-    return output.getvalue()
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 @app.post("/reports/vacancies-excel-file")
