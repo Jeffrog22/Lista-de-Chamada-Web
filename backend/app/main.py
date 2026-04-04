@@ -3635,7 +3635,7 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     slots_per_page = len(col_starts) * len(row_starts)
     blocks = payload.blocks[: slots_per_page]
 
-    for slot in range(slots_per_page):
+    for slot, block in enumerate(blocks):
         row_idx = slot // len(col_starts)
         col_idx = slot % len(col_starts)
         x1 = col_starts[col_idx]
@@ -3657,11 +3657,6 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         pdf.rect(x1 + 1.0, y2 + 1.0, 154.0, block_height - 2.0, stroke=0, fill=1)
         pdf.setFillColorRGB(0, 0, 0)
         pdf.setStrokeColorRGB(0, 0, 0)
-
-        if slot >= len(blocks):
-            continue
-
-        block = blocks[slot]
 
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(x1 + header_time_x, y1 - header_text_offset_y, _format_horario(block.horario or ""))
