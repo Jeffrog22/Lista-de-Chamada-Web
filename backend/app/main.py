@@ -3572,6 +3572,8 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     template_candidates = [
         os.path.join(DATA_DIR, "templates", "VagasTemplate.pdf"),
         os.path.join(DATA_DIR, "templates", "vagasTemplate.pdf"),
+        os.path.join(BASE_DIR, "data", "templates", "VagasTemplate.pdf"),
+        os.path.join(BASE_DIR, "data", "templates", "vagasTemplate.pdf"),
     ]
     template_path = next((path for path in template_candidates if os.path.exists(path)), "")
     if not template_path:
