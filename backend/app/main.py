@@ -3616,6 +3616,7 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     left_padding = 4
     header_time_x = 4
     header_period_x = 34
+    header_text_offset_y = 10
     detail_ratio_x = 50
     detail_prof_x = 94
 
@@ -3636,8 +3637,8 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             detail_capacity = 1 if col_idx == 0 else 2
 
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(x1 + header_time_x, y1 - 8, _format_horario(block.horario or ""))
-        pdf.drawString(x1 + header_period_x, y1 - 8, _format_period_label(block.periodoLabel or ""))
+        pdf.drawString(x1 + header_time_x, y1 - header_text_offset_y, _format_horario(block.horario or ""))
+        pdf.drawString(x1 + header_period_x, y1 - header_text_offset_y, _format_period_label(block.periodoLabel or ""))
 
         visible_rows = block.rows[:detail_capacity]
         extra_rows = block.rows[detail_capacity:]
