@@ -3599,12 +3599,6 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
         return str(value or "").strip()
 
     generated_at = payload.generatedAt or datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    # Clear header content area from template before drawing the updated text.
-    pdf.setFillColorRGB(1, 1, 1)
-    pdf.setStrokeColorRGB(1, 1, 1)
-    pdf.rect(20, page_height - 62, page_width - 40, 46, stroke=0, fill=1)
-    pdf.setFillColorRGB(0, 0, 0)
-    pdf.setStrokeColorRGB(0, 0, 0)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(24, page_height - 28, "Relatório de Vagas")
     pdf.setFont("Helvetica", 8)
@@ -3647,16 +3641,6 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
             detail_capacity = 1
         else:
             detail_capacity = 1 if col_idx == 0 else 2
-
-        block_height = body_row_height * (detail_capacity + 2) + footer_row_height
-        y2 = y1 - block_height
-
-        # Clear previous template text inside the block while keeping external border visible.
-        pdf.setFillColorRGB(1, 1, 1)
-        pdf.setStrokeColorRGB(1, 1, 1)
-        pdf.rect(x1 + 1.0, y2 + 1.0, 154.0, block_height - 2.0, stroke=0, fill=1)
-        pdf.setFillColorRGB(0, 0, 0)
-        pdf.setStrokeColorRGB(0, 0, 0)
 
         pdf.setFont("Helvetica-Bold", 9)
         pdf.drawString(x1 + header_time_x, y1 - header_text_offset_y, _format_horario(block.horario or ""))
