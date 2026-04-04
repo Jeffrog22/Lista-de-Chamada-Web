@@ -3569,13 +3569,9 @@ def _build_vacancies_pdf(payload: VacancyExportPayload) -> bytes:
     if not REPORTLAB_AVAILABLE:
         raise HTTPException(status_code=500, detail="PDF export unavailable: install reportlab")
 
-    template_candidates = [
-        os.path.join(DATA_DIR, "templates", "VagasTemplate.pdf"),
-        os.path.join(DATA_DIR, "templates", "vagasTemplate.pdf"),
-    ]
-    template_path = next((path for path in template_candidates if os.path.exists(path)), "")
-    if not template_path:
-        raise HTTPException(status_code=404, detail="Template PDF not found in data/templates")
+    template_path = os.path.join(DATA_DIR, "templates", "VagasTemplate.pdf")
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=404, detail=f"Template PDF not found: {template_path}")
 
     template_reader = PdfReader(template_path)
     if len(template_reader.pages) == 0:
