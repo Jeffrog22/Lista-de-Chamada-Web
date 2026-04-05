@@ -90,7 +90,7 @@
 - UNIT_NAME: Vila João XXIII
 - ENV_NAME: piloto-vila-joao-xxiii
 - DATABASE_URL: DEFINIDO NO RENDER (db-vila-joao-xxiii / Neon)
-- VITE_API_URL: DEFINIDO (api-vila-joao-xxiii.onrender.com - confirmar URL publica final)
+- VITE_API_URL: DEFINIDO (api-joao-xxiii.onrender.com)
 - CORS_ORIGINS: DEFINIDO NO RENDER (somente frontend do piloto)
 - SECRET_KEY: DEFINIDO NO RENDER (exclusivo deste backend)
 
@@ -148,8 +148,8 @@
 - 2026-04-05 01:18 - Deploy piloto-vila-joao-xxiii (Neon + Render + Vercel) - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:18 - Validacao backend parque: /health ok e /environment com env_name=piloto-parque-municipal e unit_name=Parque Municipal - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:18 - Validacao backend sao-matheus: /health ok e /environment com env_name=piloto-sao-matheus e unit_name=São Matheus - CONCLUIDO - Jefferson de Melo
-- 2026-04-05 01:18 - Validacao backend vila: URL publica retornando 404 em /health durante checagem automatica; confirmar endpoint final no Render - EM ABERTO - Jefferson de Melo
-- 2026-04-05 01:18 - Validacao automatica das URLs guessed de frontend dos pilotos retornou 404; confirmar URLs finais reais no Vercel - EM ABERTO - Jefferson de Melo
+- 2026-04-05 01:27 - Validacao backend vila (URL correta): /health 200 com body {"status":"ok"}; /environment com env_name=piloto-vila-joao-xxiii e unit_name=Vila João XXIII - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:27 - Validacao frontend vila (URL informada): retorno HTTP 401 (protecao/autenticacao no Vercel), sem evidenciar erro de deploy - CONCLUIDO - Jefferson de Melo
 - HH:MM - Encerramento da janela - EM ABERTO - Responsável
 
 ## Encerramento
