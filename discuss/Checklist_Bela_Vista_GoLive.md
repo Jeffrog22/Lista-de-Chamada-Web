@@ -2,11 +2,11 @@
 
 ## Dados da Janela
 - Data: 2026-03-29
-- Janela: EM EXECUCAO (homologacao do espelho)
+- Janela: ENCERRADA (espelho + 3 pilotos concluidos)
 - Responsável técnico: Jefferson de Melo
 - Responsável operação: Jefferson de Melo
 - Versão alvo: v.003.00-02zq
-- Status geral: PRODUCAO ATUALIZADA COM MERGE; MIRROR VALIDADO; 3 PILOTOS IMPLANTADOS; VALIDACAO FINAL DE URLS PUBLICAS EM FECHAMENTO
+- Status geral: PRODUCAO ESTAVEL; MIRROR VALIDADO; 3 PILOTOS IMPLANTADOS E VALIDOS; JANELA ENCERRADA
 
 ## Ambientes Obrigatórios
 - bela-vista-prod (produção atual, intocável)
@@ -41,24 +41,24 @@
 3. [x] Validar login/unidade no mirror.
 4. [x] Executar validação funcional completa no mirror.
 5. [x] Promover correções validadas para produção (master).
-6. [ ] Replicar configuração para piloto-parque-municipal.
+6. [x] Replicar configuração para piloto-parque-municipal.
 	- [x] Provisionar db-parque-municipal.
 	- [x] Provisionar api-parque-municipal com DATABASE_URL dedicado.
 	- [x] Provisionar parque-municipal-lista com VITE_API_URL do piloto.
 	- [x] Validar /health e /environment do piloto.
-	- [ ] Validar login e smoke test completo do piloto.
-7. [ ] Replicar configuração para piloto-sao-matheus.
+	- [x] Validar login e smoke test completo do piloto.
+7. [x] Replicar configuração para piloto-sao-matheus.
 	- [x] Provisionar db-sao-matheus.
 	- [x] Provisionar api-sao-matheus com DATABASE_URL dedicado.
 	- [x] Provisionar sao-matheus-lista com VITE_API_URL do piloto.
 	- [x] Validar /health e /environment do piloto.
-	- [ ] Validar login e smoke test completo do piloto.
-8. [ ] Replicar configuração para piloto-vila-joao-xxiii.
+	- [x] Validar login e smoke test completo do piloto.
+8. [x] Replicar configuração para piloto-vila-joao-xxiii.
 	- [x] Provisionar db-vila-joao-xxiii.
 	- [x] Provisionar api-vila-joao-xxiii com DATABASE_URL dedicado.
 	- [x] Provisionar vila-joao-xxiii-lista com VITE_API_URL do piloto.
-	- [ ] Validar URL publica correta de /health e /environment do piloto.
-	- [ ] Validar login e smoke test completo do piloto.
+	- [x] Validar URL publica correta de /health e /environment do piloto.
+	- [x] Validar login e smoke test completo do piloto.
 
 ## Matriz Mínima de Variáveis (por ambiente)
 - UNIT_NAME
@@ -150,9 +150,10 @@
 - 2026-04-05 01:18 - Validacao backend sao-matheus: /health ok e /environment com env_name=piloto-sao-matheus e unit_name=São Matheus - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:27 - Validacao backend vila (URL correta): /health 200 com body {"status":"ok"}; /environment com env_name=piloto-vila-joao-xxiii e unit_name=Vila João XXIII - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:27 - Validacao frontend vila (URL informada): retorno HTTP 401 (protecao/autenticacao no Vercel), sem evidenciar erro de deploy - CONCLUIDO - Jefferson de Melo
-- HH:MM - Encerramento da janela - EM ABERTO - Responsável
+- 2026-04-05 01:29 - Validacao final de login/smoke dos 3 pilotos concluida pela operacao - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:29 - Encerramento da janela - CONCLUIDO - Jefferson de Melo
 
 ## Encerramento
-- Horário final: A DEFINIR
-- Resultado: PRODUCAO ESTAVEL COM ULTIMO MERGE APLICADO
-- Observações: incidente de limpeza de chamada entre dispositivos tratado com fix backend e teste automatizado; exportacao de vagas em PDF alterada para download direto sem popup e promovida para master; layout de vagas alinhado ao template detalhado com totais agrupados por horario; rotulos finais de exportacao ajustados para "Exportar vagas"; pilotos provisionados em Neon/Render/Vercel e em fase de fechamento de evidencias finais de URL publica/login/smoke completo.
+- Horário final: 2026-04-05 01:29
+- Resultado: JANELA ENCERRADA COM PRODUCAO ESTAVEL, ESPELHO VALIDADO E 3 PILOTOS OPERACIONAIS
+- Observações: incidente de limpeza de chamada entre dispositivos tratado com fix backend e teste automatizado; exportacao de vagas em PDF alterada para download direto sem popup e promovida para master; layout de vagas alinhado ao template detalhado com totais agrupados por horario; rotulos finais de exportacao ajustados para "Exportar vagas"; pilotos provisionados em Neon/Render/Vercel com isolamento por DATABASE_URL/SECRET_KEY/CORS e validacao final registrada.
