@@ -4,6 +4,20 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
 });
 
+const accessMode = String(import.meta.env.VITE_ACCESS_MODE || "unit").trim().toLowerCase();
+
+const readScopedProfessorName = () => {
+  if (accessMode !== "professor") return "";
+  try {
+    const raw = localStorage.getItem("teacherProfile");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return String(parsed?.name || "").trim();
+  } catch {
+    return "";
+  }
+};
+
 const noCacheConfig = {
   headers: {
     "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -763,8 +777,20 @@ export const deletePlanningFile = (id: string) =>
   API.delete(`/planning-files/${encodeURIComponent(id)}`);
 
 // Import backend (multi-unit)
-export const getBootstrap = (unitId?: number) =>
-  API.get(`/api/bootstrap${unitId ? `?unit_id=${unitId}` : ""}`);
+export const getBootstrap = (unitId?: number, options?: { professor?: string }) => {
+  const params = new URLSearchParams();
+  if (typeof unitId === "number") {
+    params.set("unit_id", String(unitId));
+  }
+
+  const professorScope = String(options?.professor || "").trim() || readScopedProfessorName();
+  if (professorScope) {
+    params.set("professor", professorScope);
+  }
+
+  const query = params.toString();
+  return API.get(`/api/bootstrap${query ? `?${query}` : ""}`);
+};
 
 export const createImportStudent = (data: any) =>
   API.post("/api/import-students", data);

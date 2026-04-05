@@ -61,6 +61,7 @@ ACADEMIC_CALENDAR_FILE_LOCK = RLock()
 
 ENV_NAME = os.getenv("ENV_NAME", "").strip()
 UNIT_NAME = os.getenv("UNIT_NAME", "").strip()
+ACCESS_MODE = os.getenv("ACCESS_MODE", "unit").strip().lower()
 
 cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
 
@@ -121,6 +122,7 @@ def environment_info():
     return {
         "env_name": ENV_NAME,
         "unit_name": UNIT_NAME,
+        "access_mode": ACCESS_MODE or "unit",
     }
 
 class PoolLogEntryModel(BaseModel):
@@ -4204,7 +4206,11 @@ def get_import_data_status() -> ImportStatusOut:
     return ImportStatusOut(**payload)
 
 @app.get("/api/bootstrap", response_model=BootstrapOut)
-def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_session)) -> BootstrapOut:
+def bootstrap(
+    unit_id: Optional[int] = None,
+    professor: Optional[str] = None,
+    session: Session = Depends(get_session),
+) -> BootstrapOut:
     removed = _dedupe_import_students(session) + _dedupe_import_students_global(session)
     if removed > 0:
         session.commit()
@@ -4220,6 +4226,20 @@ def bootstrap(unit_id: Optional[int] = None, session: Session = Depends(get_sess
         classes_stmt = classes_stmt.where(models.ImportClass.unit_id == unit_id)
     classes_stmt = classes_stmt.order_by(models.ImportClass.codigo, models.ImportClass.horario)
     classes = session.exec(classes_stmt).all()
+
+    # Mode switch by environment:
+    # - unit (default): full unit visibility (legacy behavior / Bela Vista)
+    # - professor: each professor sees only own classes/students
+    if ACCESS_MODE == "professor":
+        scoped_professor = _normalize_text_fold(professor)
+        if scoped_professor:
+            classes = [
+                cls
+                for cls in classes
+                if _normalize_text_fold(cls.professor or "") == scoped_professor
+            ]
+        else:
+            classes = []
 
     class_ids = [c.id for c in classes]
     students_stmt = select(models.ImportStudent)

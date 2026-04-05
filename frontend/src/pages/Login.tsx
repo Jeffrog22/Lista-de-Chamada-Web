@@ -205,10 +205,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         }
       }
 
-      setStatus("Carregando dados...");
-      const res = await getBootstrap();
-      applyBootstrap(res.data);
-
       const normalizedProfile = {
         ...profile,
         name: String(profile.name || "").trim(),
@@ -216,6 +212,10 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         email: String(profile.email || "").trim(),
         whatsapp: String(profile.whatsapp || "").trim(),
       };
+
+      setStatus("Carregando dados...");
+      const res = await getBootstrap(undefined, { professor: normalizedProfile.name });
+      applyBootstrap(res.data);
 
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
@@ -261,7 +261,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     };
 
     try {
-      const res = await getBootstrap();
+      const res = await getBootstrap(undefined, { professor: normalizedName });
       applyBootstrap(res.data);
 
       if (rememberProfile) {
