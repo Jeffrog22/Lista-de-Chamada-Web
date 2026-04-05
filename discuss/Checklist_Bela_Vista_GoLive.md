@@ -150,6 +150,8 @@
 - 2026-04-05 01:18 - Validacao backend sao-matheus: /health ok e /environment com env_name=piloto-sao-matheus e unit_name=São Matheus - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:27 - Validacao backend vila (URL correta): /health 200 com body {"status":"ok"}; /environment com env_name=piloto-vila-joao-xxiii e unit_name=Vila João XXIII - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:27 - Validacao frontend vila (URL informada): retorno HTTP 401 (protecao/autenticacao no Vercel), sem evidenciar erro de deploy - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:35 - Revalidacao frontend vila apos ajuste de protection: https://vila-git-master-jeffrog22s-projects.vercel.app retornando HTTP 200 - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:35 - Revalidacao backend vila mantida: https://api-joao-xxiii.onrender.com/health HTTP 200 e /environment coerente - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:29 - Validacao final de login/smoke dos 3 pilotos concluida pela operacao - CONCLUIDO - Jefferson de Melo
 - 2026-04-05 01:29 - Encerramento da janela - CONCLUIDO - Jefferson de Melo
 
