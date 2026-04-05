@@ -6,7 +6,7 @@
 - Responsável técnico: Jefferson de Melo
 - Responsável operação: Jefferson de Melo
 - Versão alvo: v.003.00-02zq
-- Status geral: PRODUCAO ATUALIZADA COM MERGE; MIRROR VALIDADO; VAGAS E EXPORTACOES AJUSTADAS; INICIO DA FASE DOS 3 PILOTOS DAS NOVAS UNIDADES
+- Status geral: PRODUCAO ATUALIZADA COM MERGE; MIRROR VALIDADO; 3 PILOTOS IMPLANTADOS; VALIDACAO FINAL DE URLS PUBLICAS EM FECHAMENTO
 
 ## Ambientes Obrigatórios
 - bela-vista-prod (produção atual, intocável)
@@ -42,20 +42,23 @@
 4. [x] Executar validação funcional completa no mirror.
 5. [x] Promover correções validadas para produção (master).
 6. [ ] Replicar configuração para piloto-parque-municipal.
-	- [ ] Provisionar db-parque-municipal.
-	- [ ] Provisionar api-parque-municipal com DATABASE_URL dedicado.
-	- [ ] Provisionar parque-municipal-lista com VITE_API_URL do piloto.
-	- [ ] Validar /health, /environment, login e smoke test do piloto.
+	- [x] Provisionar db-parque-municipal.
+	- [x] Provisionar api-parque-municipal com DATABASE_URL dedicado.
+	- [x] Provisionar parque-municipal-lista com VITE_API_URL do piloto.
+	- [x] Validar /health e /environment do piloto.
+	- [ ] Validar login e smoke test completo do piloto.
 7. [ ] Replicar configuração para piloto-sao-matheus.
-	- [ ] Provisionar db-sao-matheus.
-	- [ ] Provisionar api-sao-matheus com DATABASE_URL dedicado.
-	- [ ] Provisionar sao-matheus-lista com VITE_API_URL do piloto.
-	- [ ] Validar /health, /environment, login e smoke test do piloto.
+	- [x] Provisionar db-sao-matheus.
+	- [x] Provisionar api-sao-matheus com DATABASE_URL dedicado.
+	- [x] Provisionar sao-matheus-lista com VITE_API_URL do piloto.
+	- [x] Validar /health e /environment do piloto.
+	- [ ] Validar login e smoke test completo do piloto.
 8. [ ] Replicar configuração para piloto-vila-joao-xxiii.
-	- [ ] Provisionar db-vila-joao-xxiii.
-	- [ ] Provisionar api-vila-joao-xxiii com DATABASE_URL dedicado.
-	- [ ] Provisionar vila-joao-xxiii-lista com VITE_API_URL do piloto.
-	- [ ] Validar /health, /environment, login e smoke test do piloto.
+	- [x] Provisionar db-vila-joao-xxiii.
+	- [x] Provisionar api-vila-joao-xxiii com DATABASE_URL dedicado.
+	- [x] Provisionar vila-joao-xxiii-lista com VITE_API_URL do piloto.
+	- [ ] Validar URL publica correta de /health e /environment do piloto.
+	- [ ] Validar login e smoke test completo do piloto.
 
 ## Matriz Mínima de Variáveis (por ambiente)
 - UNIT_NAME
@@ -70,26 +73,26 @@
 ### piloto-parque-municipal
 - UNIT_NAME: Parque Municipal
 - ENV_NAME: piloto-parque-municipal
-- DATABASE_URL: PENDENTE (db-parque-municipal)
-- VITE_API_URL: PENDENTE (api-parque-municipal)
-- CORS_ORIGINS: PENDENTE (somente frontend parque-municipal-lista)
-- SECRET_KEY: PENDENTE (exclusivo deste backend)
+- DATABASE_URL: DEFINIDO NO RENDER (db-parque-municipal / Neon)
+- VITE_API_URL: DEFINIDO (api-parque-municipal.onrender.com)
+- CORS_ORIGINS: DEFINIDO NO RENDER (somente frontend do piloto)
+- SECRET_KEY: DEFINIDO NO RENDER (exclusivo deste backend)
 
 ### piloto-sao-matheus
 - UNIT_NAME: São Matheus
 - ENV_NAME: piloto-sao-matheus
-- DATABASE_URL: PENDENTE (db-sao-matheus)
-- VITE_API_URL: PENDENTE (api-sao-matheus)
-- CORS_ORIGINS: PENDENTE (somente frontend sao-matheus-lista)
-- SECRET_KEY: PENDENTE (exclusivo deste backend)
+- DATABASE_URL: DEFINIDO NO RENDER (db-sao-matheus / Neon)
+- VITE_API_URL: DEFINIDO (api-sao-matheus.onrender.com)
+- CORS_ORIGINS: DEFINIDO NO RENDER (somente frontend do piloto)
+- SECRET_KEY: DEFINIDO NO RENDER (exclusivo deste backend)
 
 ### piloto-vila-joao-xxiii
 - UNIT_NAME: Vila João XXIII
 - ENV_NAME: piloto-vila-joao-xxiii
-- DATABASE_URL: PENDENTE (db-vila-joao-xxiii)
-- VITE_API_URL: PENDENTE (api-vila-joao-xxiii)
-- CORS_ORIGINS: PENDENTE (somente frontend vila-joao-xxiii-lista)
-- SECRET_KEY: PENDENTE (exclusivo deste backend)
+- DATABASE_URL: DEFINIDO NO RENDER (db-vila-joao-xxiii / Neon)
+- VITE_API_URL: DEFINIDO (api-vila-joao-xxiii.onrender.com - confirmar URL publica final)
+- CORS_ORIGINS: DEFINIDO NO RENDER (somente frontend do piloto)
+- SECRET_KEY: DEFINIDO NO RENDER (exclusivo deste backend)
 
 ## Testes de Aceite por Ambiente (mirror + pilotos)
 - [x] Login com unidade correta: permitido
@@ -139,13 +142,17 @@
 - 18:14 - Promocao para producao concluida (merge commit 28f8ceb em master + push origin/master) - CONCLUIDO - Jefferson de Melo
 - 09:42 - Relatorio de vagas ajustado para template detalhado (separacao por professor/turma com total agrupado por horario) e publicado em producao (commit 46cb1cb) - CONCLUIDO - Jefferson de Melo
 - 2026-04-04 - Ajuste final dos botões de exportacao de vagas para "Exportar vagas (.xlsx)" e "Exportar vagas (.pdf)" - CONCLUIDO - Jefferson de Melo
-- HH:MM - Início da fase dos 3 pilotos das novas unidades - EM EXECUCAO - Jefferson de Melo
-- HH:MM - Deploy piloto-parque-municipal - PENDENTE - Responsável
-- HH:MM - Deploy piloto-sao-matheus - PENDENTE - Responsável
-- HH:MM - Deploy piloto-vila-joao-xxiii - PENDENTE - Responsável
+- 2026-04-05 01:18 - Início da fase dos 3 pilotos das novas unidades - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Deploy piloto-parque-municipal (Neon + Render + Vercel) - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Deploy piloto-sao-matheus (Neon + Render + Vercel) - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Deploy piloto-vila-joao-xxiii (Neon + Render + Vercel) - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Validacao backend parque: /health ok e /environment com env_name=piloto-parque-municipal e unit_name=Parque Municipal - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Validacao backend sao-matheus: /health ok e /environment com env_name=piloto-sao-matheus e unit_name=São Matheus - CONCLUIDO - Jefferson de Melo
+- 2026-04-05 01:18 - Validacao backend vila: URL publica retornando 404 em /health durante checagem automatica; confirmar endpoint final no Render - EM ABERTO - Jefferson de Melo
+- 2026-04-05 01:18 - Validacao automatica das URLs guessed de frontend dos pilotos retornou 404; confirmar URLs finais reais no Vercel - EM ABERTO - Jefferson de Melo
 - HH:MM - Encerramento da janela - EM ABERTO - Responsável
 
 ## Encerramento
 - Horário final: A DEFINIR
 - Resultado: PRODUCAO ESTAVEL COM ULTIMO MERGE APLICADO
-- Observações: incidente de limpeza de chamada entre dispositivos tratado com fix backend e teste automatizado; exportacao de vagas em PDF alterada para download direto sem popup e promovida para master; layout de vagas alinhado ao template detalhado com totais agrupados por horario; rotulos finais de exportacao ajustados para "Exportar vagas".
+- Observações: incidente de limpeza de chamada entre dispositivos tratado com fix backend e teste automatizado; exportacao de vagas em PDF alterada para download direto sem popup e promovida para master; layout de vagas alinhado ao template detalhado com totais agrupados por horario; rotulos finais de exportacao ajustados para "Exportar vagas"; pilotos provisionados em Neon/Render/Vercel e em fase de fechamento de evidencias finais de URL publica/login/smoke completo.
