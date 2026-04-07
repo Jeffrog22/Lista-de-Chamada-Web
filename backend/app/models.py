@@ -170,3 +170,10 @@ class PoolLog(SQLModel, table=True):
     temp_piscina: str = Field(default="")
     cloro_ppm: Optional[str] = Field(default=None)
     saved_at: str = Field(default="")
+
+
+class AcademicCalendarState(SQLModel, table=True):
+    __tablename__ = "academic_calendar_state"
+    id: int = Field(default=1, primary_key=True)
+    state_json: str = Field(default="{}", sa_column=Column(Text))
+    updated_at: str = Field(default="")

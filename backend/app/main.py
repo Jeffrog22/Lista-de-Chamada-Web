@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Fo
 from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, migrate_db, get_session
 from app import crud, models
-from app.models import AttendanceLog, PoolLog
+from app.models import AttendanceLog, AcademicCalendarState, PoolLog
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import os
@@ -428,29 +428,83 @@ def _compute_weather_temp(minima_txt: str, maxima_txt: str, fallback: str = "26"
 def _academic_calendar_file() -> str:
     return os.path.join(DATA_DIR, "academicCalendar.json")
 
+
+def _empty_academic_calendar_state() -> Dict[str, Any]:
+    return {"settings": None, "events": [], "bankHours": []}
+
+
+def _normalize_academic_calendar_state(payload: Any) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return _empty_academic_calendar_state()
+    settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else None
+    events = payload.get("events") if isinstance(payload.get("events"), list) else []
+    bank_hours = payload.get("bankHours") if isinstance(payload.get("bankHours"), list) else []
+    return {"settings": settings, "events": events, "bankHours": bank_hours}
+
+
+def _load_academic_calendar_state_from_db() -> Optional[Dict[str, Any]]:
+    try:
+        from app.database import engine as _db_engine
+
+        with Session(_db_engine) as db:
+            row = db.get(AcademicCalendarState, 1)
+            if not row or not str(row.state_json or "").strip():
+                return None
+            return _normalize_academic_calendar_state(json.loads(row.state_json))
+    except Exception:
+        return None
+
+
+def _save_academic_calendar_state_to_db(state: Dict[str, Any]) -> None:
+    try:
+        from app.database import engine as _db_engine
+
+        with Session(_db_engine) as db:
+            row = db.get(AcademicCalendarState, 1)
+            payload = json.dumps(_normalize_academic_calendar_state(state), ensure_ascii=False)
+            if row:
+                row.state_json = payload
+                row.updated_at = datetime.utcnow().isoformat()
+                db.add(row)
+            else:
+                db.add(
+                    AcademicCalendarState(
+                        id=1,
+                        state_json=payload,
+                        updated_at=datetime.utcnow().isoformat(),
+                    )
+                )
+            db.commit()
+    except Exception:
+        pass
+
 def _load_academic_calendar_state() -> Dict[str, Any]:
+    db_state = _load_academic_calendar_state_from_db()
+    if db_state:
+        return db_state
+
     file_path = _academic_calendar_file()
     with ACADEMIC_CALENDAR_FILE_LOCK:
         if not os.path.exists(file_path):
-            return {"settings": None, "events": [], "bankHours": []}
+            return _empty_academic_calendar_state()
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
-            if not isinstance(payload, dict):
-                return {"settings": None, "events": [], "bankHours": []}
-            settings = payload.get("settings") if isinstance(payload.get("settings"), dict) else None
-            events = payload.get("events") if isinstance(payload.get("events"), list) else []
-            bank_hours = payload.get("bankHours") if isinstance(payload.get("bankHours"), list) else []
-            return {"settings": settings, "events": events, "bankHours": bank_hours}
+            state = _normalize_academic_calendar_state(payload)
+            _save_academic_calendar_state_to_db(state)
+            return state
         except Exception:
-            return {"settings": None, "events": [], "bankHours": []}
+            return _empty_academic_calendar_state()
 
 def _save_academic_calendar_state(state: Dict[str, Any]) -> None:
+    normalized_state = _normalize_academic_calendar_state(state)
+    _save_academic_calendar_state_to_db(normalized_state)
+
     os.makedirs(DATA_DIR, exist_ok=True)
     file_path = _academic_calendar_file()
     with ACADEMIC_CALENDAR_FILE_LOCK:
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
+            json.dump(normalized_state, f, ensure_ascii=False, indent=2)
 
 
 @app.get("/planning-files")
