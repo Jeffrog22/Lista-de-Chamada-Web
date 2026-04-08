@@ -3123,7 +3123,8 @@ def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
 def restore_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
     with EXCLUSIONS_FILE_LOCK:
-        items = _clean_exclusions_list(_load_json_list(file_path))
+        # NOTE: Do NOT clean/filter here - preserve all exclusion records
+        items = _load_json_list(file_path)
         restored: Optional[Dict[str, Any]] = None
         remaining: List[Dict[str, Any]] = []
         for item in items:
@@ -3140,7 +3141,8 @@ def restore_exclusion(entry: ExclusionEntry):
 def delete_exclusion(entry: ExclusionEntry):
     file_path = os.path.join(DATA_DIR, "excludedStudents.json")
     with EXCLUSIONS_FILE_LOCK:
-        items = _clean_exclusions_list(_load_json_list(file_path))
+        # NOTE: Do NOT clean/filter here - preserve all exclusion records
+        items = _load_json_list(file_path)
         remaining: List[Dict[str, Any]] = []
         deleted = False
         for item in items:
