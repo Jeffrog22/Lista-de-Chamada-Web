@@ -144,7 +144,8 @@
 - 2026-04-08 09:20 - Correcao: remover validação _clean_exclusions_list dos endpoints de restauração e deleção para preservar integridade dos dados - IMPLEMENTADA - Jefferson de Melo
 - 2026-04-08 09:22 - Teste de regressão: `backend/tests/test_exclusions_restore_bug.py` adicionado para evitar repetição do bug - ADICIONADO - Jefferson de Melo
 - 2026-04-08 09:25 - Publicacao do fix em producao (master) com commit aa63de8 (`'v.003.00-02zx' corrige bug: restauração de aluno removia TODAS as exclusões`) - CONCLUIDO - Jefferson de Melo
-- HH:MM - Início da fase dos 3 pilotos das novas unidades - EM EXECUCAO - Jefferson de Melo
+- 2026-04-08 09:27 - Confirmação: dados de exclusão NÃO RECUPERADOS (arquivo e backup vazios); todos os alunos excluídos anteriormente estão agora ativos na chamada - IRREVERSIVEL (data loss) - Jefferson de Melo
+- 2026-04-08 09:28 - Status: bug corrigido e publicado; futuras restaurações/deletes preservarão dados de exclusão - VALIDADO - Jefferson de Melo
 - HH:MM - Deploy piloto-parque-municipal - PENDENTE - Responsável
 - HH:MM - Deploy piloto-sao-matheus - PENDENTE - Responsável
 - HH:MM - Deploy piloto-vila-joao-xxiii - PENDENTE - Responsável
