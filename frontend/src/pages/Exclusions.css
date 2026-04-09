@@ -130,3 +130,8 @@
   background-color: #f9f9f9;
   border-radius: 8px;
 }
+
+.exclusion-date-edit-input::selection {
+  background: rgba(37, 99, 235, 0.35);
+  color: #0f172a;
+}

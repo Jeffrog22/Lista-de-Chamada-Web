@@ -36,8 +36,6 @@ interface ExcludedStudent {
 
 export const Exclusions: React.FC = () => {
   const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
-  const dateHighlightColor = "#2563eb";
-  const dateHighlightBg = "#dbeafe";
   const [students, setStudents] = useState<ExcludedStudent[]>([]);
   const [nameSearch, setNameSearch] = useState("");
   const [turmaOptions, setTurmaOptions] = useState<string[]>([]);
@@ -795,9 +793,11 @@ export const Exclusions: React.FC = () => {
               </select>
               {isEditingRowDate ? (
                 <input
+                  className="exclusion-date-edit-input"
                   autoFocus
                   value={editingDateValue}
                   onChange={(e) => setEditingDateValue(maskDateInput(e.target.value))}
+                  onFocus={(e) => e.currentTarget.select()}
                   onBlur={() => {
                     commitDateEdit(student, rowKey);
                   }}
@@ -812,15 +812,11 @@ export const Exclusions: React.FC = () => {
                   placeholder="dd/mm/aaaa"
                   style={{
                     width: "100%",
-                    border: `2px solid ${dateHighlightColor}`,
+                    border: "1px solid #d1d5db",
                     borderRadius: "6px",
                     padding: "7px 8px",
                     fontSize: "13px",
                     textAlign: "center",
-                    fontWeight: 700,
-                    color: "#1e3a8a",
-                    background: dateHighlightBg,
-                    boxShadow: "0 0 0 3px rgba(37, 99, 235, 0.2)",
                   }}
                 />
               ) : (
