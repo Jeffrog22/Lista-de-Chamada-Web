@@ -643,6 +643,90 @@ const normalizePlanningBlocks = (value: unknown): PlanningBlock[] => {
     }));
 };
 
+const parseMonthTransitionFromLabel = (label: string) => {
+  const tokens = String(label || "").match(/\b\d{1,2}\/(\d{1,2})(?:\/20\d{2})?\b/g) || [];
+  if (tokens.length < 2) return null as { startMonth: string; endMonth: string } | null;
+
+  const extractMonth = (token: string) => {
+    const parts = token.split("/");
+    if (parts.length < 2) return "";
+    const month = Number(parts[1]);
+    if (!Number.isFinite(month) || month < 1 || month > 12) return "";
+    return String(month).padStart(2, "0");
+  };
+
+  const startMonth = extractMonth(tokens[0] || "");
+  const endMonth = extractMonth(tokens[1] || "");
+  if (!startMonth || !endMonth || startMonth === endMonth) return null;
+  return { startMonth, endMonth };
+};
+
+const inferBlockYearFromKey = (key: string, fallbackYear: number) => {
+  const match = String(key || "").match(/^(20\d{2})-/);
+  if (!match) return fallbackYear;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : fallbackYear;
+};
+
+const normalizeLegacyPlanningTransitions = (file: PlanningFileData): PlanningFileData => {
+  const normalizedBlocks = [...(file.blocks || [])];
+  let activeMonth = "";
+
+  for (let index = 0; index < normalizedBlocks.length; index += 1) {
+    const block = normalizedBlocks[index];
+    const transition = parseMonthTransitionFromLabel(block.label || "");
+
+    if (block.type === "month" && block.month) {
+      activeMonth = block.month;
+      continue;
+    }
+
+    if (transition) {
+      activeMonth = transition.endMonth;
+
+      if (block.type === "week") {
+        const nextYear = inferBlockYearFromKey(block.key, Number(file.year || new Date().getFullYear()));
+        const nextMonth = transition.endMonth;
+        normalizedBlocks[index] = {
+          ...block,
+          month: nextMonth,
+          key: typeof block.week === "number" ? `${nextYear}-${nextMonth}-sem-${block.week}` : block.key,
+        };
+      }
+      continue;
+    }
+
+    if (block.type === "date") {
+      const parsedDate = parsePlanningDateValue(block.key || "", Number(file.year || new Date().getFullYear()));
+      if (parsedDate?.month) {
+        activeMonth = parsedDate.month;
+      } else if (block.month) {
+        activeMonth = block.month;
+      }
+      continue;
+    }
+
+    if (block.type === "week") {
+      if (activeMonth && block.month !== activeMonth) {
+        const nextYear = inferBlockYearFromKey(block.key, Number(file.year || new Date().getFullYear()));
+        normalizedBlocks[index] = {
+          ...block,
+          month: activeMonth,
+          key: typeof block.week === "number" ? `${nextYear}-${activeMonth}-sem-${block.week}` : block.key,
+        };
+      }
+      if (normalizedBlocks[index].month) {
+        activeMonth = String(normalizedBlocks[index].month);
+      }
+    }
+  }
+
+  return {
+    ...file,
+    blocks: normalizedBlocks,
+  };
+};
+
 const normalizePlanningFiles = (payload: unknown): PlanningFileData[] => {
   if (!Array.isArray(payload)) return [];
   const normalized = payload
@@ -656,6 +740,7 @@ const normalizePlanningFiles = (payload: unknown): PlanningFileData[] => {
       blocks: normalizePlanningBlocks(record.blocks),
       createdAt: String(record.createdAt || new Date().toISOString()),
     }))
+    .map((file) => normalizeLegacyPlanningTransitions(file))
     .filter((file) => file.sourceName);
 
   return normalized.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
