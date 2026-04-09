@@ -1502,6 +1502,13 @@ const resolvePlanningDateRange = (label: string, fallbackYear: number) => {
   return null;
 };
 
+const previousMonthOf = (month: string) => {
+  const numeric = Number(month);
+  if (!Number.isFinite(numeric) || numeric < 1 || numeric > 12) return "";
+  if (numeric === 1) return "12";
+  return String(numeric - 1).padStart(2, "0");
+};
+
 const planningRangeIncludesDate = (label: string, fallbackYear: number, selectedDateKey: string) => {
   const selectedDate = new Date(`${selectedDateKey}T00:00:00`);
   if (Number.isNaN(selectedDate.getTime())) return false;
@@ -1739,16 +1746,44 @@ export const Reports: React.FC = () => {
         let score = 0;
 
         if (block.type === "week") {
-          const monthMatches = !block.month || block.month === selectedMonthNumber;
+          const blockMonth = String(block.month || "").padStart(2, "0");
+          const prevOfBlockMonth = previousMonthOf(blockMonth);
+          const isCrossMonthRange =
+            typeof block.startDay === "number" &&
+            typeof block.endDay === "number" &&
+            block.startDay > block.endDay;
+
+          const monthMatches =
+            !block.month ||
+            blockMonth === selectedMonthNumber ||
+            (isCrossMonthRange && prevOfBlockMonth === selectedMonthNumber);
           if (!monthMatches) return;
 
           const weekMatches = selectedWeek !== null && typeof block.week === "number" && block.week === selectedWeek;
-          const rangeMatches =
-            selectedDay !== null &&
-            typeof block.startDay === "number" &&
-            typeof block.endDay === "number" &&
-            selectedDay >= block.startDay &&
-            selectedDay <= block.endDay;
+          const rangeMatches = (() => {
+            if (
+              selectedDay === null ||
+              typeof block.startDay !== "number" ||
+              typeof block.endDay !== "number"
+            ) {
+              return false;
+            }
+
+            if (block.startDay <= block.endDay) {
+              return selectedDay >= block.startDay && selectedDay <= block.endDay;
+            }
+
+            // Semana de transição de mês: ex. 31/03 a 03/04
+            if (blockMonth === selectedMonthNumber) {
+              return selectedDay <= block.endDay;
+            }
+
+            if (prevOfBlockMonth === selectedMonthNumber) {
+              return selectedDay >= block.startDay;
+            }
+
+            return false;
+          })();
 
           score = rangeMatches ? 5 : weekMatches ? 4 : 0;
         } else if (block.type === "date") {
