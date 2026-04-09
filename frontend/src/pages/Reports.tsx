@@ -621,6 +621,8 @@ const parseHeaderTargetYear = (lines: string[], sourceName: string, defaultYear:
 };
 
 const parseOptionalNumber = (value: unknown) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : undefined;
 };
@@ -668,8 +670,73 @@ const inferBlockYearFromKey = (key: string, fallbackYear: number) => {
   return Number.isFinite(parsed) ? parsed : fallbackYear;
 };
 
+const normalizeLegacyWeekLikeDateBlock = (block: PlanningBlock, fileYear: number): PlanningBlock => {
+  if (block.type !== "date") return block;
+  const normalizedLabel = normalizeParserText(block.label || "");
+  if (!/\bsem/.test(normalizedLabel)) return block;
+
+  const weekMatch = normalizedLabel.match(/(\d{1,2})\s*(?:a|ª)?\s*sem(?:ana)?\b|sem(?:ana)?\s*(\d{1,2})\b/);
+  const parsedWeek = weekMatch ? Number(weekMatch[1] || weekMatch[2]) : undefined;
+
+  const explicitDateTokens = String(block.label || "").match(/\b\d{1,2}\/\d{1,2}(?:\/20\d{2})?\b/g) || [];
+  let startDay: number | undefined;
+  let endDay: number | undefined;
+  let resolvedMonth = String(block.month || "").padStart(2, "0");
+  let resolvedYear = inferBlockYearFromKey(block.key, fileYear);
+
+  if (explicitDateTokens.length >= 2) {
+    const startParts = (explicitDateTokens[0] || "").split("/").map(Number);
+    const endParts = (explicitDateTokens[1] || "").split("/").map(Number);
+    if (startParts.length >= 2 && endParts.length >= 2) {
+      startDay = Number(startParts[0]);
+      endDay = Number(endParts[0]);
+      resolvedMonth = String(Number(endParts[1])).padStart(2, "0");
+      if (endParts[2]) resolvedYear = Number(endParts[2]);
+    }
+  } else if (explicitDateTokens.length === 1) {
+    const tokenParts = explicitDateTokens[0].split("/").map(Number);
+    const rangePrefix = normalizedLabel.match(/(?:de\s+)?(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})\//i);
+    if (tokenParts.length >= 2) {
+      endDay = Number(tokenParts[0]);
+      resolvedMonth = String(Number(tokenParts[1])).padStart(2, "0");
+      startDay = rangePrefix ? Number(rangePrefix[1]) : undefined;
+      if (tokenParts[2]) resolvedYear = Number(tokenParts[2]);
+    }
+  }
+
+  if (
+    !Number.isFinite(Number(parsedWeek)) ||
+    !Number.isFinite(Number(startDay)) ||
+    !Number.isFinite(Number(endDay)) ||
+    !resolvedMonth
+  ) {
+    return block;
+  }
+
+  const cleanedText = String(block.text || "")
+    .replace(
+      /^(?:de\s+)?\d{1,2}(?:\/\d{1,2}(?:\/20\d{2})?)?\s*(?:a|-|ate)\s*\d{1,2}(?:\/\d{1,2}(?:\/20\d{2})?)?\s*/i,
+      ""
+    )
+    .trim()
+    .replace(/^[:\-–]+\s*/, "");
+
+  return {
+    ...block,
+    type: "week",
+    month: resolvedMonth,
+    week: Number(parsedWeek),
+    startDay: Number(startDay),
+    endDay: Number(endDay),
+    key: `${resolvedYear}-${resolvedMonth}-sem-${Number(parsedWeek)}`,
+    text: cleanedText,
+  };
+};
+
 const normalizeLegacyPlanningTransitions = (file: PlanningFileData): PlanningFileData => {
-  const normalizedBlocks = [...(file.blocks || [])];
+  const normalizedBlocks = [...(file.blocks || [])].map((block) =>
+    normalizeLegacyWeekLikeDateBlock(block, Number(file.year || new Date().getFullYear()))
+  );
   let activeMonth = "";
 
   for (let index = 0; index < normalizedBlocks.length; index += 1) {
@@ -721,9 +788,32 @@ const normalizeLegacyPlanningTransitions = (file: PlanningFileData): PlanningFil
     }
   }
 
+  // Keep only one block per effective week key to avoid duplicated week cards.
+  const dedupedBlocks: PlanningBlock[] = [];
+  const seenWeekKeys = new Set<string>();
+  normalizedBlocks.forEach((block) => {
+    if (block.type !== "week") {
+      dedupedBlocks.push(block);
+      return;
+    }
+
+    const effectiveKey = String(block.key || "").trim();
+    if (!effectiveKey) {
+      dedupedBlocks.push(block);
+      return;
+    }
+
+    if (seenWeekKeys.has(effectiveKey)) {
+      return;
+    }
+
+    seenWeekKeys.add(effectiveKey);
+    dedupedBlocks.push(block);
+  });
+
   return {
     ...file,
-    blocks: normalizedBlocks,
+    blocks: dedupedBlocks,
   };
 };
 
@@ -1703,9 +1793,18 @@ export const Reports: React.FC = () => {
       }
     }
 
-    return bestMatched
-      .sort((a, b) => a.label.localeCompare(b.label))
-      .map(({ _score, ...block }) => block);
+    const bestSingle = bestMatched
+      .sort((a, b) => {
+        const textA = String(a.text || "").trim().length;
+        const textB = String(b.text || "").trim().length;
+        if (textB !== textA) return textB - textA;
+        return a.label.localeCompare(b.label);
+      })[0];
+
+    if (!bestSingle) return [] as PlanningBlock[];
+
+    const { _score, ...block } = bestSingle;
+    return [block];
   }, [planningSelectedTargetKey, planningStore.files, selectedPlanningWeekKey, effectivePlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
 
   const handlePlanningUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -3664,7 +3763,14 @@ export const Reports: React.FC = () => {
                   )}
                   {(() => {
                     const firstBlock = planningLookupResults[0];
-                    if (firstBlock && typeof firstBlock.startDay === "number" && typeof firstBlock.endDay === "number") {
+                    if (
+                      firstBlock &&
+                      firstBlock.type === "week" &&
+                      typeof firstBlock.startDay === "number" &&
+                      typeof firstBlock.endDay === "number" &&
+                      firstBlock.startDay > 0 &&
+                      firstBlock.endDay > 0
+                    ) {
                       return (
                         <>
                           Período: <strong>{String(firstBlock.startDay).padStart(2, "0")} a {String(firstBlock.endDay).padStart(2, "0")}</strong>
@@ -3721,7 +3827,11 @@ export const Reports: React.FC = () => {
                     };
 
                     const weekTitle = (() => {
-                      if (typeof block.week === "number") {
+                      if (
+                        block.type === "week" &&
+                        typeof block.week === "number" &&
+                        block.week > 0
+                      ) {
                         if (typeof block.startDay === "number" && typeof block.endDay === "number") {
                           return `${block.week}ª SEM · ${String(block.startDay).padStart(2, "0")} a ${String(block.endDay).padStart(2, "0")}`;
                         }
