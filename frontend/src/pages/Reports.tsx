@@ -1017,6 +1017,64 @@ const buildPlanningFileData = (
       continue;
     }
 
+    const weekMatch = normalized.match(/(\d{1,2})\s*(?:a|ª)?\s*sem(?:ana)?\b|sem(?:ana)?\s*(\d{1,2})\b/);
+    if (weekMatch) {
+      flushCurrentBlock();
+      const week = Number(weekMatch[1] || weekMatch[2]);
+      const explicitDateTokens = clean.match(/\b\d{1,2}\/\d{1,2}(?:\/20\d{2})?\b/g) || [];
+      const startToken = explicitDateTokens[0];
+      const endToken = explicitDateTokens[1] || explicitDateTokens[0];
+
+      let weekYear = header.year;
+      let resolvedMonth = currentMonth || defaultMonth;
+      let startDay: number | undefined;
+      let endDay: number | undefined;
+
+      if (startToken && endToken) {
+        const startParts = startToken.split("/").map(Number);
+        const endParts = endToken.split("/").map(Number);
+        if (startParts.length >= 2 && endParts.length >= 2) {
+          startDay = Number(startParts[0]);
+          endDay = Number(endParts[0]);
+          resolvedMonth = String(Number(endParts[1])).padStart(2, "0");
+          if (endParts[2]) weekYear = Number(endParts[2]);
+        }
+      }
+
+      if (typeof startDay !== "number" || typeof endDay !== "number") {
+        const rangeMatch = normalized.match(/(?:de\s+)?(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})/i);
+        startDay = rangeMatch ? Number(rangeMatch[1]) : undefined;
+        endDay = rangeMatch ? Number(rangeMatch[2]) : undefined;
+      }
+
+      const semHeaderMatch = clean.match(/^\s*(?:\d{1,2}\s*(?:a|ª)?\s*sem(?:ana)?|sem(?:ana)?\s*\d{1,2})\s*:?\s*/i);
+      let trailingAfterHeader = semHeaderMatch
+        ? clean.slice(semHeaderMatch[0].length).trim().replace(/^[:\-–]+\s*/, "")
+        : "";
+
+      trailingAfterHeader = trailingAfterHeader
+        .replace(
+          /^(?:de\s+)?\d{1,2}(?:\/\d{1,2}(?:\/20\d{2})?)?\s*(?:a|-|ate)\s*\d{1,2}(?:\/\d{1,2}(?:\/20\d{2})?)?\s*/i,
+          ""
+        )
+        .trim()
+        .replace(/^[:\-–]+\s*/, "");
+
+      currentMonth = resolvedMonth;
+      currentBlock = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        type: "week",
+        key: `${weekYear}-${resolvedMonth}-sem-${week}`,
+        label: clean,
+        text: trailingAfterHeader,
+        month: resolvedMonth,
+        week,
+        startDay,
+        endDay,
+      };
+      continue;
+    }
+
     const dateMatch = clean.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?\b/);
     if (dateMatch) {
       flushCurrentBlock();
@@ -1032,31 +1090,6 @@ const buildPlanningFileData = (
         label: clean,
         text: trailing,
         month,
-      };
-      continue;
-    }
-
-    const weekMatch = normalized.match(/(\d{1,2})\s*(?:a|ª)?\s*sem(?:ana)?\b|sem(?:ana)?\s*(\d{1,2})\b/);
-    if (weekMatch) {
-      flushCurrentBlock();
-      const week = Number(weekMatch[1] || weekMatch[2]);
-      const rangeMatch = normalized.match(/(?:de\s+)?(\d{1,2})\s*(?:a|-|ate)\s*(\d{1,2})/i);
-      const startDay = rangeMatch ? Number(rangeMatch[1]) : undefined;
-      const endDay = rangeMatch ? Number(rangeMatch[2]) : undefined;
-      const semHeaderMatch = clean.match(/^\s*(?:\d{1,2}\s*(?:a|ª)?\s*sem(?:ana)?|sem(?:ana)?\s*\d{1,2})\s*:?\s*/i);
-      const trailingAfterHeader = semHeaderMatch
-        ? clean.slice(semHeaderMatch[0].length).trim().replace(/^[:\-–]+\s*/, "")
-        : "";
-      currentBlock = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        type: "week",
-        key: `${header.year}-${currentMonth || defaultMonth}-sem-${week}`,
-        label: clean,
-        text: trailingAfterHeader,
-        month: currentMonth || defaultMonth,
-        week,
-        startDay,
-        endDay,
       };
       continue;
     }
