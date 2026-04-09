@@ -737,19 +737,19 @@ const normalizeLegacyPlanningTransitions = (file: PlanningFileData): PlanningFil
   const normalizedBlocks = [...(file.blocks || [])].map((block) =>
     normalizeLegacyWeekLikeDateBlock(block, Number(file.year || new Date().getFullYear()))
   );
-  let activeMonth = "";
+  let transitionContext: { startMonth: string; endMonth: string } | null = null;
 
   for (let index = 0; index < normalizedBlocks.length; index += 1) {
     const block = normalizedBlocks[index];
     const transition = parseMonthTransitionFromLabel(block.label || "");
 
-    if (block.type === "month" && block.month) {
-      activeMonth = block.month;
+    if (block.type === "month") {
+      transitionContext = null;
       continue;
     }
 
     if (transition) {
-      activeMonth = transition.endMonth;
+      transitionContext = transition;
 
       if (block.type === "week") {
         const nextYear = inferBlockYearFromKey(block.key, Number(file.year || new Date().getFullYear()));
@@ -763,28 +763,37 @@ const normalizeLegacyPlanningTransitions = (file: PlanningFileData): PlanningFil
       continue;
     }
 
-    if (block.type === "date") {
-      const parsedDate = parsePlanningDateValue(block.key || "", Number(file.year || new Date().getFullYear()));
-      if (parsedDate?.month) {
-        activeMonth = parsedDate.month;
-      } else if (block.month) {
-        activeMonth = block.month;
-      }
+    if (block.type !== "week" || !transitionContext) {
       continue;
     }
 
-    if (block.type === "week") {
-      if (activeMonth && block.month !== activeMonth) {
-        const nextYear = inferBlockYearFromKey(block.key, Number(file.year || new Date().getFullYear()));
-        normalizedBlocks[index] = {
-          ...block,
-          month: activeMonth,
-          key: typeof block.week === "number" ? `${nextYear}-${activeMonth}-sem-${block.week}` : block.key,
-        };
-      }
-      if (normalizedBlocks[index].month) {
-        activeMonth = String(normalizedBlocks[index].month);
-      }
+    const blockMonth = String(block.month || "").padStart(2, "0");
+    const transitionStartMonth = String(transitionContext.startMonth || "").padStart(2, "0");
+    const transitionEndMonth = String(transitionContext.endMonth || "").padStart(2, "0");
+
+    if (!blockMonth || blockMonth === transitionEndMonth) {
+      transitionContext = null;
+      continue;
+    }
+
+    if (blockMonth !== transitionStartMonth) {
+      transitionContext = null;
+      continue;
+    }
+
+    const nextYear = inferBlockYearFromKey(block.key, Number(file.year || new Date().getFullYear()));
+    normalizedBlocks[index] = {
+      ...block,
+      month: transitionEndMonth,
+      key:
+        typeof block.week === "number"
+          ? `${nextYear}-${transitionEndMonth}-sem-${block.week}`
+          : block.key,
+    };
+
+    const upcoming = normalizedBlocks[index + 1];
+    if (!upcoming || upcoming.type !== "week") {
+      transitionContext = null;
     }
   }
 
