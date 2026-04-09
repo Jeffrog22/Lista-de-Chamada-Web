@@ -189,6 +189,13 @@ class ExclusionsBulkPayload(BaseModel):
     items: List[ExclusionEntry] = Field(default_factory=list)
     replace: bool = False
 
+
+class ExclusionsRecoverPayload(BaseModel):
+    backup_file: Optional[str] = None
+    force: bool = False
+    merge: bool = True
+    expected_min_items: int = 1
+
 class ReportStudent(BaseModel):
     id: str
     student_uid: Optional[str] = None
@@ -2071,6 +2078,50 @@ def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     return cleaned
 
+
+def _exclusions_file_path() -> str:
+    return os.path.join(DATA_DIR, "excludedStudents.json")
+
+
+def _list_exclusions_backups(limit: int = 30) -> List[Dict[str, Any]]:
+    archive_dir = os.path.join(DATA_DIR, "archive")
+    if not os.path.isdir(archive_dir):
+        return []
+
+    candidates: List[Dict[str, Any]] = []
+    for file_name in os.listdir(archive_dir):
+        if not file_name.startswith("excludedStudents_") or not file_name.endswith(".json"):
+            continue
+        full_path = os.path.join(archive_dir, file_name)
+        if not os.path.isfile(full_path):
+            continue
+        items = _load_json_list(full_path)
+        candidates.append(
+            {
+                "file": file_name,
+                "count": len(items),
+                "path": full_path,
+                "modified_at": datetime.fromtimestamp(os.path.getmtime(full_path)).isoformat(),
+            }
+        )
+
+    candidates.sort(key=lambda item: str(item.get("modified_at") or ""), reverse=True)
+    return candidates[: max(1, int(limit or 30))]
+
+
+def _merge_exclusions(base_items: List[Dict[str, Any]], incoming_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    merged = _clean_exclusions_list(base_items)
+    for incoming in _clean_exclusions_list(incoming_items):
+        idx = next(
+            (existing_idx for existing_idx, existing in enumerate(merged) if _exclusion_records_match(existing, incoming)),
+            -1,
+        )
+        if idx >= 0:
+            merged[idx] = {**merged[idx], **incoming}
+        else:
+            merged.append(incoming)
+    return _clean_exclusions_list(merged)
+
 def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
     return _exclusion_records_match(_normalize_exclusion_item(item), _normalize_exclusion_item(payload.dict()))
 
@@ -3044,7 +3095,7 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
 
 @app.get("/exclusions")
 def list_exclusions():
-    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         items = _load_json_list(file_path)
         cleaned = _clean_exclusions_list(items)
@@ -3052,9 +3103,82 @@ def list_exclusions():
             _save_json_list(file_path, cleaned)
         return cleaned
 
+
+@app.get("/exclusions/backups")
+def list_exclusions_backups(limit: int = Query(default=30, ge=1, le=200)):
+    with EXCLUSIONS_FILE_LOCK:
+        current_items = _clean_exclusions_list(_load_json_list(_exclusions_file_path()))
+        backups = _list_exclusions_backups(limit=limit)
+    return {
+        "ok": True,
+        "current_count": len(current_items),
+        "backups": [{k: v for k, v in item.items() if k != "path"} for item in backups],
+    }
+
+
+@app.post("/exclusions/snapshot")
+def snapshot_exclusions_state():
+    with EXCLUSIONS_FILE_LOCK:
+        current_path = _exclusions_file_path()
+        current_items = _clean_exclusions_list(_load_json_list(current_path))
+        _save_json_list(current_path, current_items)
+        backups = _list_exclusions_backups(limit=1)
+    return {
+        "ok": True,
+        "count": len(current_items),
+        "backup_file": backups[0]["file"] if backups else None,
+    }
+
+
+@app.post("/exclusions/recover")
+def recover_exclusions(payload: ExclusionsRecoverPayload):
+    with EXCLUSIONS_FILE_LOCK:
+        current_path = _exclusions_file_path()
+        current_items = _clean_exclusions_list(_load_json_list(current_path))
+        backups = _list_exclusions_backups(limit=200)
+
+        target: Optional[Dict[str, Any]] = None
+        requested_backup = str(payload.backup_file or "").strip()
+        if requested_backup:
+            target = next((item for item in backups if item.get("file") == requested_backup), None)
+            if target is None:
+                raise HTTPException(status_code=404, detail="Backup de exclusoes nao encontrado")
+        else:
+            valid = [item for item in backups if int(item.get("count") or 0) >= max(0, int(payload.expected_min_items or 0))]
+            if valid:
+                target = max(valid, key=lambda item: (int(item.get("count") or 0), str(item.get("modified_at") or "")))
+
+        if target is None:
+            raise HTTPException(status_code=409, detail="Nenhum backup elegivel para recuperacao")
+
+        target_items = _clean_exclusions_list(_load_json_list(str(target.get("path") or "")))
+        if not target_items:
+            raise HTTPException(status_code=409, detail="Backup selecionado nao possui exclusoes")
+
+        if current_items and not payload.force:
+            raise HTTPException(
+                status_code=409,
+                detail="Lista atual nao esta vazia. Envie force=true para sobrescrever ou merge=true para combinar",
+            )
+
+        if payload.merge:
+            final_items = _merge_exclusions(current_items, target_items)
+        else:
+            final_items = target_items
+
+        _save_json_list(current_path, final_items)
+
+    return {
+        "ok": True,
+        "restored_from": target.get("file"),
+        "before": len(current_items),
+        "after": len(final_items),
+        "backup_count": int(target.get("count") or 0),
+    }
+
 @app.post("/exclusions")
 def add_exclusion(entry: ExclusionEntry):
-    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         items = _clean_exclusions_list(_load_json_list(file_path))
         payload = _normalize_exclusion_item(entry.dict())
@@ -3075,7 +3199,7 @@ def add_exclusion(entry: ExclusionEntry):
 
 @app.post("/exclusions/bulk")
 def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
-    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         existing_items = [] if payload.replace else _clean_exclusions_list(_load_json_list(file_path))
 
@@ -3121,7 +3245,7 @@ def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
 
 @app.post("/exclusions/restore")
 def restore_exclusion(entry: ExclusionEntry):
-    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         # NOTE: Do NOT clean/filter here - preserve all exclusion records
         items = _load_json_list(file_path)
@@ -3139,7 +3263,7 @@ def restore_exclusion(entry: ExclusionEntry):
 
 @app.post("/exclusions/delete")
 def delete_exclusion(entry: ExclusionEntry):
-    file_path = os.path.join(DATA_DIR, "excludedStudents.json")
+    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         # NOTE: Do NOT clean/filter here - preserve all exclusion records
         items = _load_json_list(file_path)
