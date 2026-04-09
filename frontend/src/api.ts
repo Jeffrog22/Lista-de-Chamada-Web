@@ -489,35 +489,8 @@ export const getExcludedStudents = () =>
   API.get("/exclusions", { ...noCacheConfig, params: { _ts: Date.now() } })
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
-      const localStateExists = hasExcludedStudentsLocalState();
-      const localData = localStateExists ? cleanExcludedStudentsLocalCache() : [];
-
-      if (remoteItems.length === 0 && localData.length > 0) {
-        writeExcludedStudentsLocal(localData);
-        try {
-          const syncResult = await syncExcludedStudentsToRemote([], localData, true);
-          return { ...response, data: syncResult.items, _fromFallback: false, _recoveredFromLocal: true };
-        } catch {
-          return { ...response, data: localData, _fromFallback: false, _recoveredFromLocal: true };
-        }
-      }
-
-      const baseline = mergeExcludedStudentsLocalWithRemote(remoteItems);
-
-      if (baseline.length > 0) {
-        try {
-          const syncResult = await syncExcludedStudentsToRemote(remoteItems, baseline);
-          return { ...response, data: syncResult.items, _fromFallback: false };
-        } catch {
-          return { ...response, data: baseline, _fromFallback: false };
-        }
-      }
-
-      if (!localStateExists) {
-        writeExcludedStudentsLocal([]);
-      }
-
-      return { ...response, data: [], _fromFallback: false };
+      writeExcludedStudentsLocal(remoteItems);
+      return { ...response, data: remoteItems, _fromFallback: false };
     })
     .catch(() => ({ data: readExcludedStudentsLocal(), _fromFallback: true }));
 
