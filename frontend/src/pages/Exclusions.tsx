@@ -37,9 +37,12 @@ interface ExcludedStudent {
 export const Exclusions: React.FC = () => {
   const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
   const [students, setStudents] = useState<ExcludedStudent[]>([]);
+  const [nameSearch, setNameSearch] = useState("");
   const [turmaOptions, setTurmaOptions] = useState<string[]>([]);
   const [lastTurma, setLastTurma] = useState<string>("");
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
+  const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+  const [editingDateValue, setEditingDateValue] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<ExcludedStudent | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
@@ -113,6 +116,18 @@ export const Exclusions: React.FC = () => {
     const [day, month, year] = dateString.split("/").map(Number);
     if (!day || !month || !year) return null;
     return new Date(year, month - 1, day);
+  };
+
+  const isValidDateString = (dateString: string) => {
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return false;
+    const [day, month, year] = dateString.split("/").map(Number);
+    const parsed = new Date(year, month - 1, day);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return (
+      parsed.getFullYear() === year &&
+      parsed.getMonth() === month - 1 &&
+      parsed.getDate() === day
+    );
   };
 
   const calculateAge = (dateString: string) => {
@@ -322,6 +337,11 @@ export const Exclusions: React.FC = () => {
     if (hasProfessorContext && leftProfessor !== rightProfessor) return false;
 
     return hasTurmaContext || hasHorarioContext || hasProfessorContext;
+  };
+
+  const getExclusionRowKey = (student: ExcludedStudent, idx?: number) => {
+    const stableKey = getStudentUid(student) || getStudentId(student) || resolveStudentName(student) || "aluno";
+    return `${stableKey}-${typeof idx === "number" ? idx : "x"}`;
   };
 
   const sanitizeExcludedStudents = (list: ExcludedStudent[]) => {
@@ -590,6 +610,67 @@ export const Exclusions: React.FC = () => {
     localStorage.setItem("excludedStudents", JSON.stringify(next));
   };
 
+  const persistExclusionDate = async (student: ExcludedStudent, dateExclusao: string) => {
+    const payload = {
+      ...student,
+      nome: student.nome || student.Nome || "",
+      turma: student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "",
+      horario: student.horario || student.Horario || "",
+      professor: student.professor || student.Professor || "",
+      dataExclusao: dateExclusao,
+      motivo_exclusao: (student.motivo_exclusao || student.MotivoExclusao || "").trim(),
+    };
+
+    try {
+      await addExclusion(payload);
+    } catch {
+      alert("Falha ao atualizar a data da exclusão no backend.");
+      return;
+    }
+
+    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
+    const next = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
+    setStudents(next);
+    localStorage.setItem("excludedStudents", JSON.stringify(next));
+  };
+
+  const beginDateEdit = (student: ExcludedStudent, rowKey: string) => {
+    setEditingDateKey(rowKey);
+    setEditingDateValue(normalizeDateValue(student.dataExclusao || student.DataExclusao || ""));
+  };
+
+  const cancelDateEdit = () => {
+    setEditingDateKey(null);
+    setEditingDateValue("");
+  };
+
+  const commitDateEdit = async (student: ExcludedStudent, rowKey: string) => {
+    if (editingDateKey !== rowKey) return;
+    const normalized = normalizeDateValue(editingDateValue).trim();
+    if (!isValidDateString(normalized)) {
+      alert("Data inválida. Use o formato dd/mm/aaaa.");
+      return;
+    }
+
+    setStudents((prev) =>
+      prev.map((item) => {
+        if (exclusionsMatch(item, student)) {
+          return { ...item, dataExclusao: normalized, DataExclusao: normalized };
+        }
+        return item;
+      })
+    );
+
+    await persistExclusionDate(student, normalized);
+    cancelDateEdit();
+  };
+
+  const normalizedSearch = normalizeText(nameSearch || "");
+  const filteredStudents = students.filter((student) => {
+    if (!normalizedSearch) return true;
+    return normalizeText(resolveStudentName(student)).includes(normalizedSearch);
+  });
+
   const effectiveTurmaOptions =
     turmaOptions.length > 0
       ? turmaOptions
@@ -606,7 +687,22 @@ export const Exclusions: React.FC = () => {
     <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
       <div style={{ marginBottom: "20px" }}>
         <h3 style={{ marginBottom: "15px", color: "#2c3e50" }}>Alunos Excluídos</h3>
-        <p style={{ color: "#666", fontSize: "14px" }}>Total: {students.length} alunos</p>
+        <p style={{ color: "#666", fontSize: "14px", marginBottom: "10px" }}>
+          Total: {filteredStudents.length} aluno(s)
+          {filteredStudents.length !== students.length ? ` (de ${students.length})` : ""}
+        </p>
+        <input
+          value={nameSearch}
+          onChange={(e) => setNameSearch(e.target.value)}
+          placeholder="Buscar por nome do aluno"
+          style={{
+            width: "min(420px, 100%)",
+            padding: "9px 10px",
+            borderRadius: "8px",
+            border: "1px solid #cbd5e1",
+            fontSize: "14px",
+          }}
+        />
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -636,15 +732,18 @@ export const Exclusions: React.FC = () => {
             <span>Ações</span>
           </div>
 
-          {students.map((student, idx) => (
+          {filteredStudents.map((student, idx) => {
+            const rowKey = getExclusionRowKey(student, idx);
+            const isEditingRowDate = editingDateKey === rowKey;
+            return (
             <div
-              key={`${getStudentUid(student) || getStudentId(student) || resolveStudentName(student) || "aluno"}-${idx}`}
+              key={rowKey}
               style={{
                 display: "grid",
                 gridTemplateColumns: "2fr 1fr 1fr 1.2fr 1.6fr 1fr 1.6fr",
                 gap: "8px",
                 padding: "12px 14px",
-                borderBottom: idx === students.length - 1 ? "none" : "1px solid #f1f5f9",
+                borderBottom: idx === filteredStudents.length - 1 ? "none" : "1px solid #f1f5f9",
                 background: idx % 2 === 0 ? "#ffffff" : "#f9fafb",
                 alignItems: "center",
                 fontSize: "14px",
@@ -692,7 +791,50 @@ export const Exclusions: React.FC = () => {
                     </option>
                   )}
               </select>
-              <span>{normalizeDateValue(student.dataExclusao || student.DataExclusao || "") || "-"}</span>
+              {isEditingRowDate ? (
+                <input
+                  autoFocus
+                  value={editingDateValue}
+                  onChange={(e) => setEditingDateValue(maskDateInput(e.target.value))}
+                  onBlur={() => {
+                    commitDateEdit(student, rowKey);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      commitDateEdit(student, rowKey);
+                    }
+                    if (e.key === "Escape") {
+                      cancelDateEdit();
+                    }
+                  }}
+                  placeholder="dd/mm/aaaa"
+                  style={{
+                    width: "100%",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    padding: "7px 8px",
+                    fontSize: "13px",
+                    textAlign: "center",
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => beginDateEdit(student, rowKey)}
+                  title="Clique para editar a data"
+                  style={{
+                    background: "transparent",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    padding: "6px 8px",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    color: "#1f2937",
+                  }}
+                >
+                  {normalizeDateValue(student.dataExclusao || student.DataExclusao || "") || "-"}
+                </button>
+              )}
               <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
                 <button
                   onClick={() => handleRestoreClick(student)}
@@ -726,13 +868,13 @@ export const Exclusions: React.FC = () => {
                 </button>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       </div>
 
-      {students.length === 0 && (
+      {filteredStudents.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
-          Nenhum aluno excluído
+          {students.length === 0 ? "Nenhum aluno excluído" : "Nenhum aluno encontrado pela busca"}
         </div>
       )}
 

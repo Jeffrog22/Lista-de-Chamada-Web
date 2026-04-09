@@ -185,14 +185,6 @@ const readExcludedStudentsLocal = () => {
   }
 };
 
-const hasExcludedStudentsLocalState = () => {
-  try {
-    return localStorage.getItem(EXCLUDED_STUDENTS_STORAGE_KEY) !== null;
-  } catch {
-    return false;
-  }
-};
-
 const writeExcludedStudentsLocal = (items: any[]) => {
   localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
 };
@@ -239,65 +231,6 @@ const removeExcludedStudentLocal = (payload: any) => {
   const nextItems = items.filter((item) => !exclusionMatches(item, payload));
   writeExcludedStudentsLocal(nextItems);
   return nextItems;
-};
-
-const mergeExcludedStudentsLocalWithRemote = (remoteItems: any[]) => {
-  const localItems = cleanExcludedStudentsLocalCache();
-  const merged = (Array.isArray(remoteItems) ? remoteItems : [])
-    .map((remote) => normalizeExcludedStudentRecord({ ...remote, _pendingSync: false }))
-    .filter(isValidExcludedStudentRecord);
-
-  localItems.forEach((localItem) => {
-    const localPending = isPendingExcludedSync(localItem);
-    const idx = merged.findIndex((item) => exclusionMatches(item, localItem));
-    if (idx >= 0) {
-      merged[idx] = normalizeExcludedStudentRecord({
-        ...localItem,
-        ...merged[idx],
-        _pendingSync: localPending,
-      });
-    } else if (localPending && isValidExcludedStudentRecord(localItem)) {
-      merged.push(normalizeExcludedStudentRecord(localItem));
-    }
-    });
-
-  writeExcludedStudentsLocal(merged);
-  return merged;
-};
-
-const syncExcludedStudentsToRemote = async (remoteItems: any[], localItems: any[], forceAll = false) => {
-  const remote = Array.isArray(remoteItems) ? remoteItems : [];
-  const local = Array.isArray(localItems) ? localItems : [];
-  if (local.length === 0) return { synced: 0, items: local };
-
-  const candidates = local.filter(
-    (localItem) => {
-      if (!forceAll && !isPendingExcludedSync(localItem)) return false;
-      const missingRemotely = !remote.some((remoteItem) => exclusionMatches(remoteItem, localItem));
-      if (!missingRemotely) return false;
-      return true;
-    }
-  );
-  if (candidates.length === 0) return { synced: 0, items: local };
-
-  try {
-    await API.post("/exclusions/bulk", {
-      items: candidates.map((item) => normalizeExcludedStudentRecord({ ...item, _pendingSync: false })),
-      replace: false,
-    });
-  } catch {
-    return { synced: 0, items: local };
-  }
-
-  const nextItems = local.map((item) => {
-    if (candidates.some((okItem) => exclusionMatches(okItem, item))) {
-      return normalizeExcludedStudentRecord({ ...item, _pendingSync: false });
-    }
-    return item;
-  });
-
-  writeExcludedStudentsLocal(nextItems);
-  return { synced: candidates.length, items: nextItems };
 };
 
 const normalizeAttendanceLogField = (value: unknown) => String(value || "").trim().toLowerCase();

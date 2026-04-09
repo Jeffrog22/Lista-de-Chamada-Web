@@ -146,6 +146,7 @@
 - 2026-04-08 09:25 - Publicacao do fix em producao (master) com commit aa63de8 (`'v.003.00-02zx' corrige bug: restauração de aluno removia TODAS as exclusões`) - CONCLUIDO - Jefferson de Melo
 - 2026-04-08 09:27 - Confirmação: dados de exclusão NÃO RECUPERADOS (arquivo e backup vazios); todos os alunos excluídos anteriormente estão agora ativos na chamada - IRREVERSIVEL (data loss) - Jefferson de Melo
 - 2026-04-08 09:28 - Status: bug corrigido e publicado; futuras restaurações/deletes preservarão dados de exclusão - VALIDADO - Jefferson de Melo
+- 2026-04-08 22:21 - Exclusões: adicionada busca por nome do aluno e edição inline da data de exclusão por clique, com validação de formato dd/mm/aaaa; build frontend validado - CONCLUIDO - Jefferson de Melo
 - HH:MM - Deploy piloto-parque-municipal - PENDENTE - Responsável
 - HH:MM - Deploy piloto-sao-matheus - PENDENTE - Responsável
 - HH:MM - Deploy piloto-vila-joao-xxiii - PENDENTE - Responsável
