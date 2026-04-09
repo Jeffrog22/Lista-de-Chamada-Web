@@ -676,6 +676,243 @@ const normalizePlanningLineSpacing = (line: string) => {
   return next;
 };
 
+const parseCsvRow = (line: string, delimiter: string): string[] => {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+};
+
+const normalizeCsvHeader = (header: string) =>
+  normalizeParserText(String(header || ""))
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+
+const planningCsvHeaderAliases: Record<string, string[]> = {
+  target: ["target", "perfil", "turma", "planejamento", "plano", "objetivo"],
+  year: ["year", "ano", "anoreferencia", "anoplanejamento"],
+  type: ["type", "tipo", "bloco", "tipobloco"],
+  label: ["label", "rotulo", "titulo", "cabecalho", "periodo", "semana", "data"],
+  text: ["text", "conteudo", "descricao", "descricaoatividade", "atividades", "objetivos", "observacoes"],
+  month: ["month", "mes"],
+  week: ["week", "semana", "nsemana"],
+  startDay: ["startday", "diainicio", "inicio", "de"],
+  endDay: ["endday", "diafim", "fim", "ate"],
+  date: ["date", "data", "dia"],
+};
+
+const resolveCsvHeaderMap = (headers: string[]) => {
+  const map = new Map<string, number>();
+  const normalizedHeaders = headers.map((header) => normalizeCsvHeader(header));
+
+  Object.entries(planningCsvHeaderAliases).forEach(([canonical, aliases]) => {
+    const index = normalizedHeaders.findIndex((header) => aliases.includes(header));
+    if (index >= 0) {
+      map.set(canonical, index);
+    }
+  });
+
+  return map;
+};
+
+const parsePlanningType = (value: string): PlanningBlockType => {
+  const normalized = normalizeParserText(value).replace(/\s+/g, "");
+  if (["date", "dia", "data"].includes(normalized)) return "date";
+  if (["week", "semana", "semanal"].includes(normalized)) return "week";
+  if (["month", "mes", "mensal"].includes(normalized)) return "month";
+  return "general";
+};
+
+const parsePlanningDateValue = (value: string, fallbackYear: number) => {
+  const clean = String(value || "").trim();
+  if (!clean) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const [yearStr, monthStr, dayStr] = clean.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    return { year, month: String(month).padStart(2, "0"), day: String(day).padStart(2, "0") };
+  }
+
+  const brMatch = clean.match(/^(\d{1,2})\/(\d{1,2})(?:\/(20\d{2}))?$/);
+  if (brMatch) {
+    const day = Number(brMatch[1]);
+    const month = Number(brMatch[2]);
+    const year = brMatch[3] ? Number(brMatch[3]) : fallbackYear;
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    return { year, month: String(month).padStart(2, "0"), day: String(day).padStart(2, "0") };
+  }
+
+  return null;
+};
+
+const normalizePlanningCsvContent = (value: string) =>
+  String(value || "")
+    .replace(/\\n/g, "\n")
+    .split(/\n/g)
+    .map((line) => normalizePlanningLineSpacing(line))
+    .filter(Boolean)
+    .join("\n");
+
+const buildPlanningFileDataFromCsv = (
+  raw: string,
+  sourceName: string,
+  defaultYear: number,
+  defaultMonth: string
+): PlanningFileData | null => {
+  const lines = String(raw || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) return null;
+
+  const delimiter = (() => {
+    const header = lines[0] || "";
+    const semicolonCount = (header.match(/;/g) || []).length;
+    const commaCount = (header.match(/,/g) || []).length;
+    const tabCount = (header.match(/\t/g) || []).length;
+    if (tabCount > semicolonCount && tabCount > commaCount) return "\t";
+    return semicolonCount >= commaCount ? ";" : ",";
+  })();
+
+  const headers = parseCsvRow(lines[0], delimiter);
+  const headerMap = resolveCsvHeaderMap(headers);
+  const hasContentColumns =
+    headerMap.has("label") ||
+    headerMap.has("text") ||
+    headerMap.has("week") ||
+    headerMap.has("date");
+
+  if (!hasContentColumns) {
+    return null;
+  }
+
+  const sourceFallback = sourceName.replace(/\.[^.]+$/, "").trim() || "Geral";
+  const targetSet = new Set<string>();
+  const blocks: PlanningBlock[] = [];
+  let inferredYear = defaultYear;
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const row = parseCsvRow(lines[i], delimiter);
+    const pick = (key: string) => {
+      const idx = headerMap.get(key);
+      if (typeof idx !== "number") return "";
+      return String(row[idx] || "").trim();
+    };
+
+    const rawTarget = pick("target");
+    if (rawTarget) targetSet.add(rawTarget);
+
+    const rawYear = Number(pick("year"));
+    const year = Number.isFinite(rawYear) && rawYear >= 2000 ? rawYear : inferredYear;
+    inferredYear = year;
+
+    const rawLabel = pick("label");
+    const rawText = normalizePlanningCsvContent(pick("text"));
+    const rawMonth = pick("month");
+    const parsedMonth = rawMonth
+      ? (() => {
+          const mm = String(rawMonth).trim();
+          if (/^\d{1,2}$/.test(mm)) return String(Number(mm)).padStart(2, "0");
+          const detected = detectMonthFromLine(mm);
+          return detected || "";
+        })()
+      : "";
+
+    const week = parseOptionalNumber(pick("week"));
+    const startDay = parseOptionalNumber(pick("startDay"));
+    const endDay = parseOptionalNumber(pick("endDay"));
+
+    const rawDate = pick("date");
+    const parsedDate = parsePlanningDateValue(rawDate || rawLabel, year);
+    const explicitType = parsePlanningType(pick("type"));
+
+    const inferredType: PlanningBlockType = (() => {
+      if (explicitType !== "general") return explicitType;
+      if (parsedDate) return "date";
+      if (typeof week === "number" || (typeof startDay === "number" && typeof endDay === "number")) return "week";
+      if (parsedMonth) return "month";
+      return "general";
+    })();
+
+    const month = parsedDate?.month || parsedMonth || defaultMonth;
+    const label = rawLabel || (parsedDate ? `${parsedDate.day}/${parsedDate.month}/${parsedDate.year}` : "Geral");
+
+    const key = (() => {
+      if (inferredType === "date" && parsedDate) {
+        return `${parsedDate.year}-${parsedDate.month}-${parsedDate.day}`;
+      }
+      if (inferredType === "week") {
+        const weekNumber = typeof week === "number" ? week : getWeekOfMonth(new Date(year, Number(month) - 1, Math.max(1, Number(startDay || 1))));
+        return `${year}-${month}-sem-${weekNumber}`;
+      }
+      if (inferredType === "month") {
+        return `${year}-${month}`;
+      }
+      return `${year}-${month}-geral-${i}`;
+    })();
+
+    const text = rawText || (inferredType === "month" ? "" : String(rawLabel || "").trim());
+    if (!text && inferredType !== "month") continue;
+
+    blocks.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}-${i}`,
+      type: inferredType,
+      key,
+      label,
+      text,
+      month,
+      week: typeof week === "number" ? week : undefined,
+      startDay: typeof startDay === "number" ? startDay : undefined,
+      endDay: typeof endDay === "number" ? endDay : undefined,
+    });
+  }
+
+  if (blocks.length === 0) return null;
+
+  const target =
+    Array.from(targetSet)[0] ||
+    parseHeaderTargetYear(lines, sourceName, inferredYear).target ||
+    sourceFallback;
+
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    sourceName,
+    target,
+    year: inferredYear,
+    blocks,
+    createdAt: new Date().toISOString(),
+  };
+};
+
 const buildPlanningFileData = (
   raw: string,
   sourceName: string,
@@ -933,6 +1170,61 @@ const readPlanningTextFromFile = async (file: File): Promise<string> => {
   return "";
 };
 
+const parsePlanningFile = async (
+  file: File,
+  defaultYear: number,
+  defaultMonth: string
+): Promise<PlanningFileData | null> => {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".csv")) {
+    const raw = await file.text();
+    return buildPlanningFileDataFromCsv(raw, file.name, defaultYear, defaultMonth);
+  }
+
+  const text = await readPlanningTextFromFile(file);
+  return buildPlanningFileData(text, file.name, defaultYear, defaultMonth);
+};
+
+const findNearestOpenPlanningDateKey = (
+  dateKey: string,
+  settings: AcademicCalendarSettings | null,
+  events: AcademicCalendarEvent[]
+) => {
+  if (!dateKey || !isDateClosedForAttendance(dateKey, settings, events)) {
+    return dateKey;
+  }
+
+  const baseDate = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(baseDate.getTime())) return dateKey;
+
+  const baseYear = baseDate.getFullYear();
+  const baseMonth = baseDate.getMonth();
+
+  for (let offset = 1; offset <= 31; offset += 1) {
+    const before = new Date(baseDate);
+    before.setDate(baseDate.getDate() - offset);
+    if (
+      before.getFullYear() === baseYear &&
+      before.getMonth() === baseMonth &&
+      !isDateClosedForAttendance(toDateKey(before), settings, events)
+    ) {
+      return toDateKey(before);
+    }
+
+    const after = new Date(baseDate);
+    after.setDate(baseDate.getDate() + offset);
+    if (
+      after.getFullYear() === baseYear &&
+      after.getMonth() === baseMonth &&
+      !isDateClosedForAttendance(toDateKey(after), settings, events)
+    ) {
+      return toDateKey(after);
+    }
+  }
+
+  return dateKey;
+};
+
 const weekKeyFromDateKey = (dateKey: string) => {
   const d = new Date(`${dateKey}T00:00:00`);
   if (Number.isNaN(d.getTime())) return "semana:1";
@@ -1167,8 +1459,15 @@ export const Reports: React.FC = () => {
   const yearOptions = Array.from({ length: 9 }, (_, idx) => String(new Date().getFullYear() - 4 + idx));
 
   const selectedPlanningDateKey = planningCardDate || selectedCalendarDate || getCurrentLocalDateKey();
-  const selectedPlanningWeekKey = useMemo(() => weekKeyFromDateKey(selectedPlanningDateKey), [selectedPlanningDateKey]);
-  const selectedPlanningMonthKey = selectedPlanningDateKey.slice(0, 7);
+  const effectivePlanningDateKey = useMemo(
+    () => findNearestOpenPlanningDateKey(selectedPlanningDateKey, calendarSettings, calendarEvents),
+    [selectedPlanningDateKey, calendarSettings, calendarEvents]
+  );
+  const selectedPlanningWeekKey = useMemo(() => weekKeyFromDateKey(effectivePlanningDateKey), [effectivePlanningDateKey]);
+  const selectedPlanningMonthKey = effectivePlanningDateKey.slice(0, 7);
+  const planningDateWasAdjusted = Boolean(
+    selectedPlanningDateKey && effectivePlanningDateKey && selectedPlanningDateKey !== effectivePlanningDateKey
+  );
 
   const planningTargets = useMemo(() => {
     const uniqueTargets = Array.from(
@@ -1196,7 +1495,7 @@ export const Reports: React.FC = () => {
   const planningLookupResults = useMemo(() => {
     if (!planningSelectedTargetKey) return [] as PlanningBlock[];
 
-    const dateObj = new Date(`${selectedPlanningDateKey}T00:00:00`);
+    const dateObj = new Date(`${effectivePlanningDateKey}T00:00:00`);
     const selectedDay = Number.isNaN(dateObj.getTime()) ? null : dateObj.getDate();
     const selectedWeek = Number.isNaN(dateObj.getTime()) ? null : Number(selectedPlanningWeekKey.replace("semana:", ""));
     const selectedYear = Number.isNaN(dateObj.getTime()) ? Number(selectedMonth.slice(0, 4)) : dateObj.getFullYear();
@@ -1236,8 +1535,8 @@ export const Reports: React.FC = () => {
 
           score = rangeMatches ? 5 : weekMatches ? 4 : 0;
         } else if (block.type === "date") {
-          const exactDateMatch = block.key === selectedPlanningDateKey;
-          const labelRangeMatch = planningRangeIncludesDate(block.label || "", Number(file.year || selectedYear), selectedPlanningDateKey);
+          const exactDateMatch = block.key === effectivePlanningDateKey;
+          const labelRangeMatch = planningRangeIncludesDate(block.label || "", Number(file.year || selectedYear), effectivePlanningDateKey);
           score = exactDateMatch ? 7 : labelRangeMatch ? 6 : 0;
         } else {
           return;
@@ -1289,7 +1588,7 @@ export const Reports: React.FC = () => {
     return bestMatched
       .sort((a, b) => a.label.localeCompare(b.label))
       .map(({ _score, ...block }) => block);
-  }, [planningSelectedTargetKey, planningStore.files, selectedPlanningWeekKey, selectedPlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
+  }, [planningSelectedTargetKey, planningStore.files, selectedPlanningWeekKey, effectivePlanningDateKey, selectedPlanningMonthKey, selectedMonth]);
 
   const handlePlanningUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -1308,8 +1607,7 @@ export const Reports: React.FC = () => {
       const defaultMonth = selectedMonth.split("-")[1] || "01";
 
       for (const file of files) {
-        const text = await readPlanningTextFromFile(file);
-        const parsed = buildPlanningFileData(text, file.name, defaultYear, defaultMonth);
+        const parsed = await parsePlanningFile(file, defaultYear, defaultMonth);
         if (parsed) importedFiles.push(parsed);
       }
 
@@ -3241,6 +3539,11 @@ export const Reports: React.FC = () => {
               <div className="reports-event-modal" onClick={(e) => e.stopPropagation()}>
                 <h3>Planejamento</h3>
                 <div className="reports-filter-note" style={{ marginBottom: 12 }}>
+                  {planningDateWasAdjusted && (
+                    <div style={{ marginBottom: 8 }}>
+                      Data selecionada em recesso/fechamento. Planejamento consultado em <strong>{effectivePlanningDateKey.split("-").reverse().join("/")}</strong>.
+                    </div>
+                  )}
                   {(() => {
                     const firstBlock = planningLookupResults[0];
                     if (firstBlock && typeof firstBlock.startDay === "number" && typeof firstBlock.endDay === "number") {
@@ -3253,7 +3556,7 @@ export const Reports: React.FC = () => {
                     }
                     return (
                       <>
-                        Data selecionada: <strong>{planningCardDate.split("-").reverse().join("/")}</strong>
+                        Data selecionada: <strong>{selectedPlanningDateKey.split("-").reverse().join("/")}</strong>
                         {" "}• Semana: <strong>{selectedPlanningWeekKey.replace("semana:", "")}</strong>
                       </>
                     );
@@ -3469,10 +3772,10 @@ export const Reports: React.FC = () => {
             <div className="report-card" style={{ marginBottom: 14 }}>
               <h3 style={{ marginTop: 0 }}>Planejamento</h3>
               <div className="reports-filter-field">
-                <label>Selecionar arquivos (PDF/TXT)</label>
+                <label>Selecionar arquivos (PDF/TXT/CSV)</label>
                 <input
                   type="file"
-                  accept=".pdf,.txt"
+                  accept=".pdf,.txt,.csv"
                   multiple
                   disabled={planningBusy}
                   onChange={handlePlanningUpload}
