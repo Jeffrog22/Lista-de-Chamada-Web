@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
 import { addExclusion, deleteExclusion, getExcludedStudents, restoreStudent, isExclusionsWriteFailed } from "../api";
 import "./Exclusions.css";
@@ -182,6 +182,34 @@ export const Exclusions: React.FC = () => {
     }
   };
 
+  const loadExclusionsState = useCallback(async () => {
+    const loadLocal = () => {
+      const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
+      setStudents(local);
+      localStorage.setItem("excludedStudents", JSON.stringify(local));
+    };
+
+    try {
+      const response = await getExcludedStudents();
+      const data = response?.data;
+      const fromFallback = Boolean((response as any)?._fromFallback);
+      setIsLoadFromFallback(fromFallback);
+      setWriteOpFailed(isExclusionsWriteFailed());
+
+      if (Array.isArray(data)) {
+        const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
+        const resolved = fromFallback ? local : sanitizeExcludedStudents(data as ExcludedStudent[]);
+        setStudents(resolved);
+        localStorage.setItem("excludedStudents", JSON.stringify(resolved));
+      } else {
+        loadLocal();
+      }
+    } catch {
+      loadLocal();
+      setIsLoadFromFallback(true);
+    }
+  }, []);
+
   useEffect(() => {
     const compactQuery = window.matchMedia("(max-width: 768px)");
     const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
@@ -216,41 +244,29 @@ export const Exclusions: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    const loadLocal = () => {
-      const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
-      if (local.length > 0) {
-        setStudents(local);
-        localStorage.setItem("excludedStudents", JSON.stringify(local));
+
+    loadExclusionsState().catch(() => {
+      // no-op: state already handled in helper
+    });
+
+    const onVisibility = () => {
+      if (!isMounted) return;
+      if (document.visibilityState === "visible") {
+        loadExclusionsState().catch(() => {
+          // no-op: state already handled in helper
+        });
       }
     };
 
-    getExcludedStudents()
-      .then((response) => {
-        if (!isMounted) return;
-        const data = response.data;
-        const fromFallback = Boolean((response as any)?._fromFallback);
-        setIsLoadFromFallback(fromFallback);
-        setWriteOpFailed(isExclusionsWriteFailed());
-        if (Array.isArray(data)) {
-          const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
-          const resolved = fromFallback ? local : sanitizeExcludedStudents(data as ExcludedStudent[]);
-          setStudents(resolved);
-          localStorage.setItem("excludedStudents", JSON.stringify(resolved));
-        } else {
-          loadLocal();
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          loadLocal();
-          setIsLoadFromFallback(true);
-        }
-      });
+    window.addEventListener("focus", onVisibility);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       isMounted = false;
+      window.removeEventListener("focus", onVisibility);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [loadExclusionsState]);
 
   useEffect(() => {
     try {
@@ -458,8 +474,10 @@ export const Exclusions: React.FC = () => {
     return display || "-";
   };
 
+  const isReadOnlyMode = isLoadFromFallback || writeOpFailed;
+
   const handleRestoreClick = (student: ExcludedStudent) => {
-    if (writeOpFailed) {
+    if (isReadOnlyMode) {
       alert("⚠️ Backend não está disponível!\n\nOperações de restauração estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
       return;
     }
@@ -540,7 +558,9 @@ export const Exclusions: React.FC = () => {
     try {
       await restoreStudent(restorePayload);
     } catch {
+      setWriteOpFailed(true);
       alert("Falha ao restaurar no backend.");
+      await loadExclusionsState();
       return;
     }
 
@@ -563,10 +583,7 @@ export const Exclusions: React.FC = () => {
     activeStudents.push(restoredStudent);
     localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
 
-    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
-    const newExcludedList = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
-    setStudents(newExcludedList);
-    localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
+    await loadExclusionsState();
 
     setShowModal(false);
     setEditingStudent(null);
@@ -574,7 +591,7 @@ export const Exclusions: React.FC = () => {
   };
 
   const handlePermanentDelete = async (student: ExcludedStudent) => {
-    if (writeOpFailed) {
+    if (isReadOnlyMode) {
       alert("⚠️ Backend não está disponível!\n\nOperações de exclusão estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
       return;
     }
@@ -596,13 +613,16 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
-    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
-    const newExcludedList = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
-    setStudents(newExcludedList);
-    localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
+    await loadExclusionsState();
   };
 
   const persistExclusionReason = async (student: ExcludedStudent, reason: string) => {
+    if (isReadOnlyMode) {
+      alert("Operação bloqueada enquanto os dados estiverem em fallback.");
+      await loadExclusionsState();
+      return;
+    }
+
     const normalized = reason.trim();
     const payload = {
       ...student,
@@ -617,17 +637,22 @@ export const Exclusions: React.FC = () => {
     try {
       await addExclusion(payload);
     } catch {
+      setWriteOpFailed(true);
       alert("Falha ao atualizar o motivo da exclusão no backend.");
+      await loadExclusionsState();
       return;
     }
 
-    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
-    const next = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
-    setStudents(next);
-    localStorage.setItem("excludedStudents", JSON.stringify(next));
+    await loadExclusionsState();
   };
 
   const persistExclusionDate = async (student: ExcludedStudent, dateExclusao: string) => {
+    if (isReadOnlyMode) {
+      alert("Operação bloqueada enquanto os dados estiverem em fallback.");
+      await loadExclusionsState();
+      return;
+    }
+
     const payload = {
       ...student,
       nome: student.nome || student.Nome || "",
@@ -641,17 +666,20 @@ export const Exclusions: React.FC = () => {
     try {
       await addExclusion(payload);
     } catch {
+      setWriteOpFailed(true);
       alert("Falha ao atualizar a data da exclusão no backend.");
+      await loadExclusionsState();
       return;
     }
 
-    const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
-    const next = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
-    setStudents(next);
-    localStorage.setItem("excludedStudents", JSON.stringify(next));
+    await loadExclusionsState();
   };
 
   const beginDateEdit = (student: ExcludedStudent, rowKey: string) => {
+    if (isReadOnlyMode) {
+      alert("Operação bloqueada enquanto os dados estiverem em fallback.");
+      return;
+    }
     setEditingDateKey(rowKey);
     setEditingDateValue(normalizeDateValue(student.dataExclusao || student.DataExclusao || ""));
   };
@@ -663,20 +691,15 @@ export const Exclusions: React.FC = () => {
 
   const commitDateEdit = async (student: ExcludedStudent, rowKey: string) => {
     if (editingDateKey !== rowKey) return;
+    if (isReadOnlyMode) {
+      cancelDateEdit();
+      return;
+    }
     const normalized = normalizeDateValue(editingDateValue).trim();
     if (!isValidDateString(normalized)) {
       alert("Data inválida. Use o formato dd/mm/aaaa.");
       return;
     }
-
-    setStudents((prev) =>
-      prev.map((item) => {
-        if (exclusionsMatch(item, student)) {
-          return { ...item, dataExclusao: normalized, DataExclusao: normalized };
-        }
-        return item;
-      })
-    );
 
     await persistExclusionDate(student, normalized);
     cancelDateEdit();
@@ -726,6 +749,28 @@ export const Exclusions: React.FC = () => {
               <strong>Backend não disponível:</strong> Os dados de exclusão estão em modo offline (cache local).
               Operações de edição, exclusão e restauração estão bloqueadas até que o servidor fique disponível.
             </span>
+            <button
+              type="button"
+              onClick={() => {
+                loadExclusionsState().catch(() => {
+                  // no-op
+                });
+              }}
+              style={{
+                marginLeft: "auto",
+                border: "1px solid #d39e00",
+                background: "#ffe08a",
+                color: "#7a5d00",
+                borderRadius: "6px",
+                padding: "6px 10px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Recarregar agora
+            </button>
           </div>
         )}
         <input
@@ -794,16 +839,9 @@ export const Exclusions: React.FC = () => {
               <span>{student.professor || student.Professor || "-"}</span>
               <select
                 value={student.motivo_exclusao || student.MotivoExclusao || ""}
+                disabled={isReadOnlyMode}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setStudents((prev) =>
-                    prev.map((item) => {
-                      if (exclusionsMatch(item, student)) {
-                        return { ...item, motivo_exclusao: value, MotivoExclusao: value };
-                      }
-                      return item;
-                    })
-                  );
                   persistExclusionReason(student, value);
                 }}
                 style={{
@@ -813,6 +851,9 @@ export const Exclusions: React.FC = () => {
                   padding: "7px 8px",
                   fontSize: "13px",
                   textAlign: "center",
+                  background: isReadOnlyMode ? "#f3f4f6" : "white",
+                  color: isReadOnlyMode ? "#6b7280" : "#111827",
+                  cursor: isReadOnlyMode ? "not-allowed" : "pointer",
                 }}
               >
                 <option value="">Selecionar</option>
@@ -860,15 +901,17 @@ export const Exclusions: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => beginDateEdit(student, rowKey)}
-                  title="Clique para editar a data"
+                  title={isReadOnlyMode ? "Indisponível em modo fallback" : "Clique para editar a data"}
+                  disabled={isReadOnlyMode}
                   style={{
-                    background: "transparent",
+                    background: isReadOnlyMode ? "#f3f4f6" : "transparent",
                     border: "1px solid #e2e8f0",
                     borderRadius: "6px",
                     padding: "6px 8px",
-                    cursor: "pointer",
+                    cursor: isReadOnlyMode ? "not-allowed" : "pointer",
                     fontSize: "13px",
-                    color: "#1f2937",
+                    color: isReadOnlyMode ? "#6b7280" : "#1f2937",
+                    opacity: isReadOnlyMode ? 0.7 : 1,
                   }}
                 >
                   {normalizeDateValue(student.dataExclusao || student.DataExclusao || "") || "-"}
