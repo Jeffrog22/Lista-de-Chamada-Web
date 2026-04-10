@@ -210,6 +210,19 @@ export const Exclusions: React.FC = () => {
     }
   }, []);
 
+  const refreshExclusions = useCallback(async () => {
+    try {
+      await loadExclusionsState();
+    } catch {
+      // state is already updated by loadExclusionsState
+    }
+  }, [loadExclusionsState]);
+
+  const markWriteFailureAndRefresh = useCallback(async () => {
+    setWriteOpFailed(true);
+    await refreshExclusions();
+  }, [refreshExclusions]);
+
   useEffect(() => {
     const compactQuery = window.matchMedia("(max-width: 768px)");
     const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
@@ -245,16 +258,12 @@ export const Exclusions: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
-    loadExclusionsState().catch(() => {
-      // no-op: state already handled in helper
-    });
+    refreshExclusions();
 
     const onVisibility = () => {
       if (!isMounted) return;
       if (document.visibilityState === "visible") {
-        loadExclusionsState().catch(() => {
-          // no-op: state already handled in helper
-        });
+        refreshExclusions();
       }
     };
 
@@ -266,7 +275,7 @@ export const Exclusions: React.FC = () => {
       window.removeEventListener("focus", onVisibility);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [loadExclusionsState]);
+  }, [refreshExclusions]);
 
   useEffect(() => {
     try {
@@ -558,9 +567,8 @@ export const Exclusions: React.FC = () => {
     try {
       await restoreStudent(restorePayload);
     } catch {
-      setWriteOpFailed(true);
       alert("Falha ao restaurar no backend.");
-      await loadExclusionsState();
+      await markWriteFailureAndRefresh();
       return;
     }
 
@@ -583,7 +591,7 @@ export const Exclusions: React.FC = () => {
     activeStudents.push(restoredStudent);
     localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
 
-    await loadExclusionsState();
+    await refreshExclusions();
 
     setShowModal(false);
     setEditingStudent(null);
@@ -609,17 +617,17 @@ export const Exclusions: React.FC = () => {
     } catch (err: any) {
       const msg = err?.data?.error || "Falha ao excluir no backend.";
       alert(`${msg}`);
-      setWriteOpFailed(true);
+      await markWriteFailureAndRefresh();
       return;
     }
 
-    await loadExclusionsState();
+    await refreshExclusions();
   };
 
   const persistExclusionReason = async (student: ExcludedStudent, reason: string) => {
     if (isReadOnlyMode) {
       alert("Operação bloqueada enquanto os dados estiverem em fallback.");
-      await loadExclusionsState();
+      await refreshExclusions();
       return;
     }
 
@@ -637,19 +645,18 @@ export const Exclusions: React.FC = () => {
     try {
       await addExclusion(payload);
     } catch {
-      setWriteOpFailed(true);
       alert("Falha ao atualizar o motivo da exclusão no backend.");
-      await loadExclusionsState();
+      await markWriteFailureAndRefresh();
       return;
     }
 
-    await loadExclusionsState();
+    await refreshExclusions();
   };
 
   const persistExclusionDate = async (student: ExcludedStudent, dateExclusao: string) => {
     if (isReadOnlyMode) {
       alert("Operação bloqueada enquanto os dados estiverem em fallback.");
-      await loadExclusionsState();
+      await refreshExclusions();
       return;
     }
 
@@ -666,13 +673,12 @@ export const Exclusions: React.FC = () => {
     try {
       await addExclusion(payload);
     } catch {
-      setWriteOpFailed(true);
       alert("Falha ao atualizar a data da exclusão no backend.");
-      await loadExclusionsState();
+      await markWriteFailureAndRefresh();
       return;
     }
 
-    await loadExclusionsState();
+    await refreshExclusions();
   };
 
   const beginDateEdit = (student: ExcludedStudent, rowKey: string) => {
