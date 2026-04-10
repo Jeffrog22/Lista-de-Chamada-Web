@@ -32,11 +32,11 @@ const JUSTIFICATION_LOG_QUEUE_KEY = "pendingJustificationLogs";
 const ATTENDANCE_DEBUG_KEY = "attendanceDebugPersistence";
 const ATTENDANCE_DEBUG_EVENTS_KEY = "attendanceDebugEvents";
 
-// Track if exclusions are being served from fallback (backend unreachable)
-let EXCLUSIONS_IN_FALLBACK = false;
+// Track explicit backend failure for operation attempts (not just read failures)
+let EXCLUSIONS_WRITE_FAILED = false;
 
-export const isExclusionsFallback = () => EXCLUSIONS_IN_FALLBACK;
-export const setExclusionsFallback = (state: boolean) => { EXCLUSIONS_IN_FALLBACK = state; };
+export const isExclusionsWriteFailed = () => EXCLUSIONS_WRITE_FAILED;
+export const setExclusionsWriteFailed = (state: boolean) => { EXCLUSIONS_WRITE_FAILED = state; };
 
 const isPersistenceDebugEnabled = () => {
   if (import.meta.env.DEV) return true;
@@ -429,16 +429,16 @@ export const getExcludedStudents = () =>
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       writeExcludedStudentsLocal(remoteItems);
-      setExclusionsFallback(false);
+      setExclusionsWriteFailed(false);
       return { ...response, data: remoteItems, _fromFallback: false };
     })
     .catch(() => {
-      setExclusionsFallback(true);
+      // Read-only failure: allow showing cached data without blocking
       return { data: readExcludedStudentsLocal(), _fromFallback: true };
     });
 
 export const addExclusion = (data: any) => {
-  if (isExclusionsFallback()) {
+  if (isExclusionsWriteFailed()) {
     return Promise.reject({
       status: 503,
       data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
@@ -447,12 +447,16 @@ export const addExclusion = (data: any) => {
   return API.post("/exclusions", data)
     .then((response) => {
       upsertExcludedStudentLocal(data, false);
+      setExclusionsWriteFailed(false);
       return response;
     })
-    .catch(() => Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Falha ao salvar exclusão no backend." },
-    }));
+    .catch((err) => {
+      setExclusionsWriteFailed(true);
+      return Promise.reject({
+        status: err?.response?.status || 503,
+        data: { ok: false, fallback: true, error: "Falha ao salvar exclusão no backend." },
+      });
+    });
 };
 
 export const addExclusionsBulk = (items: any[], replace = false) => {
@@ -495,7 +499,7 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
 };
 
 export const restoreStudent = (data: any) => {
-  if (isExclusionsFallback()) {
+  if (isExclusionsWriteFailed()) {
     return Promise.reject({
       status: 503,
       data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de restauração estão bloqueadas." },
@@ -504,16 +508,20 @@ export const restoreStudent = (data: any) => {
   return API.post("/exclusions/restore", data)
     .then((response) => {
       removeExcludedStudentLocal(data);
+      setExclusionsWriteFailed(false);
       return response;
     })
-    .catch(() => Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Falha ao restaurar aluno no backend." },
-    }));
+    .catch((err) => {
+      setExclusionsWriteFailed(true);
+      return Promise.reject({
+        status: err?.response?.status || 503,
+        data: { ok: false, fallback: true, error: "Falha ao restaurar aluno no backend." },
+      });
+    });
 };
 
 export const deleteExclusion = (data: any) => {
-  if (isExclusionsFallback()) {
+  if (isExclusionsWriteFailed()) {
     return Promise.reject({
       status: 503,
       data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
@@ -522,12 +530,16 @@ export const deleteExclusion = (data: any) => {
   return API.post("/exclusions/delete", data)
     .then((response) => {
       removeExcludedStudentLocal(data);
+      setExclusionsWriteFailed(false);
       return response;
     })
-    .catch(() => Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Falha ao deletar exclusão no backend." },
-    }));
+    .catch((err) => {
+      setExclusionsWriteFailed(true);
+      return Promise.reject({
+        status: err?.response?.status || 503,
+        data: { ok: false, fallback: true, error: "Falha ao deletar exclusão no backend." },
+      });
+    });
 };
 
 // Reports
