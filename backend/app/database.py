@@ -35,6 +35,7 @@ def create_db_and_tables():
         ImportStudent,
         AttendanceLog,
         PoolLog,
+        ExclusionRecord,
     )
     from sqlmodel import SQLModel
     SQLModel.metadata.create_all(engine)

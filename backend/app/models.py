@@ -177,3 +177,19 @@ class AcademicCalendarState(SQLModel, table=True):
     id: int = Field(default=1, primary_key=True)
     state_json: str = Field(default="{}", sa_column=Column(Text))
     updated_at: str = Field(default="")
+
+
+class ExclusionRecord(SQLModel, table=True):
+    __tablename__ = "exclusion_records"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    exclusion_id: str = Field(default="", index=True)
+    student_uid: str = Field(default="", index=True)
+    nome: str = Field(default="", index=True)
+    turma: str = Field(default="")
+    turma_codigo: str = Field(default="", index=True)
+    horario: str = Field(default="", index=True)
+    professor: str = Field(default="", index=True)
+    data_exclusao: str = Field(default="")
+    motivo_exclusao: str = Field(default="")
+    payload_json: str = Field(default="{}", sa_column=Column(Text))
+    saved_at: str = Field(default="")

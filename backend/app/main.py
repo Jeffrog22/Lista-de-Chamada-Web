@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Form, Response
 from sqlmodel import Session, select, func
-from app.database import create_db_and_tables, migrate_db, get_session
+from app.database import create_db_and_tables, migrate_db, get_session, engine
 from app import crud, models
-from app.models import AttendanceLog, AcademicCalendarState, PoolLog
+from app.models import AttendanceLog, AcademicCalendarState, PoolLog, ExclusionRecord
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import os
@@ -2083,6 +2083,108 @@ def _exclusions_file_path() -> str:
     return os.path.join(DATA_DIR, "excludedStudents.json")
 
 
+def _load_exclusions_from_db() -> List[Dict[str, Any]]:
+    with Session(engine) as db:
+        rows = db.exec(select(ExclusionRecord).order_by(ExclusionRecord.id.asc())).all()
+        items: List[Dict[str, Any]] = []
+        for row in rows:
+            payload: Dict[str, Any] = {}
+            try:
+                parsed = json.loads(row.payload_json or "{}")
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except Exception:
+                payload = {}
+
+            item: Dict[str, Any] = {**payload}
+            if row.exclusion_id and not item.get("id"):
+                item["id"] = row.exclusion_id
+            if row.student_uid and not item.get("student_uid"):
+                item["student_uid"] = row.student_uid
+            if row.nome and not item.get("nome"):
+                item["nome"] = row.nome
+            if row.turma and not item.get("turma"):
+                item["turma"] = row.turma
+            if row.turma_codigo and not item.get("turmaCodigo"):
+                item["turmaCodigo"] = row.turma_codigo
+            if row.horario and not item.get("horario"):
+                item["horario"] = row.horario
+            if row.professor and not item.get("professor"):
+                item["professor"] = row.professor
+            if row.data_exclusao and not item.get("dataExclusao"):
+                item["dataExclusao"] = row.data_exclusao
+            if row.motivo_exclusao and not item.get("motivo_exclusao"):
+                item["motivo_exclusao"] = row.motivo_exclusao
+            items.append(item)
+        return items
+
+
+def _save_exclusions_to_db(items: List[Dict[str, Any]]) -> None:
+    normalized_items = [_normalize_exclusion_item(item) for item in (items or []) if isinstance(item, dict)]
+    with Session(engine) as db:
+        existing = db.exec(select(ExclusionRecord)).all()
+        for row in existing:
+            db.delete(row)
+
+        now_iso = datetime.utcnow().isoformat()
+        for item in normalized_items:
+            record = ExclusionRecord(
+                exclusion_id=str(item.get("id") or "").strip(),
+                student_uid=str(item.get("student_uid") or item.get("studentUid") or "").strip(),
+                nome=str(item.get("nome") or item.get("Nome") or "").strip(),
+                turma=str(item.get("turma") or item.get("Turma") or item.get("turmaLabel") or item.get("TurmaLabel") or "").strip(),
+                turma_codigo=str(item.get("turmaCodigo") or item.get("TurmaCodigo") or item.get("grupo") or item.get("Grupo") or "").strip(),
+                horario=_normalize_horario_key(item.get("horario") or item.get("Horario") or ""),
+                professor=str(item.get("professor") or item.get("Professor") or "").strip(),
+                data_exclusao=str(item.get("dataExclusao") or item.get("DataExclusao") or "").strip(),
+                motivo_exclusao=str(item.get("motivo_exclusao") or item.get("MotivoExclusao") or "").strip(),
+                payload_json=json.dumps(item, ensure_ascii=False),
+                saved_at=str(item.get("saved_at") or now_iso),
+            )
+            db.add(record)
+
+        db.commit()
+
+
+def _read_exclusions_state(clean: bool = True) -> List[Dict[str, Any]]:
+    file_items = _load_json_list(_exclusions_file_path())
+    if file_items:
+        items = _clean_exclusions_list(file_items) if clean else file_items
+        try:
+            _save_exclusions_to_db(items)
+        except Exception:
+            pass
+        return items
+
+    db_items: List[Dict[str, Any]] = []
+    try:
+        db_items = _load_exclusions_from_db()
+    except Exception:
+        db_items = []
+
+    if db_items:
+        items = _clean_exclusions_list(db_items) if clean else db_items
+        try:
+            _save_json_list(_exclusions_file_path(), items)
+        except Exception:
+            pass
+        return items
+
+    return []
+
+
+def _write_exclusions_state(items: List[Dict[str, Any]], clean: bool = True) -> List[Dict[str, Any]]:
+    payload = _clean_exclusions_list(items) if clean else [
+        _normalize_exclusion_item(item) for item in (items or []) if isinstance(item, dict)
+    ]
+    _save_exclusions_to_db(payload)
+    try:
+        _save_json_list(_exclusions_file_path(), payload)
+    except Exception:
+        pass
+    return payload
+
+
 def _list_exclusions_backups(limit: int = 30) -> List[Dict[str, Any]]:
     archive_dir = os.path.join(DATA_DIR, "archive")
     if not os.path.isdir(archive_dir):
@@ -3095,19 +3197,14 @@ def _load_latest_attendance_logs(month: Optional[str] = None) -> Dict[str, Dict[
 
 @app.get("/exclusions")
 def list_exclusions():
-    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
-        items = _load_json_list(file_path)
-        cleaned = _clean_exclusions_list(items)
-        if cleaned != items:
-            _save_json_list(file_path, cleaned)
-        return cleaned
+        return _read_exclusions_state(clean=True)
 
 
 @app.get("/exclusions/backups")
 def list_exclusions_backups(limit: int = Query(default=30, ge=1, le=200)):
     with EXCLUSIONS_FILE_LOCK:
-        current_items = _clean_exclusions_list(_load_json_list(_exclusions_file_path()))
+        current_items = _read_exclusions_state(clean=True)
         backups = _list_exclusions_backups(limit=limit)
     return {
         "ok": True,
@@ -3119,9 +3216,8 @@ def list_exclusions_backups(limit: int = Query(default=30, ge=1, le=200)):
 @app.post("/exclusions/snapshot")
 def snapshot_exclusions_state():
     with EXCLUSIONS_FILE_LOCK:
-        current_path = _exclusions_file_path()
-        current_items = _clean_exclusions_list(_load_json_list(current_path))
-        _save_json_list(current_path, current_items)
+        current_items = _read_exclusions_state(clean=True)
+        _save_json_list(_exclusions_file_path(), current_items)
         backups = _list_exclusions_backups(limit=1)
     return {
         "ok": True,
@@ -3133,8 +3229,7 @@ def snapshot_exclusions_state():
 @app.post("/exclusions/recover")
 def recover_exclusions(payload: ExclusionsRecoverPayload):
     with EXCLUSIONS_FILE_LOCK:
-        current_path = _exclusions_file_path()
-        current_items = _clean_exclusions_list(_load_json_list(current_path))
+        current_items = _read_exclusions_state(clean=True)
         backups = _list_exclusions_backups(limit=200)
 
         target: Optional[Dict[str, Any]] = None
@@ -3166,7 +3261,7 @@ def recover_exclusions(payload: ExclusionsRecoverPayload):
         else:
             final_items = target_items
 
-        _save_json_list(current_path, final_items)
+        _write_exclusions_state(final_items, clean=True)
 
     return {
         "ok": True,
@@ -3178,9 +3273,8 @@ def recover_exclusions(payload: ExclusionsRecoverPayload):
 
 @app.post("/exclusions")
 def add_exclusion(entry: ExclusionEntry):
-    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
-        items = _clean_exclusions_list(_load_json_list(file_path))
+        items = _read_exclusions_state(clean=True)
         payload = _normalize_exclusion_item(entry.dict())
         if not payload.get("dataExclusao"):
             payload["dataExclusao"] = pd.Timestamp.utcnow().strftime("%d/%m/%Y")
@@ -3193,15 +3287,14 @@ def add_exclusion(entry: ExclusionEntry):
                 break
         if not updated:
             items.append(payload)
-        _save_json_list(file_path, items)
+        _write_exclusions_state(items, clean=True)
         return {"ok": True, "updated": updated}
 
 
 @app.post("/exclusions/bulk")
 def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
-    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
-        existing_items = [] if payload.replace else _clean_exclusions_list(_load_json_list(file_path))
+        existing_items = [] if payload.replace else _read_exclusions_state(clean=True)
 
         updated = 0
         added = 0
@@ -3230,8 +3323,7 @@ def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
                 existing_items.append(normalized_entry)
                 added += 1
 
-        cleaned = _clean_exclusions_list(existing_items)
-        _save_json_list(file_path, cleaned)
+        cleaned = _write_exclusions_state(existing_items, clean=True)
 
         return {
             "ok": True,
@@ -3245,10 +3337,9 @@ def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
 
 @app.post("/exclusions/restore")
 def restore_exclusion(entry: ExclusionEntry):
-    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         # NOTE: Do NOT clean/filter here - preserve all exclusion records
-        items = _load_json_list(file_path)
+        items = _read_exclusions_state(clean=False)
         restored: Optional[Dict[str, Any]] = None
         remaining: List[Dict[str, Any]] = []
         for item in items:
@@ -3256,17 +3347,16 @@ def restore_exclusion(entry: ExclusionEntry):
                 restored = item
                 continue
             remaining.append(item)
-        _save_json_list(file_path, remaining)
+        _write_exclusions_state(remaining, clean=False)
         if restored is None:
             raise HTTPException(status_code=404, detail="Exclusion not found")
         return {"ok": True, "restored": restored}
 
 @app.post("/exclusions/delete")
 def delete_exclusion(entry: ExclusionEntry):
-    file_path = _exclusions_file_path()
     with EXCLUSIONS_FILE_LOCK:
         # NOTE: Do NOT clean/filter here - preserve all exclusion records
-        items = _load_json_list(file_path)
+        items = _read_exclusions_state(clean=False)
         remaining: List[Dict[str, Any]] = []
         deleted = False
         for item in items:
@@ -3274,7 +3364,7 @@ def delete_exclusion(entry: ExclusionEntry):
                 deleted = True
                 continue
             remaining.append(item)
-        _save_json_list(file_path, remaining)
+        _write_exclusions_state(remaining, clean=False)
         if not deleted:
             raise HTTPException(status_code=404, detail="Exclusion not found")
         return {"ok": True}
@@ -3404,7 +3494,7 @@ def delete_academic_calendar_event(event_id: str):
 def get_reports(month: Optional[str] = None, session: Session = Depends(get_session)) -> List[ReportClass]:
     classes = session.exec(select(models.ImportClass)).all()
     students = session.exec(select(models.ImportStudent)).all()
-    excluded_items = _clean_exclusions_list(_load_json_list(os.path.join(DATA_DIR, "excludedStudents.json")))
+    excluded_items = _read_exclusions_state(clean=True)
     uid_registry = _load_student_uid_registry()
     uid_registry_changed = False
 
@@ -4052,7 +4142,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 lvl["justificativas"] += 1
 
     # load exclusions
-    excluded = _load_json_list(os.path.join(DATA_DIR, "excludedStudents.json"))
+    excluded = _read_exclusions_state(clean=True)
     for ex in excluded:
         nome = str(ex.get("nome") or "").strip()
         if not nome:
