@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, deleteExclusion, getExcludedStudents, restoreStudent } from "../api";
+import { addExclusion, deleteExclusion, getExcludedStudents, restoreStudent, isExclusionsFallback } from "../api";
 import "./Exclusions.css";
 
 interface ExcludedStudent {
@@ -45,6 +45,7 @@ export const Exclusions: React.FC = () => {
   const [editingDateValue, setEditingDateValue] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<ExcludedStudent | null>(null);
+  const [isInFallback, setIsInFallback] = useState(isExclusionsFallback());
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
     const byWidth = window.innerWidth <= 768;
     const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
@@ -227,6 +228,7 @@ export const Exclusions: React.FC = () => {
         if (!isMounted) return;
         const data = response.data;
         const fromFallback = Boolean((response as any)?._fromFallback);
+        setIsInFallback(fromFallback);
         if (Array.isArray(data)) {
           const local = sanitizeExcludedStudents(readExcludedStudentsLocal());
           const resolved = fromFallback ? local : sanitizeExcludedStudents(data as ExcludedStudent[]);
@@ -452,6 +454,10 @@ export const Exclusions: React.FC = () => {
   };
 
   const handleRestoreClick = (student: ExcludedStudent) => {
+    if (isInFallback) {
+      alert("⚠️ Backend não está disponível!\n\nOperações de restauração estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
+      return;
+    }
     const rawTurma = resolveStudentTurmaLabel(student);
     const turmaValue = resolveTurmaLabel(rawTurma) || lastTurma || rawTurma;
     const dataNascimento = normalizeDateValue(student.dataNascimento || "").trim();
@@ -563,6 +569,10 @@ export const Exclusions: React.FC = () => {
   };
 
   const handlePermanentDelete = async (student: ExcludedStudent) => {
+    if (isInFallback) {
+      alert("⚠️ Backend não está disponível!\n\nOperações de exclusão estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
+      return;
+    }
     if (!confirm(`Excluir definitivamente ${getDisplayStudentName(student)}?`)) return;
     const payload = {
       id: student.id,
@@ -574,14 +584,17 @@ export const Exclusions: React.FC = () => {
 
     try {
       await deleteExclusion(payload);
-    } catch {
-      alert("Falha ao excluir no backend.");
+    } catch (err: any) {
+      const msg = err?.data?.error || "Falha ao excluir no backend.";
+      alert(`❌ ${msg}`);
+      setIsInFallback(true);
       return;
     }
 
     const exclusionResponse = await getExcludedStudents().catch(() => ({ data: [] }));
     const newExcludedList = sanitizeExcludedStudents(Array.isArray(exclusionResponse?.data) ? exclusionResponse.data : []);
     setStudents(newExcludedList);
+    setIsInFallback(Boolean((exclusionResponse as any)?._fromFallback));
     localStorage.setItem("excludedStudents", JSON.stringify(newExcludedList));
   };
 
@@ -691,6 +704,26 @@ export const Exclusions: React.FC = () => {
           Total: {filteredStudents.length} aluno(s)
           {filteredStudents.length !== students.length ? ` (de ${students.length})` : ""}
         </p>
+        {isInFallback && (
+          <div style={{
+            background: "#fff3cd",
+            border: "1px solid #ffc107",
+            borderRadius: "6px",
+            padding: "12px 14px",
+            marginBottom: "15px",
+            color: "#856404",
+            fontSize: "13px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}>
+            <span style={{ fontSize: "16px" }}>⚠️</span>
+            <span>
+              <strong>Backend não disponível:</strong> Os dados de exclusão estão em modo offline (cache local).
+              Operações de edição, exclusão e restauração estão bloqueadas até que o servidor fique disponível.
+            </span>
+          </div>
+        )}
         <input
           value={nameSearch}
           onChange={(e) => setNameSearch(e.target.value)}
@@ -840,30 +873,35 @@ export const Exclusions: React.FC = () => {
               <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
                 <button
                   onClick={() => handleRestoreClick(student)}
+                  disabled={isInFallback}
                   style={{
-                    background: "#2563eb",
+                    background: isInFallback ? "#ccc" : "#2563eb",
                     border: "none",
-                    color: "white",
+                    color: isInFallback ? "#666" : "white",
                     padding: "8px 12px",
                     borderRadius: "8px",
-                    cursor: "pointer",
+                    cursor: isInFallback ? "not-allowed" : "pointer",
                     fontSize: "12px",
                     fontWeight: "bold",
+                    opacity: isInFallback ? 0.6 : 1,
                   }}
+                  title={isInFallback ? "Indisponível: backend offline" : "Restaurar aluno"}
                 >
                   Restaurar
                 </button>
                 <button
                   onClick={() => handlePermanentDelete(student)}
-                  title="Excluir aluno"
+                  disabled={isInFallback}
+                  title={isInFallback ? "Indisponível: backend offline" : "Excluir aluno"}
                   style={{
-                    background: "#dc3545",
+                    background: isInFallback ? "#ccc" : "#dc3545",
                     border: "none",
-                    color: "white",
+                    color: isInFallback ? "#666" : "white",
                     padding: "6px 12px",
                     borderRadius: "6px",
-                    cursor: "pointer",
+                    cursor: isInFallback ? "not-allowed" : "pointer",
                     fontSize: "12px",
+                    opacity: isInFallback ? 0.6 : 1,
                   }}
                 >
                   🗑️

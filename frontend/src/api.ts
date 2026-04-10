@@ -32,6 +32,12 @@ const JUSTIFICATION_LOG_QUEUE_KEY = "pendingJustificationLogs";
 const ATTENDANCE_DEBUG_KEY = "attendanceDebugPersistence";
 const ATTENDANCE_DEBUG_EVENTS_KEY = "attendanceDebugEvents";
 
+// Track if exclusions are being served from fallback (backend unreachable)
+let EXCLUSIONS_IN_FALLBACK = false;
+
+export const isExclusionsFallback = () => EXCLUSIONS_IN_FALLBACK;
+export const setExclusionsFallback = (state: boolean) => { EXCLUSIONS_IN_FALLBACK = state; };
+
 const isPersistenceDebugEnabled = () => {
   if (import.meta.env.DEV) return true;
   try {
@@ -423,17 +429,31 @@ export const getExcludedStudents = () =>
     .then(async (response) => {
       const remoteItems = Array.isArray(response?.data) ? response.data : [];
       writeExcludedStudentsLocal(remoteItems);
+      setExclusionsFallback(false);
       return { ...response, data: remoteItems, _fromFallback: false };
     })
-    .catch(() => ({ data: readExcludedStudentsLocal(), _fromFallback: true }));
+    .catch(() => {
+      setExclusionsFallback(true);
+      return { data: readExcludedStudentsLocal(), _fromFallback: true };
+    });
 
-export const addExclusion = (data: any) =>
-  API.post("/exclusions", data)
+export const addExclusion = (data: any) => {
+  if (isExclusionsFallback()) {
+    return Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
+    });
+  }
+  return API.post("/exclusions", data)
     .then((response) => {
       upsertExcludedStudentLocal(data, false);
       return response;
     })
-    .catch(() => ({ data: { ok: true, fallback: true, items: upsertExcludedStudentLocal(data, true) } }));
+    .catch(() => Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Falha ao salvar exclusão no backend." },
+    }));
+};
 
 export const addExclusionsBulk = (items: any[], replace = false) => {
   const payloadItems = (Array.isArray(items) ? items : []).map((item) => normalizeExcludedStudentRecord(item));
@@ -474,21 +494,41 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
     });
 };
 
-export const restoreStudent = (data: any) =>
-  API.post("/exclusions/restore", data)
+export const restoreStudent = (data: any) => {
+  if (isExclusionsFallback()) {
+    return Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de restauração estão bloqueadas." },
+    });
+  }
+  return API.post("/exclusions/restore", data)
     .then((response) => {
       removeExcludedStudentLocal(data);
       return response;
     })
-    .catch(() => ({ data: { ok: true, fallback: true, items: removeExcludedStudentLocal(data) } }));
+    .catch(() => Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Falha ao restaurar aluno no backend." },
+    }));
+};
 
-export const deleteExclusion = (data: any) =>
-  API.post("/exclusions/delete", data)
+export const deleteExclusion = (data: any) => {
+  if (isExclusionsFallback()) {
+    return Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
+    });
+  }
+  return API.post("/exclusions/delete", data)
     .then((response) => {
       removeExcludedStudentLocal(data);
       return response;
     })
-    .catch(() => ({ data: { ok: true, fallback: true, items: removeExcludedStudentLocal(data) } }));
+    .catch(() => Promise.reject({
+      status: 503,
+      data: { ok: false, fallback: true, error: "Falha ao deletar exclusão no backend." },
+    }));
+};
 
 // Reports
 export const getReports = (params?: Record<string, any>) =>
