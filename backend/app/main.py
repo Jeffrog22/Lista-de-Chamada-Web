@@ -75,7 +75,7 @@ origins = [
     for origin in cors_origins_raw.split(",")
     if _normalize_origin(origin)
 ]
-cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
+cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.(vercel\.app|netlify\.app)$")
 
 app.add_middleware(
     CORSMiddleware,
