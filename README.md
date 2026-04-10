@@ -20,6 +20,19 @@ Para sair do fallback e usar clima real:
 
 Sem essas variáveis, o endpoint `/weather` retorna fallback (`26` e `Parcialmente Nublado`).
 
+## Redeploy limpo (Render + Vercel)
+
+Use este fluxo sempre que houver rollback, force-push ou ajuste sensível de persistência:
+
+1. Confirmar `master` sincronizado com `origin/master`.
+2. No Render, serviço oficial `lista-de-chamada-web`, acionar novo deploy (Clear build cache quando necessário).
+3. Validar backend após deploy: `GET /health` deve retornar `{"status":"ok"}`.
+4. Validar endpoint de exclusões no backend publicado (`/exclusions`) com credenciais admin quando aplicável.
+5. No Vercel, acionar redeploy da build mais recente do frontend.
+6. No frontend publicado, validar fluxo de exclusões (listar, restaurar, excluir) e confirmar ausência de fallback indevido.
+
+Observação: não usar ambiente mirror em produção, salvo quando explicitamente solicitado para testes isolados.
+
 ## Validar importação CSV
 
 Sempre que quiser verificar se o template oficial `data/templates/import-data.template.csv` continua compatível, execute o script de teste:
