@@ -238,11 +238,13 @@ export const Exclusions: React.FC = () => {
           localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         } else {
           loadLocal();
-
-          const { _fromFallback: fromFallback = false } = response;
-          setIsLoadFromFallback(fromFallback);
-          setWriteOpFailed(isExclusionsWriteFailed());
-        if (isMounted) loadLocal();
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          loadLocal();
+          setIsLoadFromFallback(true);
+        }
       });
 
     return () => {
