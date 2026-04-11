@@ -3262,6 +3262,14 @@ export const Attendance: React.FC = () => {
       const storedHasAnyMark = (storedRecords || []).some((item) =>
         Object.values(item?.attendance || {}).some((value) => Boolean(value))
       );
+      const pendingScopeInfo = getPendingAttendanceScopeStatus({
+        turmaCodigo: selectedClass.turmaCodigo || "",
+        turmaLabel: selectedClass.turmaLabel || selectedTurma || "",
+        horario: selectedClass.horario || selectedHorario || "",
+        professor: selectedClass.professor || selectedProfessor || "",
+        mes: monthKey,
+      });
+      const hasPendingScopeWrites = Number(pendingScopeInfo?.pending || 0) > 0;
       const storedByName = new Map(
         (storedRecords || []).map((item) => [normalizeText(item.aluno), item])
       );
@@ -3503,7 +3511,10 @@ export const Attendance: React.FC = () => {
 
           const backend = backendByName.get(studentKey);
           const stored = storedByName.get(studentKey);
-          const shouldPreferStoredSnapshot = storedHasAnyMark && backendHasAnyMark;
+          const shouldPreferStoredSnapshot =
+            storedHasAnyMark &&
+            backendHasAnyMark &&
+            (hasPendingScopeWrites || hasUnsavedLocalChangesRef.current);
 
           return {
             id: idx + 1,
@@ -3746,7 +3757,6 @@ export const Attendance: React.FC = () => {
       .then((attendanceResp: any) => {
         if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
           setHasUnsavedLocalChanges(false);
-          setHydrationRefreshSeq((prev) => prev + 1);
         }
         refreshSyncIndicator().catch(() => undefined);
       })
