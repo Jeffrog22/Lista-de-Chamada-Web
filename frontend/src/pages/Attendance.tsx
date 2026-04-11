@@ -1852,6 +1852,10 @@ export const Attendance: React.FC = () => {
   const hydrationRequestIdRef = useRef(0);
   const [hydrationRefreshSeq, setHydrationRefreshSeq] = useState(0);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const hydrationScopeRef = useRef<string>("");
+  const lastRemoteSavedAtRef = useRef<string>("");
+  const hydrationPollInFlightRef = useRef(false);
+  const pollingLatencySamplesRef = useRef<number[]>([]);
   const [hydrationReadInfo, setHydrationReadInfo] = useState<{
     ref: string;
     snapshot: string;
@@ -1877,6 +1881,22 @@ export const Attendance: React.FC = () => {
   });
   const syncIndicator = syncEngine.syncIndicator;
   const refreshSyncIndicator = syncEngine.refreshSyncIndicator;
+
+  const pollScope = useMemo(() => {
+    const persistence = resolvePersistenceContext();
+    return {
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
+      mes: monthKey,
+      isValid: persistence.isValid,
+    };
+  }, [monthKey, resolvePersistenceContext]);
+
+  useEffect(() => {
+    lastRemoteSavedAtRef.current = "";
+  }, [pollScope.turmaCodigo, pollScope.turmaLabel, pollScope.horario, pollScope.professor, pollScope.mes]);
 
   const getTransferLockForDate = useCallback(
     (studentName: string, dateKey: string): TransferLockInfo | null => {
@@ -3454,13 +3474,9 @@ export const Attendance: React.FC = () => {
         return;
       }
 
-      // Resetar histórico ao mudar de turma/horário/professor para evitar inconsistências
-      setHistory([]);
-
-      setAttendance(
-        classStudents
-          .filter((aluno) => !isExcludedByIdentity(aluno || ""))
-          .map((aluno, idx) => {
+      const nextHydratedAttendance = classStudents
+        .filter((aluno) => !isExcludedByIdentity(aluno || ""))
+        .map((aluno, idx) => {
           const studentKey = normalizeText(aluno);
           const base = newDates.reduce(
             (acc, date) => {
@@ -3542,8 +3558,21 @@ export const Attendance: React.FC = () => {
               return storedNotes;
             })(),
           };
-          })
-      );
+        });
+
+      const scopeKey = `${storageKey}|${monthKey}`;
+      if (hydrationScopeRef.current !== scopeKey) {
+        // Limpa histórico apenas na troca real de escopo para evitar flicker no polling.
+        setHistory([]);
+        hydrationScopeRef.current = scopeKey;
+      }
+
+      setAttendance((prev) => {
+        const prevSerialized = JSON.stringify(prev);
+        const nextSerialized = JSON.stringify(nextHydratedAttendance);
+        if (prevSerialized === nextSerialized) return prev;
+        return nextHydratedAttendance;
+      });
       setHydratedStorageKey(storageKey);
     };
 
@@ -3553,6 +3582,60 @@ export const Attendance: React.FC = () => {
       isMounted = false;
     };
   }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor, hydrationRefreshSeq, resolvedDiasSemana, activeStudentsMeta]);
+
+  useEffect(() => {
+    if (!pollScope.isValid) return;
+
+    let isActive = true;
+
+    const runPolling = async () => {
+      if (!isActive) return;
+      if (document.visibilityState !== "visible") return;
+      if (hydrationPollInFlightRef.current) return;
+      if (hasUnsavedLocalChangesRef.current) return;
+
+      hydrationPollInFlightRef.current = true;
+      const startedAt = performance.now();
+
+      try {
+        const probe: any = await forceAttendanceSync({
+          turmaCodigo: pollScope.turmaCodigo,
+          turmaLabel: pollScope.turmaLabel,
+          horario: pollScope.horario,
+          professor: pollScope.professor,
+          mes: pollScope.mes,
+        }).catch(() => ({ data: { hasLog: false, saved_at: "" } }));
+
+        const latency = performance.now() - startedAt;
+        const samples = [...pollingLatencySamplesRef.current, latency].slice(-20);
+        pollingLatencySamplesRef.current = samples;
+
+        const remoteSavedAt = String(probe?.data?.saved_at || "").trim();
+        if (!remoteSavedAt) return;
+
+        if (!lastRemoteSavedAtRef.current) {
+          lastRemoteSavedAtRef.current = remoteSavedAt;
+          return;
+        }
+
+        if (remoteSavedAt !== lastRemoteSavedAtRef.current) {
+          lastRemoteSavedAtRef.current = remoteSavedAt;
+          setHydrationRefreshSeq((prev) => prev + 1);
+          refreshSyncIndicator().catch(() => undefined);
+        }
+      } finally {
+        hydrationPollInFlightRef.current = false;
+      }
+    };
+
+    runPolling();
+    const intervalId = window.setInterval(runPolling, 1500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [pollScope, refreshSyncIndicator]);
 
   useEffect(() => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;
