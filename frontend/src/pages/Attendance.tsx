@@ -3726,6 +3726,10 @@ export const Attendance: React.FC = () => {
     setAttendance(nextAttendance);
     attendanceRef.current = nextAttendance;
 
+    if (storageKey && hydratedStorageKey === storageKey) {
+      saveAttendanceStorage(nextAttendance);
+    }
+
     saveAttendanceLog({
       turmaCodigo: persistence.turmaCodigo,
       turmaLabel: persistence.turmaLabel,
