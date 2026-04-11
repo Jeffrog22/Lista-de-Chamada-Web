@@ -127,6 +127,7 @@ type ClimaCache = {
 
 const WEATHER_CACHE_VERSION = "cptec-v1";
 const WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const ATTENDANCE_SYNC_POLL_MS = 1500;
 
 // Opções de Sensação Térmica (ordem solicitada)
 const WEATHER_ICONS = {
@@ -997,10 +998,17 @@ export const Attendance: React.FC = () => {
     try {
       const response = await getExcludedStudents();
       const payload = Array.isArray(response?.data) ? response.data : [];
-      localStorage.setItem("excludedStudents", JSON.stringify(payload));
-      refreshStorageData();
+      const currentRaw = localStorage.getItem("excludedStudents");
+      const nextRaw = JSON.stringify(payload);
+      if (currentRaw !== nextRaw) {
+        localStorage.setItem("excludedStudents", nextRaw);
+        refreshStorageData();
+        return true;
+      }
+      return false;
     } catch {
       // mantém cache local quando backend estiver indisponível
+      return false;
     }
   }, [refreshStorageData]);
 
@@ -1852,6 +1860,7 @@ export const Attendance: React.FC = () => {
   const hydrationRequestIdRef = useRef(0);
   const [hydrationRefreshSeq, setHydrationRefreshSeq] = useState(0);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const syncEngineEnabled = String(import.meta.env.VITE_ATTENDANCE_SYNC_ENGINE || "1").trim() !== "0";
   const hydrationScopeRef = useRef<string>("");
   const lastRemoteSavedAtRef = useRef<string>("");
   const hydrationPollInFlightRef = useRef(false);
@@ -1878,6 +1887,7 @@ export const Attendance: React.FC = () => {
 
   const syncEngine = useAttendanceSyncEngine({
     scope: syncScope,
+    enabled: syncEngineEnabled,
   });
   const syncIndicator = syncEngine.syncIndicator;
   const refreshSyncIndicator = syncEngine.refreshSyncIndicator;
@@ -3584,7 +3594,7 @@ export const Attendance: React.FC = () => {
   }, [selectedTurma, selectedClass.horario, selectedClass.professor, selectedDaysKey, studentsPerClass, storageKey, monthKey, selectedClass.turmaLabel, selectedClass.turmaCodigo, selectedHorario, selectedProfessor, hydrationRefreshSeq, resolvedDiasSemana, activeStudentsMeta]);
 
   useEffect(() => {
-    if (!pollScope.isValid) return;
+    if (!syncEngineEnabled || !pollScope.isValid) return;
 
     let isActive = true;
 
@@ -3605,6 +3615,11 @@ export const Attendance: React.FC = () => {
           professor: pollScope.professor,
           mes: pollScope.mes,
         }).catch(() => ({ data: { hasLog: false, saved_at: "" } }));
+
+        const exclusionsChanged = await refreshExcludedStudents();
+        if (exclusionsChanged && !hasUnsavedLocalChangesRef.current) {
+          setHydrationRefreshSeq((prev) => prev + 1);
+        }
 
         const latency = performance.now() - startedAt;
         const samples = [...pollingLatencySamplesRef.current, latency].slice(-20);
@@ -3629,13 +3644,13 @@ export const Attendance: React.FC = () => {
     };
 
     runPolling();
-    const intervalId = window.setInterval(runPolling, 1500);
+    const intervalId = window.setInterval(runPolling, ATTENDANCE_SYNC_POLL_MS);
 
     return () => {
       isActive = false;
       window.clearInterval(intervalId);
     };
-  }, [pollScope, refreshSyncIndicator]);
+  }, [pollScope, refreshExcludedStudents, refreshSyncIndicator, syncEngineEnabled]);
 
   useEffect(() => {
     if (!storageKey || hydratedStorageKey !== storageKey) return;
