@@ -3584,29 +3584,52 @@ export const Attendance: React.FC = () => {
     const student = attendance.find((item) => item.id === id);
     const transferLocked = student ? !!getTransferLockForDate(student.aluno, date) : false;
     if (dayClosed || classBlockedByMeeting || transferLocked) return;
+    const persistence = resolvePersistenceContext();
+    if (!persistence.isValid) return;
 
     // Salva o estado atual no histórico antes de modificar
     setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
     setHasUnsavedLocalChanges(true);
 
-    setAttendance((prev) => {
-      const newAttendance = prev.map((item) => {
-        if (item.id === id) {
-          const currentStatus = item.attendance[date];
-          const newStatus = cycleStatus(currentStatus);
-          
-          return {
-            ...item,
-            attendance: {
-              ...item.attendance,
-              [date]: newStatus,
-            },
-          };
-        }
-        return item;
-      });
-      return newAttendance;
+    const nextAttendance = attendance.map((item) => {
+      if (item.id === id) {
+        const currentStatus = item.attendance[date];
+        const newStatus = cycleStatus(currentStatus);
+
+        return {
+          ...item,
+          attendance: {
+            ...item.attendance,
+            [date]: newStatus,
+          },
+        };
+      }
+      return item;
     });
+
+    setAttendance(nextAttendance);
+
+    saveAttendanceLog({
+      turmaCodigo: persistence.turmaCodigo,
+      turmaLabel: persistence.turmaLabel,
+      horario: persistence.horario,
+      professor: persistence.professor,
+      mes: monthKey,
+      registros: nextAttendance.map((item) => ({
+        aluno_nome: item.aluno,
+        attendance: item.attendance,
+        justifications: item.justifications || {},
+        notes: item.notes || [],
+      })),
+    })
+      .then((attendanceResp: any) => {
+        if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
+          setHasUnsavedLocalChanges(false);
+          setHydrationRefreshSeq((prev) => prev + 1);
+        }
+        refreshSyncIndicator().catch(() => undefined);
+      })
+      .catch(() => undefined);
   };
   const handleUndo = () => {
     if (history.length > 0) {
