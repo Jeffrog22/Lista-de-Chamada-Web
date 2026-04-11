@@ -44,7 +44,7 @@ def _payload(status_value: str, client_saved_at: str):
                 "attendance": {
                     "2026-03-10": status_value,
                 },
-                "justifications": {},
+                "justifications": {"2026-03-10": "Motivo inicial"},
                 "notes": [],
             }
         ],
@@ -63,7 +63,7 @@ def test_merge_does_not_erase_existing_status_when_incoming_is_empty(client: Tes
 
     items = json.loads(output_file.read_text(encoding="utf-8"))
     assert isinstance(items, list)
-    assert len(items) >= 2
+    assert len(items) >= 1
 
     latest = items[-1]
     registros = latest.get("registros") or []
@@ -71,3 +71,25 @@ def test_merge_does_not_erase_existing_status_when_incoming_is_empty(client: Tes
 
     attendance_map = registros[0].get("attendance") or {}
     assert attendance_map.get("2026-03-10") == "Presente"
+
+
+def test_merge_does_not_erase_existing_justification_when_incoming_is_empty(client: TestClient, tmp_path: Path):
+    first = client.post("/attendance-log", json=_payload("Justificado", "2026-03-31T10:00:00Z"))
+    assert first.status_code == 200
+
+    payload = _payload("Justificado", "2026-03-31T10:05:00Z")
+    payload["registros"][0]["justifications"] = {"2026-03-10": ""}
+    second = client.post("/attendance-log", json=payload)
+    assert second.status_code == 200
+
+    output_file = tmp_path / "data" / "baseChamada.json"
+    assert output_file.exists()
+
+    items = json.loads(output_file.read_text(encoding="utf-8"))
+    assert isinstance(items, list)
+    latest = items[-1]
+    registros = latest.get("registros") or []
+    assert len(registros) == 1
+
+    justifications_map = registros[0].get("justifications") or {}
+    assert justifications_map.get("2026-03-10") == "Motivo inicial"

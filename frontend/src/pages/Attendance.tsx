@@ -3487,7 +3487,9 @@ export const Attendance: React.FC = () => {
               if (shouldPreferStoredSnapshot) {
                 Object.entries(storedAttendance).forEach(([date, value]) => {
                   if (!newDates.includes(date)) return;
-                  merged[date] = value;
+                  const normalized = String(value || "").trim();
+                  if (!normalized) return;
+                  merged[date] = normalized as "Presente" | "Falta" | "Justificado" | "";
                 });
               } else if (!backendSnapshotTrusted || !backend) {
                 Object.entries(storedAttendance).forEach(([date, value]) => {
@@ -3510,10 +3512,7 @@ export const Attendance: React.FC = () => {
                 Object.entries(storedJustifications).forEach(([date, value]) => {
                   if (!newDates.includes(date)) return;
                   const normalized = String(value || "").trim();
-                  if (!normalized) {
-                    delete merged[date];
-                    return;
-                  }
+                  if (!normalized) return;
                   merged[date] = normalized;
                 });
               } else if (!backendSnapshotTrusted || !backend) {
