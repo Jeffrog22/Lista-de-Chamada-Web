@@ -1350,16 +1350,8 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 latest_same_class = candidate
                 break
 
-        client_saved_at = _saved_at_sort_key(item.get("clientSavedAt"))
-        latest_saved_at = _saved_at_sort_key((latest_same_class or {}).get("saved_at"))
-
-        if latest_same_class and client_saved_at and latest_saved_at and client_saved_at < latest_saved_at:
-            return {
-                "ok": True,
-                "skipped": True,
-                "reason": "stale_snapshot",
-                "latest_saved_at": latest_same_class.get("saved_at"),
-            }
+        # Do not reject by client timestamp: devices can have clock skew.
+        # We always merge incoming snapshot with latest server snapshot.
 
         incoming_registros = item.get("registros") or []
         if latest_same_class and isinstance(latest_same_class.get("registros"), list):
@@ -1421,8 +1413,9 @@ def append_attendance_log(payload: AttendanceLogPayload):
                 for date_key in non_empty_attendance_dates:
                     status_value = str(merged_attendance.get(date_key) or "").strip()
                     incoming_reason = normalized_incoming_justifications.get(date_key, "")
-                    if status_value == "Justificado" and incoming_reason:
-                        merged_justifications[date_key] = incoming_reason
+                    if status_value == "Justificado":
+                        if incoming_reason:
+                            merged_justifications[date_key] = incoming_reason
                     else:
                         merged_justifications.pop(date_key, None)
 
