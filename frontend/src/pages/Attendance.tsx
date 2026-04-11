@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPendingAttendanceScopeStatus, getPoolLog, getReports, getWeather, saveAttendanceLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
 } from "../utils/academicCalendar";
 import type { AcademicCalendarEvent, AcademicCalendarSettings } from "../utils/academicCalendar";
+import { useAttendanceSyncEngine } from "../hooks/useAttendanceSyncEngine";
 
 interface ClassOption {
   grupo?: string;
@@ -1858,78 +1859,24 @@ export const Attendance: React.FC = () => {
     studentCount: number;
     updatedAt: string;
   } | null>(null);
-  const [syncIndicator, setSyncIndicator] = useState<{
-    status: "checking" | "confirmed" | "pending" | "error";
-    detail: string;
-    updatedAt: string;
-  } | null>(null);
   const lastHydrationReadAlertRef = useRef<string>("");
 
-  const refreshSyncIndicator = useCallback(async () => {
+  const syncScope = useMemo(() => {
     const persistence = resolvePersistenceContext();
-    if (!persistence.isValid) {
-      setSyncIndicator(null);
-      return;
-    }
-
-    const scope = {
+    return {
       turmaCodigo: persistence.turmaCodigo,
       turmaLabel: persistence.turmaLabel,
       horario: persistence.horario,
       professor: persistence.professor,
       mes: monthKey,
     };
-
-    setSyncIndicator((prev) => ({
-      status: "checking",
-      detail: prev?.detail || "Verificando sincronização...",
-      updatedAt: new Date().toLocaleTimeString("pt-BR"),
-    }));
-
-    try {
-      const pendingInfo = getPendingAttendanceScopeStatus(scope);
-      const pendingCount = Number(pendingInfo?.pending || 0);
-      const probe = await forceAttendanceSync(scope).catch(() => ({ data: { hasLog: false } }));
-      const hasRemoteLog = Boolean(probe?.data?.hasLog);
-      const serverSavedAt = String(probe?.data?.saved_at || "").trim();
-
-      if (pendingCount > 0) {
-        setSyncIndicator({
-          status: "pending",
-          detail: `Pendente: ${pendingCount} item(ns) na fila local para esta turma/mês.`,
-          updatedAt: new Date().toLocaleTimeString("pt-BR"),
-        });
-        return;
-      }
-
-      if (hasRemoteLog) {
-        setSyncIndicator({
-          status: "confirmed",
-          detail: serverSavedAt
-            ? `Confirmado no servidor (${serverSavedAt}).`
-            : "Confirmado no servidor.",
-          updatedAt: new Date().toLocaleTimeString("pt-BR"),
-        });
-        return;
-      }
-
-      setSyncIndicator({
-        status: "pending",
-        detail: "Sem log confirmado no servidor para esta turma/mês.",
-        updatedAt: new Date().toLocaleTimeString("pt-BR"),
-      });
-    } catch {
-      setSyncIndicator({
-        status: "error",
-        detail: "Não foi possível verificar sync agora.",
-        updatedAt: new Date().toLocaleTimeString("pt-BR"),
-      });
-    }
   }, [monthKey, resolvePersistenceContext]);
 
-  useEffect(() => {
-    refreshSyncIndicator();
-  }, [refreshSyncIndicator, hydrationRefreshSeq, selectedTurma, selectedHorario, selectedProfessor, monthKey]);
+  const syncEngine = useAttendanceSyncEngine({
+    scope: syncScope,
+  });
+  const syncIndicator = syncEngine.syncIndicator;
+  const refreshSyncIndicator = syncEngine.refreshSyncIndicator;
 
   const getTransferLockForDate = useCallback(
     (studentName: string, dateKey: string): TransferLockInfo | null => {
@@ -4372,27 +4319,27 @@ export const Attendance: React.FC = () => {
               padding: "8px 10px",
               borderRadius: "8px",
               border:
-                syncIndicator.status === "confirmed"
+                syncIndicator.status === "sincronizado"
                   ? "1px solid #86efac"
-                  : syncIndicator.status === "pending"
+                  : syncIndicator.status === "pendente"
                     ? "1px solid #fcd34d"
-                    : syncIndicator.status === "error"
+                    : syncIndicator.status === "erro"
                       ? "1px solid #fca5a5"
                       : "1px solid #cbd5e1",
               background:
-                syncIndicator.status === "confirmed"
+                syncIndicator.status === "sincronizado"
                   ? "#f0fdf4"
-                  : syncIndicator.status === "pending"
+                  : syncIndicator.status === "pendente"
                     ? "#fffbeb"
-                    : syncIndicator.status === "error"
+                    : syncIndicator.status === "erro"
                       ? "#fef2f2"
                       : "#f8fafc",
               color:
-                syncIndicator.status === "confirmed"
+                syncIndicator.status === "sincronizado"
                   ? "#166534"
-                  : syncIndicator.status === "pending"
+                  : syncIndicator.status === "pendente"
                     ? "#92400e"
-                    : syncIndicator.status === "error"
+                    : syncIndicator.status === "erro"
                       ? "#991b1b"
                       : "#334155",
               fontSize: "12px",
@@ -4403,23 +4350,23 @@ export const Attendance: React.FC = () => {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
               <div>
                 <strong>
-                  Sync: {syncIndicator.status === "confirmed" ? "confirmado" : syncIndicator.status === "checking" ? "verificando" : syncIndicator.status === "error" ? "erro" : "pendente"}
+                  Sync: {syncIndicator.status === "sincronizado" ? "sincronizado" : syncIndicator.status === "erro" ? "erro" : "pendente"}
                 </strong>
                 {" "}· {syncIndicator.detail} · {syncIndicator.updatedAt}
               </div>
               <button
                 type="button"
                 onClick={handleForceSyncNow}
-                disabled={isManualSyncing || syncIndicator.status === "checking"}
+                disabled={isManualSyncing}
                 style={{
                   border: "none",
                   borderRadius: "8px",
-                  background: isManualSyncing || syncIndicator.status === "checking" ? "#94a3b8" : "#334155",
+                  background: isManualSyncing ? "#94a3b8" : "#334155",
                   color: "#fff",
                   fontSize: "12px",
                   fontWeight: 700,
                   padding: "8px 12px",
-                  cursor: isManualSyncing || syncIndicator.status === "checking" ? "not-allowed" : "pointer",
+                  cursor: isManualSyncing ? "not-allowed" : "pointer",
                   whiteSpace: "nowrap",
                 }}
               >
