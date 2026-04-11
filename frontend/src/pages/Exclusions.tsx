@@ -38,6 +38,8 @@ export const Exclusions: React.FC = () => {
   const exclusionReasonOptions = ["Falta", "Desistência", "Transferência", "Documentação"];
   const [students, setStudents] = useState<ExcludedStudent[]>([]);
   const [nameSearch, setNameSearch] = useState("");
+  const [sortField, setSortField] = useState<"nome" | "dataExclusao">("nome");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [turmaOptions, setTurmaOptions] = useState<string[]>([]);
   const [lastTurma, setLastTurma] = useState<string>("");
   const [professorOptions, setProfessorOptions] = useState<string[]>([]);
@@ -717,6 +719,38 @@ export const Exclusions: React.FC = () => {
     return normalizeText(resolveStudentName(student)).includes(normalizedSearch);
   });
 
+  const parseExclusionDate = (value: string) => {
+    const normalized = normalizeDateValue(value || "").trim();
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(normalized)) return Number.NEGATIVE_INFINITY;
+    const [dd, mm, yyyy] = normalized.split("/").map(Number);
+    const dt = new Date(yyyy, mm - 1, dd);
+    if (Number.isNaN(dt.getTime())) return Number.NEGATIVE_INFINITY;
+    return dt.getTime();
+  };
+
+  const toggleSort = (field: "nome" | "dataExclusao") => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortField(field);
+    setSortDirection("asc");
+  };
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    let cmp = 0;
+    if (sortField === "nome") {
+      const aName = normalizeText(resolveStudentName(a));
+      const bName = normalizeText(resolveStudentName(b));
+      cmp = aName.localeCompare(bName, "pt-BR");
+    } else {
+      const aDate = parseExclusionDate(String(a.dataExclusao || a.DataExclusao || ""));
+      const bDate = parseExclusionDate(String(b.dataExclusao || b.DataExclusao || ""));
+      cmp = aDate - bDate;
+    }
+    return sortDirection === "asc" ? cmp : -cmp;
+  });
+
   const effectiveTurmaOptions =
     turmaOptions.length > 0
       ? turmaOptions
@@ -779,18 +813,43 @@ export const Exclusions: React.FC = () => {
             </button>
           </div>
         )}
-        <input
-          value={nameSearch}
-          onChange={(e) => setNameSearch(e.target.value)}
-          placeholder="Buscar por nome do aluno"
-          style={{
-            width: "min(420px, 100%)",
-            padding: "9px 10px",
-            borderRadius: "8px",
-            border: "1px solid #cbd5e1",
-            fontSize: "14px",
-          }}
-        />
+        <div style={{ position: "relative", width: "min(420px, 100%)" }}>
+          <input
+            value={nameSearch}
+            onChange={(e) => setNameSearch(e.target.value)}
+            placeholder="Buscar por nome do aluno"
+            style={{
+              width: "100%",
+              padding: "9px 32px 9px 10px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+              fontSize: "14px",
+            }}
+          />
+          {nameSearch.trim() && (
+            <button
+              type="button"
+              onClick={() => setNameSearch("")}
+              title="Limpar busca"
+              aria-label="Limpar busca"
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                color: "#64748b",
+                cursor: "pointer",
+                fontSize: "14px",
+                lineHeight: 1,
+                padding: "2px 4px",
+              }}
+            >
+              x
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ overflowX: "auto" }}>
@@ -811,16 +870,48 @@ export const Exclusions: React.FC = () => {
               textAlign: "center",
             }}
           >
-            <span style={{ textAlign: "left" }}>Nome</span>
+            <button
+              type="button"
+              onClick={() => toggleSort("nome")}
+              style={{
+                textAlign: "left",
+                background: "transparent",
+                border: "none",
+                color: "inherit",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                cursor: "pointer",
+                padding: 0,
+              }}
+              title="Ordenar por nome"
+            >
+              Nome {sortField === "nome" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+            </button>
             <span>Turma</span>
             <span>Horário</span>
             <span>Professor</span>
             <span>Motivo</span>
-            <span>Data da exclusão</span>
+            <button
+              type="button"
+              onClick={() => toggleSort("dataExclusao")}
+              style={{
+                textAlign: "center",
+                background: "transparent",
+                border: "none",
+                color: "inherit",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                cursor: "pointer",
+                padding: 0,
+              }}
+              title="Ordenar por data da exclusão"
+            >
+              Data da exclusão {sortField === "dataExclusao" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+            </button>
             <span>Ações</span>
           </div>
 
-          {filteredStudents.map((student, idx) => {
+          {sortedStudents.map((student, idx) => {
             const rowKey = getExclusionRowKey(student, idx);
             const isEditingRowDate = editingDateKey === rowKey;
             return (
@@ -831,7 +922,7 @@ export const Exclusions: React.FC = () => {
                 gridTemplateColumns: "2fr 1fr 1fr 1.2fr 1.6fr 1fr 1.6fr",
                 gap: "8px",
                 padding: "12px 14px",
-                borderBottom: idx === filteredStudents.length - 1 ? "none" : "1px solid #f1f5f9",
+                borderBottom: idx === sortedStudents.length - 1 ? "none" : "1px solid #f1f5f9",
                 background: idx % 2 === 0 ? "#ffffff" : "#f9fafb",
                 alignItems: "center",
                 fontSize: "14px",
@@ -965,7 +1056,7 @@ export const Exclusions: React.FC = () => {
         </div>
       </div>
 
-      {filteredStudents.length === 0 && (
+      {sortedStudents.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
           {students.length === 0 ? "Nenhum aluno excluído" : "Nenhum aluno encontrado pela busca"}
         </div>
