@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPoolLog, getReports, getWeather, saveAttendanceLog, savePoolLog } from "../api";
+import { addExclusion, flushPendingAttendanceLogs, forceAttendanceSync, getAcademicCalendar, getExcludedStudents, getPendingAttendanceScopeStatus, getPoolLog, getReports, getWeather, saveAttendanceLog, savePoolLog } from "../api";
 import {
   isClassBlockedByEventPeriod,
   isDateClosedForAttendance,
@@ -1761,6 +1761,7 @@ export const Attendance: React.FC = () => {
   }));
 
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(initialAttendance);
+  const attendanceRef = useRef<AttendanceRecord[]>(initialAttendance);
   const [transferLocksByName, setTransferLocksByName] = useState<Record<string, TransferLockInfo>>({});
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
@@ -1804,6 +1805,10 @@ export const Attendance: React.FC = () => {
   useEffect(() => {
     hasUnsavedLocalChangesRef.current = hasUnsavedLocalChanges;
   }, [hasUnsavedLocalChanges]);
+
+  useEffect(() => {
+    attendanceRef.current = attendance;
+  }, [attendance]);
 
   useEffect(() => {
     setHasUnsavedLocalChanges(false);
@@ -3602,7 +3607,6 @@ export const Attendance: React.FC = () => {
       if (!isActive) return;
       if (document.visibilityState !== "visible") return;
       if (hydrationPollInFlightRef.current) return;
-      if (hasUnsavedLocalChangesRef.current) return;
 
       hydrationPollInFlightRef.current = true;
       const startedAt = performance.now();
@@ -3628,6 +3632,18 @@ export const Attendance: React.FC = () => {
         const remoteSavedAt = String(probe?.data?.saved_at || "").trim();
         if (!remoteSavedAt) return;
 
+        const pendingScopeInfo = getPendingAttendanceScopeStatus({
+          turmaCodigo: pollScope.turmaCodigo,
+          turmaLabel: pollScope.turmaLabel,
+          horario: pollScope.horario,
+          professor: pollScope.professor,
+          mes: pollScope.mes,
+        });
+        const pendingScopeCount = Number(pendingScopeInfo?.pending || 0);
+        if (pendingScopeCount === 0 && hasUnsavedLocalChangesRef.current) {
+          setHasUnsavedLocalChanges(false);
+        }
+
         if (!lastRemoteSavedAtRef.current) {
           lastRemoteSavedAtRef.current = remoteSavedAt;
           return;
@@ -3635,7 +3651,9 @@ export const Attendance: React.FC = () => {
 
         if (remoteSavedAt !== lastRemoteSavedAtRef.current) {
           lastRemoteSavedAtRef.current = remoteSavedAt;
-          setHydrationRefreshSeq((prev) => prev + 1);
+          if (!hasUnsavedLocalChangesRef.current) {
+            setHydrationRefreshSeq((prev) => prev + 1);
+          }
           refreshSyncIndicator().catch(() => undefined);
         }
       } finally {
@@ -3683,12 +3701,13 @@ export const Attendance: React.FC = () => {
     if (dayClosed || classBlockedByMeeting || transferLocked) return;
     const persistence = resolvePersistenceContext();
     if (!persistence.isValid) return;
+    const currentSnapshot = attendanceRef.current;
 
     // Salva o estado atual no histórico antes de modificar
-    setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
+    setHistory((h) => [JSON.parse(JSON.stringify(currentSnapshot)), ...h.slice(0, 9)]);
     setHasUnsavedLocalChanges(true);
 
-    const nextAttendance = attendance.map((item) => {
+    const nextAttendance = currentSnapshot.map((item) => {
       if (item.id === id) {
         const currentStatus = item.attendance[date];
         const newStatus = cycleStatus(currentStatus);
@@ -3705,6 +3724,7 @@ export const Attendance: React.FC = () => {
     });
 
     setAttendance(nextAttendance);
+    attendanceRef.current = nextAttendance;
 
     saveAttendanceLog({
       turmaCodigo: persistence.turmaCodigo,
