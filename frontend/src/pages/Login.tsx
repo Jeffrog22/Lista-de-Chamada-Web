@@ -19,6 +19,8 @@ const normalizeUnitName = (value: string) =>
     .trim()
     .toLowerCase();
 
+const isAdminProfile = (value: string) => normalizeUnitName(value) === "admin";
+
 const isUnitAllowedForEnvironment = (typedUnit: string) => {
   if (!expectedUnitName) {
     return true;
@@ -204,9 +206,12 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         name: String(profile.name || "").trim(),
         unit: expectedUnitName || String(profile.unit || "").trim(),
       };
+      const adminAccess = isAdminProfile(normalizedProfile.name);
 
       setStatus("Carregando dados...");
-      const res = await getBootstrap(undefined, { professor: normalizedProfile.name });
+      const res = adminAccess
+        ? await getBootstrap()
+        : await getBootstrap(undefined, { professor: normalizedProfile.name });
       applyBootstrap(res.data);
 
       if (rememberProfile) {
@@ -286,6 +291,9 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       <p style={{ color: "#666", fontSize: 12, marginTop: 4, lineHeight: 1.4, wordBreak: "break-word" }}>
         Atualizado em: {formatImportDate(importStatusInfo?.last_import_at)}
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
+      </p>
+      <p style={{ color: "#475569", fontSize: 12, marginTop: 8, lineHeight: 1.4 }}>
+        Modo de testes: use <strong>admin</strong> no nome do professor e a unidade do piloto para acesso sem filtro por professor.
       </p>
 
       <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
