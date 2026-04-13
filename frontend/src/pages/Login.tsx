@@ -7,8 +7,6 @@ type ApiResponse<T = any> = { data: T };
 interface TeacherProfile {
   name: string;
   unit: string;
-  email: string;
-  whatsapp: string;
 }
 
 const expectedUnitName = String(import.meta.env.VITE_UNIT_NAME || "").trim();
@@ -33,8 +31,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [profile, setProfile] = useState<TeacherProfile>({
     name: "",
     unit: "",
-    email: "",
-    whatsapp: "",
   });
   const [rememberProfile, setRememberProfile] = useState(true);
   const [file, setFile] = useState<File | null>(null);
@@ -44,6 +40,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
   const [quickProfessors, setQuickProfessors] = useState<string[]>([]);
+  const [showQuickAccess, setShowQuickAccess] = useState(false);
 
   const importTimestampStorageKey = "last_import_at";
 
@@ -82,8 +79,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         setProfile({
           name: String(parsed?.name || ""),
           unit: String(parsed?.unit || ""),
-          email: String(parsed?.email || ""),
-          whatsapp: String(parsed?.whatsapp || ""),
         });
         setRememberProfile(true);
       }
@@ -206,11 +201,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       }
 
       const normalizedProfile = {
-        ...profile,
         name: String(profile.name || "").trim(),
         unit: expectedUnitName || String(profile.unit || "").trim(),
-        email: String(profile.email || "").trim(),
-        whatsapp: String(profile.whatsapp || "").trim(),
       };
 
       setStatus("Carregando dados...");
@@ -256,8 +248,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     const normalizedProfile = {
       name: normalizedName,
       unit: unitForQuickLogin,
-      email: String(profile.email || "").trim(),
-      whatsapp: String(profile.whatsapp || "").trim(),
     };
 
     try {
@@ -289,7 +279,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         fontFamily: "sans-serif",
       }}
     >
-      <h2 style={{ fontSize: 22, lineHeight: 1.25 }}>Cadastro Inicial - Importacao de Dados</h2>
+      <h2 style={{ fontSize: 22, lineHeight: 1.25 }}>Login / Importar dados</h2>
       <p style={{ color: "#666", fontSize: 12, marginTop: 8, lineHeight: 1.4 }}>
         Backend import: {backendOnline ? "online" : "offline"} (porta 8001)
       </p>
@@ -298,7 +288,30 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
 
-      {quickProfessors.length > 0 && (
+      <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => setShowQuickAccess((prev) => !prev)}
+          style={{
+            padding: "8px 12px",
+            border: "1px solid #93c5fd",
+            borderRadius: 999,
+            background: showQuickAccess ? "#dbeafe" : "#eff6ff",
+            color: "#1d4ed8",
+            cursor: loading ? "not-allowed" : "pointer",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          Cadastro / Primeiro Login
+        </button>
+        <span style={{ color: "#666", fontSize: 12 }}>
+          {showQuickAccess ? "Atalho rápido aberto" : "Use o atalho para entrar com um professor já cadastrado."}
+        </span>
+      </div>
+
+      {showQuickAccess && quickProfessors.length > 0 && (
         <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
           <div style={{ fontSize: 12, color: "#666" }}>Login rápido por professor cadastrado:</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -347,25 +360,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
               Unidade oficial deste ambiente{envName ? ` (${envName})` : ""}: <strong>{expectedUnitName}</strong>
             </span>
           )}
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontWeight: "bold", marginBottom: 4 }}>Email</span>
-          <input
-            type="email"
-            value={profile.email}
-            onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))}
-            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
-          />
-        </label>
-
-        <label style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontWeight: "bold", marginBottom: 4 }}>Whatsapp</span>
-          <input
-            value={profile.whatsapp}
-            onChange={(e) => setProfile((prev) => ({ ...prev, whatsapp: e.target.value }))}
-            style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
-          />
         </label>
 
         <label style={{ display: "flex", flexDirection: "column" }}>
