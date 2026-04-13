@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { execSync } from 'node:child_process'
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 const resolveVersionFromCommitSubject = () => {
   try {
     const subject = execSync('git log -1 --pretty=%s', { stdio: ['ignore', 'pipe', 'ignore'] })
@@ -45,7 +47,7 @@ const resolveBuildVersion = () => {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), cloudflare()],
   define: {
     __APP_VERSION__: JSON.stringify(resolveBuildVersion()),
   },
