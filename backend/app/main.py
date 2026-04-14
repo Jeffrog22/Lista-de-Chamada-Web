@@ -4229,6 +4229,27 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 justificativas=just,
                 frequencia=freq,
             ))
+
+        # ensure current active level is represented even when there are no attendance records yet in that level
+        if current_nivel:
+            existing_level_names = {
+                _normalize_text(str(entry.nivel or ""))
+                for entry in levels_out
+                if str(entry.nivel or "").strip()
+            }
+            if _normalize_text(current_nivel) not in existing_level_names:
+                levels_out.append(LevelHistoryOut(
+                    nivel=current_nivel,
+                    firstDate=None,
+                    lastDate=None,
+                    days=0,
+                    presencas=0,
+                    faltas=0,
+                    justificativas=0,
+                    frequencia=0.0,
+                ))
+
+        levels_out.sort(key=lambda lvl: (lvl.lastDate or "", lvl.firstDate or ""), reverse=True)
         out.append(StudentStatisticsOut(
             id=None,
             nome=_to_proper_case(st.get("nome") or key),

@@ -16,26 +16,7 @@ type ApiResponse<T = any> = { data: T };
 type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | "reports" | "vacancies";
 type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
-const zoomStorageKey = "appZoomLevel";
 const focusViewportStorageKey = "focusViewportMode";
-const MIN_ZOOM = 0.7;
-const MAX_ZOOM = 1.8;
-const ZOOM_STEP = 0.05;
-
-const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
-
-const readInitialZoom = () => {
-  try {
-    const raw = localStorage.getItem(zoomStorageKey);
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      return clampZoom(parsed);
-    }
-  } catch {
-    // ignore
-  }
-  return 1;
-};
 
 const readInitialFocusViewportMode = () => {
   try {
@@ -87,26 +68,7 @@ export default function App() {
   });
   const sidebarTouchStartX = useRef<number | null>(null);
   const sidebarTouchCurrentX = useRef<number | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(readInitialZoom);
   const [focusViewportMode, setFocusViewportMode] = useState<boolean>(readInitialFocusViewportMode);
-  const pinchStartDistanceRef = useRef<number | null>(null);
-  const pinchStartZoomRef = useRef<number>(1);
-
-  const updateZoomLevel = (next: number) => {
-    const clamped = clampZoom(next);
-    setZoomLevel(clamped);
-  };
-
-  const stepZoom = (delta: number) => {
-    setZoomLevel((prev) => clampZoom(prev + delta));
-  };
-
-  const getTouchDistance = (touches: TouchList) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.hypot(dx, dy);
-  };
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -242,23 +204,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.body.style.zoom = String(zoomLevel);
-    const zoomCompensation = zoomLevel > 0 ? 100 / zoomLevel : 100;
-    document.body.style.minHeight = `${zoomCompensation}%`;
-    document.body.style.width = `${zoomCompensation}%`;
-    try {
-      localStorage.setItem(zoomStorageKey, String(zoomLevel));
-    } catch {
-      // ignore
-    }
-    return () => {
-      document.body.style.zoom = "1";
-      document.body.style.minHeight = "100%";
-      document.body.style.width = "100%";
-    };
-  }, [zoomLevel]);
-
-  useEffect(() => {
     try {
       localStorage.setItem(focusViewportStorageKey, focusViewportMode ? "1" : "0");
     } catch {
@@ -277,26 +222,10 @@ export default function App() {
       return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
     };
 
-    const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey) return;
-      event.preventDefault();
-      const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      stepZoom(delta);
-    };
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
 
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        stepZoom(ZOOM_STEP);
-      } else if (event.key === "ArrowDown") {
-        event.preventDefault();
-        stepZoom(-ZOOM_STEP);
-      } else if (event.ctrlKey && (event.key === "0" || event.key === "Numpad0")) {
-        event.preventDefault();
-        updateZoomLevel(1);
-      } else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "f") {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "f") {
         event.preventDefault();
         setFocusViewportMode((prev) => !prev);
       } else if (focusViewportMode && event.key === "Escape") {
@@ -305,45 +234,12 @@ export default function App() {
       }
     };
 
-    const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 2) return;
-      pinchStartDistanceRef.current = getTouchDistance(event.touches);
-      pinchStartZoomRef.current = zoomLevel;
-    };
-
-    const onTouchMove = (event: TouchEvent) => {
-      if (event.touches.length !== 2) return;
-      const startDistance = pinchStartDistanceRef.current;
-      if (!startDistance) return;
-      event.preventDefault();
-      const currentDistance = getTouchDistance(event.touches);
-      if (!currentDistance) return;
-      const ratio = currentDistance / startDistance;
-      updateZoomLevel(pinchStartZoomRef.current * ratio);
-    };
-
-    const onTouchEnd = () => {
-      if (pinchStartDistanceRef.current !== null) {
-        pinchStartDistanceRef.current = null;
-      }
-    };
-
-    window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd);
-    window.addEventListener("touchcancel", onTouchEnd);
 
     return () => {
-      window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [zoomLevel, focusViewportMode]);
+  }, [focusViewportMode]);
 
   const formatImportDate = (value?: string | null) => {
     if (!value) return "-";
