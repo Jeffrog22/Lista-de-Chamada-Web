@@ -1541,10 +1541,10 @@ export const Students: React.FC = () => {
             }}
             style={{
               width: "100%",
-              padding: "12px 36px 12px 12px",
+              padding: "10px 34px 10px 10px",
               border: "1px solid #ddd",
               borderRadius: "8px",
-              fontSize: "14px",
+              fontSize: "13px",
             }}
           />
           {searchTerm && (
@@ -1621,7 +1621,7 @@ export const Students: React.FC = () => {
           <thead>
             <tr style={{ background: "#f4f4f4", color: "#333", borderBottom: "2px solid #ddd" }}>
               {selectionMode && (
-                <th style={{ padding: "12px", textAlign: "center", width: "44px" }}>
+                <th style={{ padding: "8px", textAlign: "center", width: "40px" }}>
                   <input
                     type="checkbox"
                     checked={allPendingSelected}
@@ -1633,31 +1633,31 @@ export const Students: React.FC = () => {
               )}
               <th
                 onClick={() => handleSort("nome")}
-                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+                style={{ padding: "8px", textAlign: "left", cursor: "pointer" }}
               >
                 Nome{getSortIndicator("nome")}
               </th>
               <th
                 onClick={() => handleSort("nivel")}
-                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+                style={{ padding: "8px", textAlign: "left", cursor: "pointer" }}
               >
                 Nível{getSortIndicator("nivel")}
               </th>
               <th
                 onClick={() => handleSort("idade")}
-                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", width: "56px", whiteSpace: "nowrap" }}
+                style={{ padding: "8px 6px", textAlign: "center", cursor: "pointer", width: "52px", whiteSpace: "nowrap" }}
               >
                 Idade{getSortIndicator("idade")}
               </th>
               <th
                 onClick={() => handleSort("categoria")}
-                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+                style={{ padding: "8px", textAlign: "left", cursor: "pointer" }}
               >
                 Categoria{getSortIndicator("categoria")}
               </th>
               <th
                 onClick={() => handleSort("turma")}
-                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", whiteSpace: "nowrap", width: "118px" }}
+                style={{ padding: "8px 6px", textAlign: "center", cursor: "pointer", whiteSpace: "nowrap", width: "112px" }}
               >
                 Turma{getSortIndicator("turma")}
               </th>
@@ -1665,22 +1665,22 @@ export const Students: React.FC = () => {
                 onClick={() => {
                   handleSort("horario");
                 }}
-                style={{ padding: "10px 8px", textAlign: "center", cursor: "pointer", position: "relative", width: "70px", whiteSpace: "nowrap" }}
+                style={{ padding: "8px 6px", textAlign: "center", cursor: "pointer", position: "relative", width: "66px", whiteSpace: "nowrap" }}
               >
                 Horário{getSortIndicator("horario")}
               </th>
               <th
                 onClick={() => handleSort("professor")}
-                style={{ padding: "12px", textAlign: "left", cursor: "pointer" }}
+                style={{ padding: "8px", textAlign: "left", cursor: "pointer" }}
               >
                 Professor{getSortIndicator("professor")}
               </th>
-              <th style={{ padding: "12px", textAlign: "center" }}>{selectionMode ? "Selecionar" : "Ações"}</th>
+              <th style={{ padding: "8px", textAlign: "center" }}>{selectionMode ? "Selecionar" : "Ações"}</th>
             </tr>
             {/* filtro acumulativo */}
             <tr className="filter-row">
-              {selectionMode && <th style={{ padding: "8px" }}></th>}
-              <th style={{ padding: "8px" }}>
+              {selectionMode && <th style={{ padding: "6px" }}></th>}
+              <th style={{ padding: "6px" }}>
                 <div
                   style={{
                     fontSize: "12px",
@@ -1694,11 +1694,11 @@ export const Students: React.FC = () => {
                   Total: {displayedStudents.length}
                 </div>
               </th>
-              <th style={{ padding: "8px" }}>
+              <th style={{ padding: "6px" }}>
                 <select
                   value={filters.nivel}
                   onChange={(e) => setFilters((f) => ({ ...f, nivel: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
+                  style={{ width: "100%", padding: "3px" }}
                 >
                   <option value="">Todos</option>
                   {nivelOptions.map((n) => (
@@ -1706,12 +1706,12 @@ export const Students: React.FC = () => {
                   ))}
                 </select>
               </th>
-              <th style={{ padding: "8px" }}></th>
-              <th style={{ padding: "8px" }}>
+              <th style={{ padding: "6px" }}></th>
+              <th style={{ padding: "6px" }}>
                 <select
                   value={filters.categoria}
                   onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
+                  style={{ width: "100%", padding: "3px" }}
                 >
                   <option value="">Todos</option>
                   {categoriaOptions.map((c) => (
@@ -1719,11 +1719,11 @@ export const Students: React.FC = () => {
                   ))}
                 </select>
               </th>
-              <th style={{ padding: "8px" }}>
+              <th style={{ padding: "6px" }}>
                 <select
                   value={filters.turma}
                   onChange={(e) => setFilters((f) => ({ ...f, turma: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
+                  style={{ width: "100%", padding: "3px" }}
                 >
                   <option value="">Todos</option>
                   {turmaOptions.map((t) => (
@@ -1731,11 +1731,11 @@ export const Students: React.FC = () => {
                   ))}
                 </select>
               </th>
-              <th style={{ padding: "8px" }}>
+              <th style={{ padding: "6px" }}>
                 <select
                   value={filters.horario}
                   onChange={(e) => setFilters((f) => ({ ...f, horario: e.target.value }))}
-                  style={{ width: "100%", padding: "4px" }}
+                  style={{ width: "100%", padding: "3px" }}
                 >
                   <option value="">Todos</option>
                   {horarioOptions.map((h) => (
@@ -1751,7 +1751,7 @@ export const Students: React.FC = () => {
             {displayedStudents.map((student, idx) => (
               <tr key={student.id} style={{ borderBottom: "1px solid #eee", background: idx % 2 === 0 ? "#fff" : "#f9f9f9" }}>
                 {selectionMode && (
-                  <td style={{ padding: "10px 6px", textAlign: "center" }}>
+                  <td style={{ padding: "7px 6px", textAlign: "center" }}>
                     <input
                       type="checkbox"
                       checked={selectedPendingIds.includes(String(student.id))}
@@ -1762,7 +1762,7 @@ export const Students: React.FC = () => {
                   </td>
                 )}
                 <td 
-                  style={{ padding: "10px 8px", fontWeight: 500, cursor: allocationTarget ? "pointer" : "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
+                  style={{ padding: "7px 8px", fontWeight: 500, cursor: allocationTarget ? "pointer" : "pointer", color: "#2c3e50", whiteSpace: "nowrap" }}
                   onClick={() => {
                     if (selectionMode) {
                       togglePendingSelection(String(student.id));
@@ -1786,10 +1786,10 @@ export const Students: React.FC = () => {
                     {getDisplayStudentName(student)}
                   </span>
                 </td>
-                <td style={{ padding: "12px" }}>{student.nivel}</td>
-                <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{student.idade}</td>
-                <td style={{ padding: "12px" }}>{student.categoria}</td>
-                <td style={{ padding: "10px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
+                <td style={{ padding: "7px 8px" }}>{student.nivel}</td>
+                <td style={{ padding: "7px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{student.idade}</td>
+                <td style={{ padding: "7px 8px" }}>{student.categoria}</td>
+                <td style={{ padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
                   {getTurmaDisplayLabel(student) ? (
                     <span
                       style={{
@@ -1823,9 +1823,9 @@ export const Students: React.FC = () => {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: "10px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
-                <td style={{ padding: "12px" }}>{student.professor}</td>
-                <td style={{ padding: "10px 8px", textAlign: "center", display: "flex", gap: "6px", justifyContent: "center" }}>
+                <td style={{ padding: "7px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{formatHorario(student.horario)}</td>
+                <td style={{ padding: "7px 8px" }}>{student.professor}</td>
+                <td style={{ padding: "7px 8px", textAlign: "center", display: "flex", gap: "4px", justifyContent: "center" }}>
                   {selectionMode ? null : (
                     <>
                       {getTurmaDisplayLabel(student) ? (
@@ -1836,10 +1836,10 @@ export const Students: React.FC = () => {
                             background: "#28a745",
                             color: "white",
                             border: "none",
-                            padding: "4px 8px",
+                            padding: "3px 7px",
                             borderRadius: "6px",
                             cursor: "pointer",
-                            fontSize: "11px",
+                            fontSize: "10px",
                             lineHeight: 1.1,
                             whiteSpace: "nowrap",
                           }}
@@ -1854,10 +1854,10 @@ export const Students: React.FC = () => {
                             background: "#fd7e14",
                             color: "white",
                             border: "none",
-                            padding: "4px 8px",
+                            padding: "3px 7px",
                             borderRadius: "6px",
                             cursor: "pointer",
-                            fontSize: "11px",
+                            fontSize: "10px",
                             lineHeight: 1.1,
                             whiteSpace: "nowrap",
                           }}
@@ -1872,10 +1872,10 @@ export const Students: React.FC = () => {
                           background: "#dc3545",
                           color: "white",
                           border: "none",
-                          padding: "4px 8px",
+                          padding: "3px 7px",
                           borderRadius: "6px",
                           cursor: "pointer",
-                          fontSize: "11px",
+                          fontSize: "10px",
                           lineHeight: 1.1,
                         }}
                       >
