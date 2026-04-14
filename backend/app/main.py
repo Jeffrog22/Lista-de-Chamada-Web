@@ -4019,6 +4019,10 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         candidate = {
             "nivel": nivel_raw,
             "student_id": int(getattr(st, "id", 0) or 0),
+            "class_id": int(getattr(st, "class_id", 0) or 0),
+            "dias_semana": str(getattr(cls, "dias_semana", "") or "") if cls else "",
+            "turma_label": str(getattr(cls, "turma_label", "") or "") if cls else "",
+            "codigo": str(getattr(cls, "codigo", "") or "") if cls else "",
             "nome": _to_proper_case(nome_raw),
         }
         existing = active_level_by_name.get(name_key)
@@ -4038,6 +4042,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     items = sorted(items, key=lambda item: _saved_at_sort_key((item or {}).get("saved_at")))
 
     today = datetime.utcnow().date()
+    allowed_days_map = _load_allowed_schedule_days(today)
 
     students: Dict[str, Dict[str, Any]] = {}
 
@@ -4209,6 +4214,36 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 current_nivel = candidates[0][0]
                 if current_nivel == "(sem-nivel)":
                     current_nivel = None
+
+        def _find_level_values(level_name: str) -> Optional[Dict[str, Any]]:
+            if not level_name:
+                return None
+            exact = st.get("per_level", {}).get(level_name)
+            if exact:
+                return exact
+            normalized_target = _normalize_text(level_name)
+            for stored_level_name, stored_values in st.get("per_level", {}).items():
+                if _normalize_text(stored_level_name) == normalized_target:
+                    return stored_values
+            return None
+
+        def _schedule_group_from_active_entry(entry: Dict[str, Any]) -> str:
+            dias_semana = _normalize_text_fold(str(entry.get("dias_semana") or ""))
+            if ("terca" in dias_semana and "quinta" in dias_semana) or "tq" in dias_semana:
+                return "tq"
+            if ("quarta" in dias_semana and "sexta" in dias_semana) or "qs" in dias_semana:
+                return "qs"
+            return _infer_schedule_group(str(entry.get("turma_label") or ""), str(entry.get("codigo") or ""))
+
+        def _count_planned_days(entry: Dict[str, Any], start_date: date, end_date: date) -> int:
+            if not start_date or not end_date or start_date > end_date:
+                return 0
+            group = _schedule_group_from_active_entry(entry)
+            if group not in {"tq", "qs"}:
+                return 0
+            allowed_days = allowed_days_map.get(group, set())
+            return sum(1 for day_key in allowed_days if start_date.isoformat() <= day_key <= end_date.isoformat())
+
         # build levels array
         levels_out: List[LevelHistoryOut] = []
         for lvl_name, vals in st.get("per_level", {}).items():
@@ -4234,24 +4269,60 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 frequencia=freq,
             ))
 
-        # ensure current active level is represented even when there are no attendance records yet in that level
         if current_nivel:
-            existing_level_names = {
-                _normalize_text(str(entry.nivel or ""))
-                for entry in levels_out
-                if str(entry.nivel or "").strip()
-            }
-            if _normalize_text(current_nivel) not in existing_level_names:
-                levels_out.append(LevelHistoryOut(
-                    nivel=current_nivel,
-                    firstDate=None,
-                    lastDate=None,
-                    days=0,
-                    presencas=0,
-                    faltas=0,
-                    justificativas=0,
-                    frequencia=0.0,
-                ))
+            active_entry = active_level_by_name.get(key) or {}
+            current_key = _normalize_text(current_nivel)
+            current_first = None
+            current_last = None
+            current_pres = 0
+            current_falt = 0
+            current_just = 0
+            current_total_days = 0
+
+            current_level_vals = _find_level_values(current_nivel)
+            if current_level_vals:
+                current_first = current_level_vals.get("first")
+                current_last = current_level_vals.get("last") or end_date
+                current_pres = int(current_level_vals.get("presencas") or 0)
+                current_falt = int(current_level_vals.get("faltas") or 0)
+                current_just = int(current_level_vals.get("justificativas") or 0)
+                current_total_days = max(
+                    _count_planned_days(active_entry, current_first or end_date, current_last or end_date),
+                    current_pres + current_falt + current_just,
+                )
+            else:
+                previous_last_dates = [vals.get("last") for lvl, vals in st.get("per_level", {}).items() if _normalize_text(lvl) != current_key and vals.get("last")]
+                inferred_start = (max(previous_last_dates) + timedelta(days=1)) if previous_last_dates else first
+                current_first = inferred_start
+                current_last = end_date
+                current_total_days = _count_planned_days(active_entry, inferred_start, end_date)
+
+            if current_total_days < 0:
+                current_total_days = 0
+
+            inferred_current_falt = max(0, current_total_days - current_pres - current_just)
+            current_falt = max(current_falt, inferred_current_falt)
+
+            current_frequency = round(((current_pres + current_just) / current_total_days) * 100, 1) if current_total_days else 0.0
+            current_entry = LevelHistoryOut(
+                nivel=current_nivel,
+                firstDate=current_first.isoformat() if current_first else None,
+                lastDate=current_last.isoformat() if current_last else None,
+                days=current_total_days,
+                presencas=current_pres,
+                faltas=current_falt,
+                justificativas=current_just,
+                frequencia=current_frequency,
+            )
+
+            replaced = False
+            for idx, entry in enumerate(levels_out):
+                if _normalize_text(entry.nivel or "") == current_key:
+                    levels_out[idx] = current_entry
+                    replaced = True
+                    break
+            if not replaced:
+                levels_out.append(current_entry)
 
         levels_out.sort(key=lambda lvl: (lvl.lastDate or "", lvl.firstDate or ""), reverse=True)
         out.append(StudentStatisticsOut(
