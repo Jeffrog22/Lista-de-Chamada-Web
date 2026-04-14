@@ -6,8 +6,7 @@ import { Reports } from "./pages/Reports";
 import { Vacancies } from "./pages/Vacancies";
 import { Exclusions } from "./pages/Exclusions";
 import { Login } from "./pages/Login";
-import { clearTransferOverrides, getBootstrap, getImportDataStatus, getMaintenanceDiagnostics, importDataFile } from "./api";
-import { mapBootstrapForStorage } from "./utils/bootstrapMapping";
+import { clearTransferOverrides, getImportDataStatus, getMaintenanceDiagnostics } from "./api";
 import "./App.simple.css";
 
 declare const __APP_VERSION__: string;
@@ -79,8 +78,6 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [teacherName, setTeacherName] = useState<string>("");
   const [teacherUnit, setTeacherUnit] = useState<string>("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
   const [lastImportInfo, setLastImportInfo] = useState<any>(null);
   const [maintenanceDiag, setMaintenanceDiag] = useState<any>(null);
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
@@ -408,86 +405,6 @@ export default function App() {
     setCurrentView("main");
   };
 
-  const calculateAge = (dateString: string) => {
-    if (!dateString) return 0;
-    const [day, month, year] = dateString.split("/").map(Number);
-    const birthDate = new Date(year, month - 1, day);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return Number.isNaN(age) ? 0 : age;
-  };
-
-  const applyBootstrap = (data: any) => {
-    const { mappedStudents, mappedClasses } = mapBootstrapForStorage(data, calculateAge);
-
-    if (mappedStudents.length > 0) {
-      localStorage.setItem("activeStudents", JSON.stringify(mappedStudents));
-    }
-    if (mappedClasses.length > 0) {
-      localStorage.setItem("activeClasses", JSON.stringify(mappedClasses));
-    }
-  };
-
-  const handleQuickUpdate = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-      fileInputRef.current.click();
-    }
-  };
-
-  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
-
-    const februaryHint = /(^|[^a-z])(fev|fevereiro|feb|february)([^a-z]|$)|2026[-_]?02|02[-_]?2026/i.test(selected.name);
-    let applyOverrides = true;
-    if (februaryHint) {
-      const keepOriginalGroups = window.confirm(
-        "Arquivo parece ser de fevereiro. Deseja importar como baseline sem aplicar transferências (overrides)?"
-      );
-      applyOverrides = !keepOriginalGroups ? true : false;
-    }
-
-    setUpdateStatus("Enviando arquivo...");
-    try {
-      try {
-        await importDataFile(selected, { applyOverrides });
-      } catch (firstErr: any) {
-        const firstDetail = String(firstErr?.response?.data?.detail || "");
-        const shouldRetryWithoutOverrides = applyOverrides && /autoflush|integrityerror|unique/i.test(firstDetail);
-        if (!shouldRetryWithoutOverrides) {
-          throw firstErr;
-        }
-
-        setUpdateStatus("Reprocessando sem transferencias...");
-        await importDataFile(selected, { applyOverrides: false });
-      }
-
-      const optimisticDate = saveLastImportAtFallback();
-      setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
-      setUpdateStatus("Carregando dados...");
-      const res = await getBootstrap();
-      applyBootstrap(res.data);
-      try {
-        const statusRes = await getImportDataStatus();
-        const backendStatus = statusRes.data || {};
-        const persistedDate = resolveLastImportAt(backendStatus) || optimisticDate;
-        setLastImportInfo({ ...backendStatus, last_import_at: persistedDate });
-      } catch {
-        setLastImportInfo((prev: any) => ({ ...(prev || {}), last_import_at: optimisticDate }));
-      }
-      setUpdateStatus("Base atualizada.");
-      window.setTimeout(() => setUpdateStatus(null), 2000);
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Falha ao atualizar a base.";
-      setUpdateStatus(detail);
-    }
-  };
-
   const toggleSidebar = () => {
     if (focusViewportMode) return;
     setSidebarOpen(!sidebarOpen);
@@ -576,9 +493,6 @@ export default function App() {
             {teacherName ? `Conectado: ${formatDisplayName(teacherName)}` : "Conectado"}
             {teacherUnit ? ` - Unidade validada: ${teacherUnit}` : ""}
           </span>
-          {updateStatus && (
-            <span className="user-info">{updateStatus}</span>
-          )}
           <span className="user-info">
             Atualizado em: {formatImportDate(lastImportInfo?.last_import_at)}
           </span>
@@ -587,16 +501,6 @@ export default function App() {
               diag b:{maintenanceDiag?.bootstrap?.students ?? "-"} c:{maintenanceDiag?.bootstrap?.classes ?? "-"} fev:{(maintenanceDiag?.feb2026?.attendance ?? 0) + (maintenanceDiag?.feb2026?.justifications ?? 0) + (maintenanceDiag?.feb2026?.exclusions ?? 0)}
             </span>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            style={{ display: "none" }}
-            onChange={onFileSelected}
-          />
-          <button className="logout-button" onClick={handleQuickUpdate}>
-            Atualizar Base
-          </button>
           <button className="logout-button" onClick={onLogout}>
             Sair
           </button>

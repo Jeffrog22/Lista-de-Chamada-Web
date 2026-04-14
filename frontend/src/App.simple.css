@@ -316,12 +316,18 @@ body, html {
 
 .focus-viewport-mode .main-layout {
   height: 100vh;
+  background: #ffffff;
 }
 
 .focus-viewport-mode .content-area {
   width: 100%;
   height: 100vh;
   padding: 10px;
+  background: #ffffff;
+}
+
+.focus-viewport-mode .app-container {
+  background: #ffffff;
 }
 
 .focus-exit-button {

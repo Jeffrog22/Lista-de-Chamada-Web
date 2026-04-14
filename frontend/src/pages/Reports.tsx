@@ -1559,6 +1559,8 @@ export const Reports: React.FC = () => {
   const [statistics, setStatistics] = useState<StudentStatistics[]>([]);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsFilter, setStatsFilter] = useState("");
+  const [statsStatusFilter, setStatsStatusFilter] = useState<"todos" | "ativos" | "excluidos">("todos");
+  const [statsSortBy, setStatsSortBy] = useState<"retention_desc" | "retention_asc" | "freq_desc" | "name_asc">("retention_desc");
   const [expandedStats, setExpandedStats] = useState<Record<string, boolean>>({});
 
   const formatDate = (iso?: string | null) => {
@@ -1589,6 +1591,88 @@ export const Reports: React.FC = () => {
       loadStats();
     }
   }, [activeTab]);
+
+  const statisticsView = useMemo(() => {
+    const toNumber = (value: unknown) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const normalizedSearch = normalizeText(statsFilter || "");
+
+    const mapped = (statistics || []).map((student) => {
+      const levels = Array.isArray(student.levels) ? student.levels : [];
+      const totals = levels.reduce(
+        (acc, lvl) => {
+          acc.presencas += toNumber(lvl?.presencas);
+          acc.faltas += toNumber(lvl?.faltas);
+          acc.justificativas += toNumber(lvl?.justificativas);
+          return acc;
+        },
+        { presencas: 0, faltas: 0, justificativas: 0 }
+      );
+
+      const totalRegistros = totals.presencas + totals.faltas + totals.justificativas;
+      const frequenciaCalculada =
+        totalRegistros > 0
+          ? Number((((totals.presencas + totals.justificativas) / totalRegistros) * 100).toFixed(1))
+          : 0;
+
+      return {
+        ...student,
+        levels,
+        isExcluded: Boolean(student.exclusionDate),
+        totals,
+        totalRegistros,
+        frequenciaCalculada,
+      };
+    });
+
+    const summarySource = mapped;
+    const summary = {
+      total: summarySource.length,
+      ativos: summarySource.filter((s) => !s.isExcluded).length,
+      excluidos: summarySource.filter((s) => s.isExcluded).length,
+      retencaoMedia:
+        summarySource.length > 0
+          ? Math.round(summarySource.reduce((acc, s) => acc + toNumber(s.retentionDays), 0) / summarySource.length)
+          : 0,
+      frequenciaMedia:
+        summarySource.length > 0
+          ? Number(
+              (
+                summarySource.reduce((acc, s) => acc + toNumber(s.frequenciaCalculada), 0) /
+                summarySource.length
+              ).toFixed(1)
+            )
+          : 0,
+    };
+
+    let filtered = mapped.filter((student) => {
+      const matchName = !normalizedSearch || normalizeText(student.nome).includes(normalizedSearch);
+      const matchStatus =
+        statsStatusFilter === "todos" ||
+        (statsStatusFilter === "ativos" && !student.isExcluded) ||
+        (statsStatusFilter === "excluidos" && student.isExcluded);
+      return matchName && matchStatus;
+    });
+
+    filtered = filtered.sort((a, b) => {
+      if (statsSortBy === "retention_asc") {
+        return toNumber(a.retentionDays) - toNumber(b.retentionDays);
+      }
+      if (statsSortBy === "freq_desc") {
+        return toNumber(b.frequenciaCalculada) - toNumber(a.frequenciaCalculada);
+      }
+      if (statsSortBy === "name_asc") {
+        return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+      }
+      return toNumber(b.retentionDays) - toNumber(a.retentionDays);
+    });
+
+    return { summary, rows: filtered };
+  }, [statistics, statsFilter, statsStatusFilter, statsSortBy]);
+
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(getCurrentLocalDateKey());
   const [planningStore, setPlanningStore] = useState<PlanningStore>({ files: [] });
   const [planningBusy, setPlanningBusy] = useState(false);
@@ -4216,9 +4300,9 @@ export const Reports: React.FC = () => {
 
       {activeTab === "estatisticas" && (
         <div className="reports-section">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
             <h3 style={{ margin: 0 }}>Estatísticas — Retenção e Permanência por Nível</h3>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input
                 type="search"
                 placeholder="Filtrar por aluno..."
@@ -4226,6 +4310,52 @@ export const Reports: React.FC = () => {
                 onChange={(e) => setStatsFilter(e.target.value)}
                 style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd" }}
               />
+              <select
+                value={statsStatusFilter}
+                onChange={(e) => setStatsStatusFilter(e.target.value as "todos" | "ativos" | "excluidos")}
+                style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd" }}
+              >
+                <option value="todos">Todos</option>
+                <option value="ativos">Ativos</option>
+                <option value="excluidos">Excluídos</option>
+              </select>
+              <select
+                value={statsSortBy}
+                onChange={(e) =>
+                  setStatsSortBy(
+                    e.target.value as "retention_desc" | "retention_asc" | "freq_desc" | "name_asc"
+                  )
+                }
+                style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid #ddd" }}
+              >
+                <option value="retention_desc">Retenção: maior primeiro</option>
+                <option value="retention_asc">Retenção: menor primeiro</option>
+                <option value="freq_desc">Frequência: maior primeiro</option>
+                <option value="name_asc">Nome: A-Z</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, marginBottom: 12 }}>
+            <div className="report-card" style={{ padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Total de alunos</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{statisticsView.summary.total}</div>
+            </div>
+            <div className="report-card" style={{ padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Ativos</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#166534" }}>{statisticsView.summary.ativos}</div>
+            </div>
+            <div className="report-card" style={{ padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Excluídos</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: "#991b1b" }}>{statisticsView.summary.excluidos}</div>
+            </div>
+            <div className="report-card" style={{ padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Retenção média (dias)</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{statisticsView.summary.retencaoMedia}</div>
+            </div>
+            <div className="report-card" style={{ padding: "10px 12px" }}>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Frequência média</div>
+              <div style={{ fontSize: 24, fontWeight: 700 }}>{statisticsView.summary.frequenciaMedia}%</div>
             </div>
           </div>
 
@@ -4236,7 +4366,11 @@ export const Reports: React.FC = () => {
               <div className="reports-section placeholder">Sem dados de presença para calcular estatísticas.</div>
             )}
 
-            {!statsLoading && statistics.length > 0 && (
+            {!statsLoading && statistics.length > 0 && statisticsView.rows.length === 0 && (
+              <div className="reports-section placeholder">Nenhum aluno encontrado para os filtros aplicados.</div>
+            )}
+
+            {!statsLoading && statistics.length > 0 && statisticsView.rows.length > 0 && (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
@@ -4250,12 +4384,28 @@ export const Reports: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {statistics
-                      .filter((s) => normalizeText(s.nome).includes(normalizeText(statsFilter || "")))
-                      .map((s) => (
-                        <React.Fragment key={s.nome}>
+                    {statisticsView.rows.map((s) => {
+                      const rowKey = String(s.id || s.nome || "");
+                      return (
+                        <React.Fragment key={rowKey}>
                           <tr>
-                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.nome}</td>
+                            <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <span>{s.nome}</span>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    borderRadius: 999,
+                                    padding: "2px 8px",
+                                    background: s.isExcluded ? "#fee2e2" : "#dcfce7",
+                                    color: s.isExcluded ? "#991b1b" : "#166534",
+                                  }}
+                                >
+                                  {s.isExcluded ? "Excluído" : "Ativo"}
+                                </span>
+                              </div>
+                            </td>
                             <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{formatDate(s.firstPresence)}</td>
                             <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.exclusionDate ? formatDate(s.exclusionDate) : (s.lastPresence ? formatDate(s.lastPresence) : "-")}</td>
                             <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>{s.retentionDays}</td>
@@ -4263,13 +4413,13 @@ export const Reports: React.FC = () => {
                             <td style={{ padding: "10px 8px", borderBottom: "1px solid #fafafa" }}>
                               <button
                                 className="btn-small-success"
-                                onClick={() => setExpandedStats((prev) => ({ ...prev, [s.nome]: !prev[s.nome] }))}
+                                onClick={() => setExpandedStats((prev) => ({ ...prev, [rowKey]: !prev[rowKey] }))}
                               >
-                                {expandedStats[s.nome] ? "Ocultar" : "Ver"}
+                                {expandedStats[rowKey] ? "Ocultar" : "Ver"}
                               </button>
                             </td>
                           </tr>
-                          {expandedStats[s.nome] && (
+                          {expandedStats[rowKey] && (
                             <tr>
                               <td colSpan={6} style={{ padding: 12, background: "#fbfdff" }}>
                                 <strong>Histórico por nível</strong>
@@ -4290,7 +4440,7 @@ export const Reports: React.FC = () => {
                                       </thead>
                                       <tbody>
                                         {s.levels.map((lvl) => (
-                                          <tr key={`${s.nome}-${lvl.nivel}-${lvl.firstDate || "-"}`}>
+                                          <tr key={`${rowKey}-${lvl.nivel}-${lvl.firstDate || "-"}`}>
                                             <td style={{ padding: "6px 8px" }}>{lvl.nivel || "-"}</td>
                                             <td style={{ padding: "6px 8px" }}>{lvl.firstDate ? `${formatDate(lvl.firstDate)} → ${formatDate(lvl.lastDate)}` : "-"}</td>
                                             <td style={{ padding: "6px 8px" }}>{lvl.days}</td>
@@ -4308,7 +4458,8 @@ export const Reports: React.FC = () => {
                             </tr>
                           )}
                         </React.Fragment>
-                      ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

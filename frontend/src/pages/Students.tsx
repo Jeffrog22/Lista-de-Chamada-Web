@@ -1431,7 +1431,7 @@ export const Students: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: "20px", background: "white", borderRadius: "12px" }}>
+    <div style={{ padding: "20px", background: "white", borderRadius: "12px", minHeight: "100%" }}>
       {allocationTarget && (
         <div
           style={{
