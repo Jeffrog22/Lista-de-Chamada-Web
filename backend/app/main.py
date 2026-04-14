@@ -4002,8 +4002,16 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
     classes = session.exec(select(models.ImportClass)).all()
     class_by_code = {str(c.codigo or ""): c for c in classes}
-    class_by_label = {str(c.turma_label or ""): c for c in classes}
     class_by_label_norm = {_normalize_text_fold(c.turma_label or ""): c for c in classes if str(c.turma_label or "").strip()}
+    class_by_triple: Dict[Tuple[str, str, str], models.ImportClass] = {}
+    for c in classes:
+        triple_key = (
+            _normalize_text_fold(c.turma_label or ""),
+            _normalize_horario_key(c.horario or ""),
+            _normalize_text_fold(c.professor or ""),
+        )
+        if any(triple_key):
+            class_by_triple[triple_key] = c
 
     # map current active class level by student name from import tables (source of truth for current allocation)
     active_level_by_name: Dict[str, Dict[str, Any]] = {}
@@ -4013,7 +4021,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         nome_raw = str(getattr(st, "nome", "") or "").strip()
         if not nome_raw:
             continue
-        name_key = _normalize_text(nome_raw)
+        name_key = _normalize_text_fold(nome_raw)
         cls = class_by_id.get(int(st.class_id)) if getattr(st, "class_id", None) else None
         nivel_raw = str(getattr(cls, "nivel", "") or "").strip() if cls else ""
         candidate = {
@@ -4047,7 +4055,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     students: Dict[str, Dict[str, Any]] = {}
 
     def _ensure_student(name: str):
-        key = _normalize_text(name)
+        key = _normalize_text_fold(name)
         if key not in students:
             students[key] = {
                 "nome": _to_proper_case(name),
@@ -4071,10 +4079,15 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         # resolve nivel from import classes
         nivel = ""
         cls = None
-        if turma_codigo and turma_codigo in class_by_code:
+        class_triple_key = (
+            _normalize_text_fold(turma_label),
+            turma_horario,
+            turma_professor,
+        )
+        if class_triple_key in class_by_triple:
+            cls = class_by_triple.get(class_triple_key)
+        elif turma_codigo and turma_codigo in class_by_code:
             cls = class_by_code.get(turma_codigo)
-        elif turma_label and turma_label in class_by_label:
-            cls = class_by_label.get(turma_label)
         elif turma_label:
             cls = class_by_label_norm.get(_normalize_text_fold(turma_label))
         if cls:
