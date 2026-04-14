@@ -3,7 +3,7 @@ from sqlmodel import Session, select, func
 from app.database import create_db_and_tables, migrate_db, get_session, engine
 from app import crud, models
 from app.models import AttendanceLog, AcademicCalendarState, PoolLog, ExclusionRecord
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from contextlib import asynccontextmanager
 import os
 import json
@@ -4299,10 +4299,8 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 current_pres = int(current_level_vals.get("presencas") or 0)
                 current_falt = int(current_level_vals.get("faltas") or 0)
                 current_just = int(current_level_vals.get("justificativas") or 0)
-                current_total_days = max(
-                    _count_planned_days(active_entry, current_first or end_date, current_last or end_date),
-                    current_pres + current_falt + current_just,
-                )
+                # Presence/absence metrics must come from recorded attendance only.
+                current_total_days = current_pres + current_falt + current_just
             else:
                 previous_last_dates = [vals.get("last") for lvl, vals in st.get("per_level", {}).items() if _normalize_text(lvl) != current_key and vals.get("last")]
                 inferred_start = (max(previous_last_dates) + timedelta(days=1)) if previous_last_dates else first
@@ -4312,9 +4310,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
             if current_total_days < 0:
                 current_total_days = 0
-
-            inferred_current_falt = max(0, current_total_days - current_pres - current_just)
-            current_falt = max(current_falt, inferred_current_falt)
 
             current_frequency = round(((current_pres + current_just) / current_total_days) * 100, 1) if current_total_days else 0.0
             current_entry = LevelHistoryOut(
