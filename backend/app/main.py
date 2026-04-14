@@ -4338,6 +4338,32 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             current_just = 0
             current_total_days = 0
 
+            def _aggregate_all_levels() -> Dict[str, Any]:
+                agg_first = None
+                agg_last = None
+                agg_pres = 0
+                agg_falt = 0
+                agg_just = 0
+                for lvl_name, vals in st.get("per_level", {}).items():
+                    if lvl_name == "(sem-nivel)":
+                        continue
+                    lvl_first = vals.get("first")
+                    lvl_last = vals.get("last")
+                    if lvl_first and (agg_first is None or lvl_first < agg_first):
+                        agg_first = lvl_first
+                    if lvl_last and (agg_last is None or lvl_last > agg_last):
+                        agg_last = lvl_last
+                    agg_pres += int(vals.get("presencas") or 0)
+                    agg_falt += int(vals.get("faltas") or 0)
+                    agg_just += int(vals.get("justificativas") or 0)
+                return {
+                    "first": agg_first,
+                    "last": agg_last,
+                    "presencas": agg_pres,
+                    "faltas": agg_falt,
+                    "justificativas": agg_just,
+                }
+
             current_level_vals = _find_level_values(current_nivel)
             if current_level_vals:
                 current_first = current_level_vals.get("first")
@@ -4346,6 +4372,15 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 current_falt = int(current_level_vals.get("faltas") or 0)
                 current_just = int(current_level_vals.get("justificativas") or 0)
                 # Presence/absence metrics must come from recorded attendance only.
+                current_total_days = current_pres + current_falt + current_just
+
+            if current_total_days == 0:
+                aggregate_vals = _aggregate_all_levels()
+                current_first = aggregate_vals.get("first") or current_first or first
+                current_last = aggregate_vals.get("last") or current_last or end_date
+                current_pres = int(aggregate_vals.get("presencas") or 0)
+                current_falt = int(aggregate_vals.get("faltas") or 0)
+                current_just = int(aggregate_vals.get("justificativas") or 0)
                 current_total_days = current_pres + current_falt + current_just
             else:
                 previous_last_dates = [vals.get("last") for lvl, vals in st.get("per_level", {}).items() if _normalize_text(lvl) != current_key and vals.get("last")]
