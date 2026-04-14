@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getBootstrap, getImportDataStatus, importDataFile } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
@@ -44,6 +44,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
   const [quickProfessors, setQuickProfessors] = useState<string[]>([]);
+  const [adminInputsUnlocked, setAdminInputsUnlocked] = useState(false);
+  const mobileTapTimestampsRef = useRef<number[]>([]);
 
   const importTimestampStorageKey = "last_import_at";
 
@@ -88,6 +90,21 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       localStorage.setItem(quickProfessorsStorageKey, JSON.stringify(nextList));
     } catch {
       // ignore storage errors
+    }
+  };
+
+  const canEditInputs = firstLoginMode || adminInputsUnlocked;
+
+  const handleContainerTap = () => {
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+
+    const now = Date.now();
+    const recent = [...mobileTapTimestampsRef.current, now].filter((ts) => now - ts <= 1200);
+    mobileTapTimestampsRef.current = recent;
+    if (recent.length >= 4) {
+      setAdminInputsUnlocked(true);
+      mobileTapTimestampsRef.current = [];
     }
   };
 
@@ -143,6 +160,19 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       });
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && String(event.key || "").toLowerCase() === "a") {
+        setAdminInputsUnlocked(true);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
   const handleRememberChange = (checked: boolean) => {
     setRememberProfile(checked);
     if (!checked) {
@@ -190,7 +220,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setError(null);
     setStatus(null);
 
-    if (!firstLoginMode) {
+    if (!canEditInputs) {
       setError("Desative o modo rápido e marque Cadastro / Primeiro Login para cadastrar novo professor.");
       return;
     }
@@ -325,6 +355,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         background: "#fff",
         fontFamily: "sans-serif",
       }}
+      onClick={handleContainerTap}
     >
       <h2 style={{ fontSize: 22, lineHeight: 1.25 }}>Login / Importar dados</h2>
       <p style={{ color: "#666", fontSize: 12, marginTop: 8, lineHeight: 1.4 }}>
@@ -374,7 +405,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.name}
             onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
-            disabled={loading || !firstLoginMode}
+            disabled={loading || !canEditInputs}
             style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
@@ -384,7 +415,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.unit}
             onChange={(e) => setProfile((prev) => ({ ...prev, unit: e.target.value }))}
-            disabled={loading || !firstLoginMode}
+            disabled={loading || !canEditInputs}
             style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
           {expectedUnitName && (
@@ -400,7 +431,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             type="file"
             accept=".csv"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
-            disabled={loading || !firstLoginMode}
+            disabled={loading || !canEditInputs}
             style={{ width: "100%" }}
           />
         </label>
@@ -426,7 +457,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
 
         <button
           type="submit"
-          disabled={loading || !firstLoginMode}
+          disabled={loading || !canEditInputs}
           style={{
             width: "100%",
             padding: 12,
