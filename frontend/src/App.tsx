@@ -18,6 +18,7 @@ type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | 
 type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
 const zoomStorageKey = "appZoomLevel";
+const focusViewportStorageKey = "focusViewportMode";
 const MIN_ZOOM = 0.7;
 const MAX_ZOOM = 1.8;
 const ZOOM_STEP = 0.05;
@@ -35,6 +36,14 @@ const readInitialZoom = () => {
     // ignore
   }
   return 1;
+};
+
+const readInitialFocusViewportMode = () => {
+  try {
+    return localStorage.getItem(focusViewportStorageKey) === "1";
+  } catch {
+    return false;
+  }
 };
 
 const getViewFromHash = (hash: string): ViewType => {
@@ -82,6 +91,7 @@ export default function App() {
   const sidebarTouchStartX = useRef<number | null>(null);
   const sidebarTouchCurrentX = useRef<number | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(readInitialZoom);
+  const [focusViewportMode, setFocusViewportMode] = useState<boolean>(readInitialFocusViewportMode);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef<number>(1);
 
@@ -247,6 +257,17 @@ export default function App() {
   }, [zoomLevel]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(focusViewportStorageKey, focusViewportMode ? "1" : "0");
+    } catch {
+      // ignore
+    }
+    if (focusViewportMode) {
+      setSidebarOpen(false);
+    }
+  }, [focusViewportMode]);
+
+  useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) => {
       if (!(target instanceof HTMLElement)) return false;
       const tag = target.tagName;
@@ -273,6 +294,12 @@ export default function App() {
       } else if (event.ctrlKey && (event.key === "0" || event.key === "Numpad0")) {
         event.preventDefault();
         updateZoomLevel(1);
+      } else if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setFocusViewportMode((prev) => !prev);
+      } else if (focusViewportMode && event.key === "Escape") {
+        event.preventDefault();
+        setFocusViewportMode(false);
       }
     };
 
@@ -314,7 +341,7 @@ export default function App() {
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [zoomLevel]);
+  }, [zoomLevel, focusViewportMode]);
 
   const formatImportDate = (value?: string | null) => {
     if (!value) return "-";
@@ -462,6 +489,7 @@ export default function App() {
   };
 
   const toggleSidebar = () => {
+    if (focusViewportMode) return;
     setSidebarOpen(!sidebarOpen);
   };
 
@@ -532,10 +560,10 @@ export default function App() {
     <div
       className={`app-container ${isMobileViewport ? "mobile-compact" : ""} ${
         isMobileViewport && currentView === "main" ? "mobile-main-menu" : ""
-      }`}
+      } ${focusViewportMode ? "focus-viewport-mode" : ""}`}
     >
       {/* HEADER */}
-      <header className="app-header">
+      {!focusViewportMode && <header className="app-header">
         <div className="header-left">
           <button className="menu-button" onClick={toggleSidebar}>
             ☰
@@ -572,8 +600,15 @@ export default function App() {
           <button className="logout-button" onClick={onLogout}>
             Sair
           </button>
+          <button
+            className="logout-button"
+            onClick={() => setFocusViewportMode(true)}
+            title="Usar tela toda (Ctrl+Alt+F)"
+          >
+            Tela toda
+          </button>
         </div>
-      </header>
+      </header>}
 
       {/* MAIN LAYOUT */}
       <div className="main-layout">
@@ -638,6 +673,16 @@ export default function App() {
 
         {/* CONTENT AREA */}
         <main className="content-area">
+          {focusViewportMode && (
+            <button
+              type="button"
+              className="focus-exit-button"
+              onClick={() => setFocusViewportMode(false)}
+              title="Sair da tela toda (Esc ou Ctrl+Alt+F)"
+            >
+              Sair tela toda
+            </button>
+          )}
           {currentView === "main" ? (
             isMobileViewport ? null : (
               <div className="welcome-screen">
