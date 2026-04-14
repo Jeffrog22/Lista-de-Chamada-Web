@@ -4365,13 +4365,30 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 }
 
             current_level_vals = _find_level_values(current_nivel)
-            if current_level_vals:
-                current_first = current_level_vals.get("first")
-                current_last = current_level_vals.get("last") or end_date
+            current_first = current_level_vals.get("first") if current_level_vals else None
+            current_last = current_level_vals.get("last") if current_level_vals else None
+
+            if current_first is None:
+                previous_last_dates = [vals.get("last") for lvl, vals in st.get("per_level", {}).items() if _normalize_text(lvl) != current_key and vals.get("last")]
+                current_first = (max(previous_last_dates) + timedelta(days=1)) if previous_last_dates else first
+
+            current_last = current_last or end_date
+
+            # Count all recorded events in the current period, regardless of the bucket that produced them.
+            period_entries = [
+                entry
+                for date_key, entry in st.get("attendance_by_date", {}).items()
+                if date_key and current_first and current_last and current_first.isoformat() <= date_key <= current_last.isoformat()
+            ]
+            current_pres = sum(1 for entry in period_entries if str(entry.get("status") or "") == "c")
+            current_falt = sum(1 for entry in period_entries if str(entry.get("status") or "") == "f")
+            current_just = sum(1 for entry in period_entries if str(entry.get("status") or "") == "j")
+            current_total_days = current_pres + current_falt + current_just
+
+            if current_total_days == 0 and current_level_vals:
                 current_pres = int(current_level_vals.get("presencas") or 0)
                 current_falt = int(current_level_vals.get("faltas") or 0)
                 current_just = int(current_level_vals.get("justificativas") or 0)
-                # Presence/absence metrics must come from recorded attendance only.
                 current_total_days = current_pres + current_falt + current_just
 
             if current_total_days == 0:
@@ -4382,12 +4399,6 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                 current_falt = int(aggregate_vals.get("faltas") or 0)
                 current_just = int(aggregate_vals.get("justificativas") or 0)
                 current_total_days = current_pres + current_falt + current_just
-            else:
-                previous_last_dates = [vals.get("last") for lvl, vals in st.get("per_level", {}).items() if _normalize_text(lvl) != current_key and vals.get("last")]
-                inferred_start = (max(previous_last_dates) + timedelta(days=1)) if previous_last_dates else first
-                current_first = inferred_start
-                current_last = end_date
-                current_total_days = _count_planned_days(active_entry, inferred_start, end_date)
 
             if current_total_days < 0:
                 current_total_days = 0
