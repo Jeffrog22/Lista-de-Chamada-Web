@@ -4328,8 +4328,8 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             current_just = 0
             current_total_days = 0
 
-            # Guardrail: minors should not keep stray "Adulto" buckets caused by ambiguous historical mapping.
-            if _is_minor(active_entry):
+            # Guardrail: if current level is not adult, merge stray "Adulto" buckets into current level.
+            if "adult" not in _normalize_text_fold(current_nivel):
                 adult_bucket_keys = [
                     lvl_name
                     for lvl_name in list(st.get("per_level", {}).keys())

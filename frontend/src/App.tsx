@@ -17,6 +17,7 @@ type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | 
 type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
 const focusViewportStorageKey = "focusViewportMode";
+const mobileZoomPercentStorageKey = "mobileZoomPercent";
 
 const readInitialFocusViewportMode = () => {
   try {
@@ -69,6 +70,14 @@ export default function App() {
   const sidebarTouchStartX = useRef<number | null>(null);
   const sidebarTouchCurrentX = useRef<number | null>(null);
   const [focusViewportMode, setFocusViewportMode] = useState<boolean>(readInitialFocusViewportMode);
+  const [mobileZoomPercent, setMobileZoomPercent] = useState<number>(() => {
+    try {
+      const raw = Number(localStorage.getItem(mobileZoomPercentStorageKey) || "100");
+      return [85, 90, 95, 100].includes(raw) ? raw : 100;
+    } catch {
+      return 100;
+    }
+  });
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -213,6 +222,14 @@ export default function App() {
       setSidebarOpen(false);
     }
   }, [focusViewportMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(mobileZoomPercentStorageKey, String(mobileZoomPercent));
+    } catch {
+      // ignore
+    }
+  }, [mobileZoomPercent]);
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) => {
@@ -378,7 +395,8 @@ export default function App() {
     <div
       className={`app-container ${isMobileViewport ? "mobile-compact" : ""} ${
         isMobileViewport && currentView === "main" ? "mobile-main-menu" : ""
-      } ${focusViewportMode ? "focus-viewport-mode" : ""}`}
+      } ${focusViewportMode ? "focus-viewport-mode" : ""} ${isMobileViewport ? "mobile-zoom-enabled" : ""}`}
+      style={{ "--mobile-zoom-scale": String(isMobileViewport ? mobileZoomPercent / 100 : 1) } as React.CSSProperties}
     >
       {/* HEADER */}
       {!focusViewportMode && <header className="app-header">
@@ -401,6 +419,19 @@ export default function App() {
             <span className="diag-badge" title="Diagnóstico de integridade do backend">
               diag b:{maintenanceDiag?.bootstrap?.students ?? "-"} c:{maintenanceDiag?.bootstrap?.classes ?? "-"} fev:{(maintenanceDiag?.feb2026?.attendance ?? 0) + (maintenanceDiag?.feb2026?.justifications ?? 0) + (maintenanceDiag?.feb2026?.exclusions ?? 0)}
             </span>
+          )}
+          {isMobileViewport && (
+            <select
+              className="mobile-zoom-select"
+              value={mobileZoomPercent}
+              onChange={(event) => setMobileZoomPercent(Number(event.target.value) || 100)}
+              title="Zoom do app (mobile)"
+            >
+              <option value={85}>85%</option>
+              <option value={90}>90%</option>
+              <option value={95}>95%</option>
+              <option value={100}>100%</option>
+            </select>
           )}
           <button className="logout-button" onClick={onLogout}>
             Sair
