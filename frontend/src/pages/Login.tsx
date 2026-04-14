@@ -30,10 +30,12 @@ const isUnitAllowedForEnvironment = (typedUnit: string) => {
 
 export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
   const teacherProfileStorageKey = "teacherProfile";
+  const quickProfessorsStorageKey = "quickProfessorProfiles";
   const [profile, setProfile] = useState<TeacherProfile>({
     name: "",
     unit: "",
   });
+  const [firstLoginMode, setFirstLoginMode] = useState(true);
   const [rememberProfile, setRememberProfile] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -42,7 +44,6 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
   const [quickProfessors, setQuickProfessors] = useState<string[]>([]);
-  const [showQuickAccess, setShowQuickAccess] = useState(false);
 
   const importTimestampStorageKey = "last_import_at";
 
@@ -73,6 +74,23 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     return fallback || "";
   };
 
+  const buildMergedQuickProfessors = (base: string[], extra: string[]) =>
+    Array.from(
+      new Set(
+        [...base, ...extra]
+          .map((name) => String(name || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+  const saveQuickProfessors = (nextList: string[]) => {
+    try {
+      localStorage.setItem(quickProfessorsStorageKey, JSON.stringify(nextList));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   useEffect(() => {
     try {
       const savedProfileRaw = localStorage.getItem(teacherProfileStorageKey);
@@ -92,15 +110,25 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       .then((res: ApiResponse) => {
         setBackendOnline(true);
         const classes = Array.isArray(res?.data?.classes) ? res.data.classes : [];
-        const professors: string[] = Array.from(
+        const professorsFromClasses: string[] = Array.from(
           new Set(
             classes
               .map((cls: any) => String(cls?.professor || "").trim())
               .filter(Boolean)
           )
         ) as string[];
-        professors.sort((a, b) => a.localeCompare(b, "pt-BR"));
-        setQuickProfessors(professors);
+        let savedQuickProfessors: string[] = [];
+        try {
+          const raw = localStorage.getItem(quickProfessorsStorageKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          savedQuickProfessors = Array.isArray(parsed) ? parsed.map((name) => String(name || "").trim()) : [];
+        } catch {
+          // ignore invalid local payload
+        }
+
+        const mergedProfessors = buildMergedQuickProfessors(professorsFromClasses, savedQuickProfessors);
+        setQuickProfessors(mergedProfessors);
+        saveQuickProfessors(mergedProfessors);
       })
       .catch(() => setBackendOnline(false));
     getImportDataStatus()
@@ -162,6 +190,11 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setError(null);
     setStatus(null);
 
+    if (!firstLoginMode) {
+      setError("Desative o modo rápido e marque Cadastro / Primeiro Login para cadastrar novo professor.");
+      return;
+    }
+
     if (!profile.name || !profile.unit) {
       setError("Preencha nome e unidade.");
       return;
@@ -214,6 +247,10 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         : await getBootstrap(undefined, { professor: normalizedProfile.name });
       applyBootstrap(res.data);
 
+      const updatedQuickProfessors = buildMergedQuickProfessors(quickProfessors, [normalizedProfile.name]);
+      setQuickProfessors(updatedQuickProfessors);
+      saveQuickProfessors(updatedQuickProfessors);
+
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
       } else {
@@ -231,6 +268,11 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   };
 
   const handleQuickProfessorLogin = async (professorName: string) => {
+    if (firstLoginMode) {
+      setError("Desmarque Cadastro / Primeiro Login para usar o atalho rápido.");
+      return;
+    }
+
     const normalizedName = String(professorName || "").trim();
     if (!normalizedName) return;
 
@@ -292,34 +334,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         Atualizado em: {formatImportDate(importStatusInfo?.last_import_at)}
         {importStatusInfo?.filename ? ` (${importStatusInfo.filename})` : ""}
       </p>
-      <p style={{ color: "#475569", fontSize: 12, marginTop: 8, lineHeight: 1.4 }}>
-        Modo de testes: use <strong>admin</strong> no nome do professor e a unidade do piloto para acesso sem filtro por professor.
-      </p>
 
-      <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={() => setShowQuickAccess((prev) => !prev)}
-          style={{
-            padding: "8px 12px",
-            border: "1px solid #93c5fd",
-            borderRadius: 999,
-            background: showQuickAccess ? "#dbeafe" : "#eff6ff",
-            color: "#1d4ed8",
-            cursor: loading ? "not-allowed" : "pointer",
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          Cadastro / Primeiro Login
-        </button>
-        <span style={{ color: "#666", fontSize: 12 }}>
-          {showQuickAccess ? "Atalho rápido aberto" : "Use o atalho para entrar com um professor já cadastrado."}
-        </span>
-      </div>
-
-      {showQuickAccess && quickProfessors.length > 0 && (
+      {!firstLoginMode && quickProfessors.length > 0 && (
         <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
           <div style={{ fontSize: 12, color: "#666" }}>Login rápido por professor cadastrado:</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -346,12 +362,19 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         </div>
       )}
 
+      {!firstLoginMode && quickProfessors.length === 0 && (
+        <div style={{ marginTop: 12, color: "#666", fontSize: 12 }}>
+          Nenhum professor no atalho rápido. Marque Cadastro / Primeiro Login para cadastrar o primeiro acesso.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         <label style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: "bold", marginBottom: 4 }}>Nome do Professor</span>
           <input
             value={profile.name}
             onChange={(e) => setProfile((prev) => ({ ...prev, name: e.target.value }))}
+            disabled={loading || !firstLoginMode}
             style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
         </label>
@@ -361,6 +384,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           <input
             value={profile.unit}
             onChange={(e) => setProfile((prev) => ({ ...prev, unit: e.target.value }))}
+            disabled={loading || !firstLoginMode}
             style={{ width: "100%", padding: 10, border: "1px solid #ccc", borderRadius: 4, fontSize: 16 }}
           />
           {expectedUnitName && (
@@ -376,8 +400,19 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
             type="file"
             accept=".csv"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
+            disabled={loading || !firstLoginMode}
             style={{ width: "100%" }}
           />
+        </label>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333" }}>
+          <input
+            type="checkbox"
+            checked={firstLoginMode}
+            onChange={(e) => setFirstLoginMode(e.target.checked)}
+            disabled={loading}
+          />
+          <span>Cadastro / Primeiro Login</span>
         </label>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333" }}>
@@ -391,7 +426,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !firstLoginMode}
           style={{
             width: "100%",
             padding: 12,
