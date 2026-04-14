@@ -243,6 +243,9 @@ export default function App() {
 
   useEffect(() => {
     document.body.style.zoom = String(zoomLevel);
+    const zoomCompensation = zoomLevel > 0 ? 100 / zoomLevel : 100;
+    document.body.style.minHeight = `${zoomCompensation}%`;
+    document.body.style.width = `${zoomCompensation}%`;
     try {
       localStorage.setItem(zoomStorageKey, String(zoomLevel));
     } catch {
@@ -250,6 +253,8 @@ export default function App() {
     }
     return () => {
       document.body.style.zoom = "1";
+      document.body.style.minHeight = "100%";
+      document.body.style.width = "100%";
     };
   }, [zoomLevel]);
 

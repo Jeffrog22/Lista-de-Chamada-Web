@@ -4001,6 +4001,34 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     class_by_label = {str(c.turma_label or ""): c for c in classes}
     class_by_label_norm = {_normalize_text_fold(c.turma_label or ""): c for c in classes if str(c.turma_label or "").strip()}
 
+    # map current active class level by student name from import tables (source of truth for current allocation)
+    active_level_by_name: Dict[str, Dict[str, Any]] = {}
+    import_students = session.exec(select(models.ImportStudent)).all()
+    class_by_id = {int(c.id): c for c in classes if getattr(c, "id", None) is not None}
+    for st in import_students:
+        nome_raw = str(getattr(st, "nome", "") or "").strip()
+        if not nome_raw:
+            continue
+        name_key = _normalize_text(nome_raw)
+        cls = class_by_id.get(int(st.class_id)) if getattr(st, "class_id", None) else None
+        nivel_raw = str(getattr(cls, "nivel", "") or "").strip() if cls else ""
+        candidate = {
+            "nivel": nivel_raw,
+            "student_id": int(getattr(st, "id", 0) or 0),
+            "nome": _to_proper_case(nome_raw),
+        }
+        existing = active_level_by_name.get(name_key)
+        if not existing:
+            active_level_by_name[name_key] = candidate
+            continue
+        # prefer entries with level, and then the latest import student id
+        existing_has_level = bool(str(existing.get("nivel") or "").strip())
+        candidate_has_level = bool(nivel_raw)
+        if (candidate_has_level and not existing_has_level) or (
+            candidate_has_level == existing_has_level and candidate["student_id"] >= int(existing.get("student_id") or 0)
+        ):
+            active_level_by_name[name_key] = candidate
+
     # load all attendance log entries (sorted to let the newest snapshot win)
     items = _load_json_list(os.path.join(DATA_DIR, "baseChamada.json"))
     items = sorted(items, key=lambda item: _saved_at_sort_key((item or {}).get("saved_at")))
@@ -4162,9 +4190,15 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         retention_days = 0
         if first and end_date:
             retention_days = max(0, (end_date - first).days)
-        # determine current nivel: use per_level with latest 'last' date
+        # determine current nivel: prefer active student allocation in import tables, fallback to latest attendance history
         current_nivel = None
-        if st.get("per_level"):
+        active_entry = active_level_by_name.get(key)
+        if active_entry:
+            resolved_active_level = str(active_entry.get("nivel") or "").strip()
+            if resolved_active_level and resolved_active_level != "(sem-nivel)":
+                current_nivel = resolved_active_level
+
+        if not current_nivel and st.get("per_level"):
             candidates = [(k, v["last"]) for k, v in st["per_level"].items() if v.get("last")]
             if candidates:
                 candidates.sort(key=lambda x: x[1], reverse=True)
