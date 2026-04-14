@@ -1617,7 +1617,7 @@ export const Students: React.FC = () => {
       </div>
 
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#f4f4f4", color: "#333", borderBottom: "2px solid #ddd" }}>
               {selectionMode && (

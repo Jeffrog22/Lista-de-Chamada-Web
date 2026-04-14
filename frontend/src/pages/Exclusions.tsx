@@ -853,7 +853,7 @@ export const Exclusions: React.FC = () => {
       </div>
 
       <div style={{ overflowX: "auto" }}>
-        <div style={{ minWidth: "1100px", border: "1px solid #e5e7eb", borderRadius: "10px", overflow: "hidden" }}>
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: "10px", overflow: "hidden" }}>
           <div
             style={{
               display: "grid",

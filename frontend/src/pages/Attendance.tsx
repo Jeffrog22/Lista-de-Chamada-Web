@@ -4541,7 +4541,7 @@ export const Attendance: React.FC = () => {
         }}
       >
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#667eea", color: "white" }}>
                 <th
