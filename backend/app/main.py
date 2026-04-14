@@ -4031,6 +4031,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             "dias_semana": str(getattr(cls, "dias_semana", "") or "") if cls else "",
             "turma_label": str(getattr(cls, "turma_label", "") or "") if cls else "",
             "codigo": str(getattr(cls, "codigo", "") or "") if cls else "",
+            "data_nascimento": str(getattr(st, "data_nascimento", "") or ""),
             "nome": _to_proper_case(nome_raw),
         }
         existing = active_level_by_name.get(name_key)
@@ -4274,6 +4275,24 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             allowed_days = allowed_days_map.get(group, set())
             return sum(1 for day_key in allowed_days if start_date.isoformat() <= day_key <= end_date.isoformat())
 
+        def _parse_birth_date(raw_value: str) -> Optional[date]:
+            raw = str(raw_value or "").strip()
+            if not raw:
+                return None
+            for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(raw, fmt).date()
+                except Exception:
+                    continue
+            return None
+
+        def _is_minor(active_info: Dict[str, Any]) -> bool:
+            birth = _parse_birth_date(str(active_info.get("data_nascimento") or ""))
+            if not birth:
+                return False
+            years = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
+            return years < 18
+
         # build levels array
         levels_out: List[LevelHistoryOut] = []
         for lvl_name, vals in st.get("per_level", {}).items():
@@ -4308,6 +4327,34 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             current_falt = 0
             current_just = 0
             current_total_days = 0
+
+            # Guardrail: minors should not keep stray "Adulto" buckets caused by ambiguous historical mapping.
+            if _is_minor(active_entry):
+                adult_bucket_keys = [
+                    lvl_name
+                    for lvl_name in list(st.get("per_level", {}).keys())
+                    if "adult" in _normalize_text_fold(lvl_name)
+                ]
+                if adult_bucket_keys:
+                    target_bucket = st.setdefault("per_level", {}).setdefault(current_nivel, {
+                        "first": None,
+                        "last": None,
+                        "presencas": 0,
+                        "faltas": 0,
+                        "justificativas": 0,
+                    })
+                    for adult_key in adult_bucket_keys:
+                        adult_bucket = st.get("per_level", {}).get(adult_key) or {}
+                        adult_first = adult_bucket.get("first")
+                        adult_last = adult_bucket.get("last")
+                        if adult_first and (target_bucket.get("first") is None or adult_first < target_bucket.get("first")):
+                            target_bucket["first"] = adult_first
+                        if adult_last and (target_bucket.get("last") is None or adult_last > target_bucket.get("last")):
+                            target_bucket["last"] = adult_last
+                        target_bucket["presencas"] = int(target_bucket.get("presencas") or 0) + int(adult_bucket.get("presencas") or 0)
+                        target_bucket["faltas"] = int(target_bucket.get("faltas") or 0) + int(adult_bucket.get("faltas") or 0)
+                        target_bucket["justificativas"] = int(target_bucket.get("justificativas") or 0) + int(adult_bucket.get("justificativas") or 0)
+                        st.get("per_level", {}).pop(adult_key, None)
 
             current_level_vals = _find_level_values(current_nivel)
             if current_level_vals:
