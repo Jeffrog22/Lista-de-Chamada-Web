@@ -3996,6 +3996,10 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     Nota: identificação de aluno é por nome normalizado (mesmo critério usado em relatórios atuais).
     """
     # load classes to map turmaCodigo/turmaLabel -> nivel
+    overrides_applied = _apply_transfer_overrides(session)
+    if overrides_applied > 0:
+        session.commit()
+
     classes = session.exec(select(models.ImportClass)).all()
     class_by_code = {str(c.codigo or ""): c for c in classes}
     class_by_label = {str(c.turma_label or ""): c for c in classes}
