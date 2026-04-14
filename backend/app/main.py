@@ -4003,7 +4003,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
     classes = session.exec(select(models.ImportClass)).all()
     class_by_code = {str(c.codigo or ""): c for c in classes}
     class_by_label_norm = {_normalize_text_fold(c.turma_label or ""): c for c in classes if str(c.turma_label or "").strip()}
-    class_by_triple: Dict[Tuple[str, str, str], models.ImportClass] = {}
+    class_by_triple: Dict[Tuple[str, str, str], List[models.ImportClass]] = {}
     for c in classes:
         triple_key = (
             _normalize_text_fold(c.turma_label or ""),
@@ -4011,7 +4011,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             _normalize_text_fold(c.professor or ""),
         )
         if any(triple_key):
-            class_by_triple[triple_key] = c
+            class_by_triple.setdefault(triple_key, []).append(c)
 
     # map current active class level by student name from import tables (source of truth for current allocation)
     active_level_by_name: Dict[str, Dict[str, Any]] = {}
@@ -4079,17 +4079,29 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         # resolve nivel from import classes
         nivel = ""
         cls = None
+        ambiguous_level = False
         class_triple_key = (
             _normalize_text_fold(turma_label),
             turma_horario,
             turma_professor,
         )
-        if class_triple_key in class_by_triple:
-            cls = class_by_triple.get(class_triple_key)
-        elif turma_codigo and turma_codigo in class_by_code:
+
+        # Prefer class code when available (historically more stable than generic labels).
+        if turma_codigo and turma_codigo in class_by_code:
             cls = class_by_code.get(turma_codigo)
+        elif class_triple_key in class_by_triple:
+            triple_candidates = class_by_triple.get(class_triple_key) or []
+            if len(triple_candidates) == 1:
+                cls = triple_candidates[0]
+            elif len(triple_candidates) > 1:
+                ambiguous_level = True
         elif turma_label:
             cls = class_by_label_norm.get(_normalize_text_fold(turma_label))
+
+        # Generic day labels without class code can map to multiple levels over time.
+        if not turma_codigo and schedule_group in {"tq", "qs"}:
+            ambiguous_level = True
+
         if cls:
             nivel = str(cls.nivel or "")
 
@@ -4117,7 +4129,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
 
                 # dedupe snapshots: same student/day/schedule should count once (latest wins)
                 if schedule_group in {"tq", "qs"}:
-                    event_key = (date_key, schedule_group)
+                    event_key = (date_key, schedule_group, turma_horario, turma_professor)
                 else:
                     event_key = (
                         date_key,
@@ -4130,14 +4142,17 @@ def get_reports_statistics(session: Session = Depends(get_session)):
                     "date": parsed_d,
                     "status": mapped,
                     "nivel": nivel or "(sem-nivel)",
+                    "ambiguous_level": bool(ambiguous_level),
                 }
 
     # build per-student aggregates from deduped events
-    for _, st in students.items():
+    for student_key, st in students.items():
         st["attendance_by_date"] = {}
         st["per_level"] = {}
         st["first_presence"] = None
         st["last_presence"] = None
+
+        active_level_for_student = str((active_level_by_name.get(student_key) or {}).get("nivel") or "").strip()
 
         deduped_events = sorted(
             st.get("event_by_key", {}).values(),
@@ -4151,6 +4166,8 @@ def get_reports_statistics(session: Session = Depends(get_session)):
             date_key = parsed_d.isoformat()
             mapped = str(event.get("status") or "")
             level_key = str(event.get("nivel") or "(sem-nivel)")
+            if (level_key == "(sem-nivel)" or bool(event.get("ambiguous_level"))) and active_level_for_student:
+                level_key = active_level_for_student
 
             st["attendance_by_date"][date_key] = {
                 "status": mapped,
@@ -4190,7 +4207,7 @@ def get_reports_statistics(session: Session = Depends(get_session)):
         nome = str(ex.get("nome") or "").strip()
         if not nome:
             continue
-        key = _normalize_text(nome)
+        key = _normalize_text_fold(nome)
         if key not in students:
             students[key] = {"nome": _to_proper_case(nome), "ids": set(), "attendance_by_date": {}, "per_level": {}, "event_by_key": {}, "first_presence": None, "last_presence": None, "exclusion_date": None}
         date_str = str(ex.get("dataExclusao") or "").strip()
