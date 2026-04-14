@@ -1767,6 +1767,9 @@ export const Attendance: React.FC = () => {
   const [history, setHistory] = useState<AttendanceHistory[]>([]);
   const [hasUnsavedLocalChanges, setHasUnsavedLocalChanges] = useState(false);
   const hasUnsavedLocalChangesRef = useRef(false);
+  const latestAttendanceMutationIdRef = useRef(0);
+  const lastAcknowledgedAttendanceMutationIdRef = useRef(0);
+  const inFlightAttendanceSaveCountRef = useRef(0);
   const [isCompactViewport, setIsCompactViewport] = useState<boolean>(() => {
     const byWidth = window.innerWidth <= 768;
     const byLandscapePhone = window.innerWidth <= 1024 && window.innerHeight <= 500;
@@ -1812,6 +1815,9 @@ export const Attendance: React.FC = () => {
 
   useEffect(() => {
     setHasUnsavedLocalChanges(false);
+    latestAttendanceMutationIdRef.current = 0;
+    lastAcknowledgedAttendanceMutationIdRef.current = 0;
+    inFlightAttendanceSaveCountRef.current = 0;
   }, [storageKey]);
 
   useEffect(() => {
@@ -3651,7 +3657,14 @@ export const Attendance: React.FC = () => {
           mes: pollScope.mes,
         });
         const pendingScopeCount = Number(pendingScopeInfo?.pending || 0);
-        if (pendingScopeCount === 0 && hasUnsavedLocalChangesRef.current) {
+        const hasLatestMutationAcked =
+          lastAcknowledgedAttendanceMutationIdRef.current >= latestAttendanceMutationIdRef.current;
+        if (
+          pendingScopeCount === 0 &&
+          hasUnsavedLocalChangesRef.current &&
+          inFlightAttendanceSaveCountRef.current === 0 &&
+          hasLatestMutationAcked
+        ) {
           setHasUnsavedLocalChanges(false);
         }
 
@@ -3717,6 +3730,8 @@ export const Attendance: React.FC = () => {
     // Salva o estado atual no histórico antes de modificar
     setHistory((h) => [JSON.parse(JSON.stringify(currentSnapshot)), ...h.slice(0, 9)]);
     setHasUnsavedLocalChanges(true);
+    const mutationId = latestAttendanceMutationIdRef.current + 1;
+    latestAttendanceMutationIdRef.current = mutationId;
 
     const nextAttendance = currentSnapshot.map((item) => {
       if (item.id === id) {
@@ -3741,12 +3756,16 @@ export const Attendance: React.FC = () => {
       saveAttendanceStorage(nextAttendance);
     }
 
+    inFlightAttendanceSaveCountRef.current += 1;
+    let latestMutationSavedRemotely = false;
+
     saveAttendanceLog({
       turmaCodigo: persistence.turmaCodigo,
       turmaLabel: persistence.turmaLabel,
       horario: persistence.horario,
       professor: persistence.professor,
       mes: monthKey,
+      clientMutationId: mutationId,
       registros: nextAttendance.map((item) => ({
         aluno_nome: item.aluno,
         attendance: item.attendance,
@@ -3755,12 +3774,21 @@ export const Attendance: React.FC = () => {
       })),
     })
       .then((attendanceResp: any) => {
-        if (attendanceResp?.data?.ok && !attendanceResp?.data?.queued) {
-          setHasUnsavedLocalChanges(false);
+        const isLatestMutation = mutationId === latestAttendanceMutationIdRef.current;
+        const savedRemotely = Boolean(attendanceResp?.data?.ok) && !Boolean(attendanceResp?.data?.queued);
+        if (savedRemotely && isLatestMutation) {
+          latestMutationSavedRemotely = true;
+          lastAcknowledgedAttendanceMutationIdRef.current = mutationId;
         }
         refreshSyncIndicator().catch(() => undefined);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        inFlightAttendanceSaveCountRef.current = Math.max(0, inFlightAttendanceSaveCountRef.current - 1);
+        if (latestMutationSavedRemotely && inFlightAttendanceSaveCountRef.current === 0) {
+          setHasUnsavedLocalChanges(false);
+        }
+      });
   };
   const handleUndo = () => {
     if (history.length > 0) {
