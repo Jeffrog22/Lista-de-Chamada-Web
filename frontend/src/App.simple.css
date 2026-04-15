@@ -123,6 +123,39 @@ body, html {
   white-space: nowrap;
 }
 
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.zoom-control-button {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+}
+
+.zoom-control-button:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.zoom-control-value {
+  min-width: 42px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
 .logout-button {
   background: rgba(245, 87, 108, 0.9);
   border: none;
@@ -139,35 +172,6 @@ body, html {
   background: rgba(245, 87, 108, 1);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
-}
-
-.desktop-scale-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-}
-
-.desktop-scale-btn,
-.desktop-scale-value {
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 7px 9px;
-  cursor: pointer;
-}
-
-.desktop-scale-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.desktop-scale-value {
-  min-width: 56px;
 }
 
 .quick-teacher-select {
@@ -571,6 +575,21 @@ body, html {
     padding: 5px 8px;
     font-size: 10px;
   }
+
+  .zoom-controls {
+    gap: 4px;
+    padding: 3px 6px;
+  }
+
+  .zoom-control-button {
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  .zoom-control-value {
+    min-width: 36px;
+    font-size: 10px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -595,6 +614,21 @@ body, html {
   .logout-button {
     padding: 5px 8px;
     font-size: 10px;
+  }
+
+  .zoom-controls {
+    gap: 3px;
+    padding: 3px 5px;
+  }
+
+  .zoom-control-button {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .zoom-control-value {
+    min-width: 34px;
+    font-size: 9px;
   }
 
   .neon-btn {
@@ -692,5 +726,11 @@ body, html {
 
   .content-area {
     font-size: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    transform-origin: top left;
   }
 }

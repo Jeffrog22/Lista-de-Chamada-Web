@@ -17,7 +17,9 @@ type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | 
 type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
 const focusViewportStorageKey = "focusViewportMode";
-const desktopScaleStorageKey = "desktopUiScale";
+const viewportScaleStorageKey = "uiViewportScale";
+
+const clampScale = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const readInitialFocusViewportMode = () => {
   try {
@@ -27,11 +29,12 @@ const readInitialFocusViewportMode = () => {
   }
 };
 
-const readInitialDesktopScale = () => {
+const readInitialViewportScale = () => {
   try {
-    const raw = Number(localStorage.getItem(desktopScaleStorageKey) || "1");
-    if (!Number.isFinite(raw)) return 1;
-    return Math.min(1.4, Math.max(0.55, raw));
+    const raw = localStorage.getItem(viewportScaleStorageKey);
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return 1;
+    return clampScale(parsed, 0.5, 1.75);
   } catch {
     return 1;
   }
@@ -80,7 +83,18 @@ export default function App() {
   const sidebarTouchStartX = useRef<number | null>(null);
   const sidebarTouchCurrentX = useRef<number | null>(null);
   const [focusViewportMode, setFocusViewportMode] = useState<boolean>(readInitialFocusViewportMode);
-  const [desktopScale, setDesktopScale] = useState<number>(readInitialDesktopScale);
+  const [viewportScale, setViewportScale] = useState<number>(readInitialViewportScale);
+
+  const effectiveViewportScale = (() => {
+    // Mobile starts slightly zoomed-out by default to approximate desktop composition.
+    const mobileBaseScale = 0.82;
+    if (isMobileViewport) {
+      return clampScale(viewportScale * mobileBaseScale, 0.5, 1.25);
+    }
+    return clampScale(viewportScale, 0.8, 1.75);
+  })();
+
+  const viewportScalePercent = Math.round(effectiveViewportScale * 100);
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -228,23 +242,11 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(desktopScaleStorageKey, String(desktopScale));
+      localStorage.setItem(viewportScaleStorageKey, String(viewportScale));
     } catch {
       // ignore
     }
-  }, [desktopScale]);
-
-  const decreaseDesktopScale = () => {
-    setDesktopScale((prev) => Math.max(0.55, Number((prev - 0.05).toFixed(2))));
-  };
-
-  const increaseDesktopScale = () => {
-    setDesktopScale((prev) => Math.min(1.4, Number((prev + 0.05).toFixed(2))));
-  };
-
-  const resetDesktopScale = () => {
-    setDesktopScale(1);
-  };
+  }, [viewportScale]);
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) => {
@@ -411,7 +413,12 @@ export default function App() {
       className={`app-container ${isMobileViewport ? "mobile-compact" : ""} ${
         isMobileViewport && currentView === "main" ? "mobile-main-menu" : ""
       } ${focusViewportMode ? "focus-viewport-mode" : ""}`}
-      style={!isMobileViewport ? ({ zoom: desktopScale } as React.CSSProperties) : undefined}
+      style={{
+        transform: `scale(${effectiveViewportScale})`,
+        transformOrigin: "top left",
+        width: `${100 / effectiveViewportScale}%`,
+        minHeight: `${100 / effectiveViewportScale}vh`,
+      }}
     >
       {/* HEADER */}
       {!focusViewportMode && <header className="app-header">
@@ -445,34 +452,23 @@ export default function App() {
           >
             Tela toda
           </button>
-          {!isMobileViewport && (
-            <div className="desktop-scale-controls" title="Escala da interface no desktop">
-              <button
-                type="button"
-                className="desktop-scale-btn"
-                onClick={decreaseDesktopScale}
-                disabled={desktopScale <= 0.55}
-              >
-                -
-              </button>
-              <button
-                type="button"
-                className="desktop-scale-value"
-                onClick={resetDesktopScale}
-                title="Resetar escala"
-              >
-                {Math.round(desktopScale * 100)}%
-              </button>
-              <button
-                type="button"
-                className="desktop-scale-btn"
-                onClick={increaseDesktopScale}
-                disabled={desktopScale >= 1.4}
-              >
-                +
-              </button>
-            </div>
-          )}
+          <div className="zoom-controls" title="Ajuste de escala da interface">
+            <button
+              type="button"
+              className="zoom-control-button"
+              onClick={() => setViewportScale((prev) => clampScale(prev - 0.05, 0.5, 1.75))}
+            >
+              A-
+            </button>
+            <span className="zoom-control-value">{viewportScalePercent}%</span>
+            <button
+              type="button"
+              className="zoom-control-button"
+              onClick={() => setViewportScale((prev) => clampScale(prev + 0.05, 0.5, 1.75))}
+            >
+              A+
+            </button>
+          </div>
         </div>
       </header>}
 
