@@ -1154,24 +1154,32 @@ export const Students: React.FC = () => {
       motivo_exclusao: reason,
     };
 
-    await addExclusion(payload).catch(() => {
-      alert("Falha ao enviar exclusão ao backend. Tente novamente.");
-    });
+    try {
+      // Attempt to add exclusion to backend
+      await addExclusion(payload);
 
-    await getExcludedStudents()
-      .then((response) => {
-        const synced = sanitizeExcludedRecords(Array.isArray(response?.data) ? response.data : []);
-        setExcludedRecords(synced);
-        localStorage.setItem("excludedStudents", JSON.stringify(synced));
-      })
-      .catch(() => undefined);
+      // Refresh excluded students from backend
+      const response = await getExcludedStudents().catch(() => ({ data: [] }));
+      const synced = sanitizeExcludedRecords(Array.isArray(response?.data) ? response.data : []);
+      setExcludedRecords(synced);
+      localStorage.setItem("excludedStudents", JSON.stringify(synced));
 
-    setStudents((prev) => prev.filter((s) => String(s.id) !== String(student.id)));
+      // Remove student from active list only after successful API call
+      setStudents((prev) => prev.filter((s) => String(s.id) !== String(student.id)));
 
-    setShowExcludeReasonModal(false);
-    setStudentPendingExclusion(null);
-    setExcludeReason("");
-    alert("Aluno movido para a lista de exclusão.");
+      // Close modal and reset state
+      setShowExcludeReasonModal(false);
+      setStudentPendingExclusion(null);
+      setExcludeReason("");
+
+      // Show success message
+      alert("Aluno movido para a lista de exclusão.");
+    } catch (err: any) {
+      // On error: show message, keep modal open for retry, keep student in list
+      const errorMsg = err?.data?.error || "Falha ao enviar exclusão ao backend. Tente novamente.";
+      alert(errorMsg);
+      return;
+    }
   };
 
   const handleGoToAttendance = (student: Student) => {
