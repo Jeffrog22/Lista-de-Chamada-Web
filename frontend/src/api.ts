@@ -212,7 +212,15 @@ const exclusionMatches = (candidate: any, payload: any) => {
     return candidateProfessor === payloadProfessor;
   }
 
-  // No context at all - name alone is not enough to match (to prevent duplicates)
+  const candidateHasAnyContext = candidateTurmaSet.size > 0 || Boolean(candidateHorario) || Boolean(candidateProfessor);
+  const payloadHasAnyContext = payloadTurmaSet.size > 0 || Boolean(payloadHorario) || Boolean(payloadProfessor);
+
+  // Backward compatibility for legacy exclusions stored only by name.
+  // If one side has no context, keep name match so old exclusions remain effective.
+  if (!candidateHasAnyContext || !payloadHasAnyContext) {
+    return true;
+  }
+
   return false;
 };
 
@@ -496,12 +504,6 @@ export const getExcludedStudents = () =>
     });
 
 export const addExclusion = (data: any) => {
-  if (isExclusionsWriteFailed()) {
-    return Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
-    });
-  }
   return API.post("/exclusions", data)
     .then((response) => {
       upsertExcludedStudentLocal(data, false);
@@ -557,12 +559,6 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
 };
 
 export const restoreStudent = (data: any) => {
-  if (isExclusionsWriteFailed()) {
-    return Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de restauração estão bloqueadas." },
-    });
-  }
   return API.post("/exclusions/restore", data)
     .then((response) => {
       removeExcludedStudentLocal(data);
@@ -579,12 +575,6 @@ export const restoreStudent = (data: any) => {
 };
 
 export const deleteExclusion = (data: any) => {
-  if (isExclusionsWriteFailed()) {
-    return Promise.reject({
-      status: 503,
-      data: { ok: false, fallback: true, error: "Backend não está disponível. Operações de exclusão estão bloqueadas." },
-    });
-  }
   return API.post("/exclusions/delete", data)
     .then((response) => {
       removeExcludedStudentLocal(data);

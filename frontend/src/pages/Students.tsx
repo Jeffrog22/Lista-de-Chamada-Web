@@ -175,6 +175,13 @@ export const Students: React.FC = () => {
     const hasProfessorContext = Boolean(leftProfessor && rightProfessor);
     if (hasProfessorContext && leftProfessor !== rightProfessor) return false;
 
+    const leftHasAnyContext = leftTurmas.size > 0 || Boolean(leftHorario) || Boolean(leftProfessor);
+    const rightHasAnyContext = rightTurmas.size > 0 || Boolean(rightHorario) || Boolean(rightProfessor);
+
+    // Backward compatibility: legacy exclusions persisted only with student name.
+    // If one side has no context at all, treat same-name as a match to prevent reappearing students.
+    if (!leftHasAnyContext || !rightHasAnyContext) return true;
+
     return hasTurmaContext || hasHorarioContext || hasProfessorContext;
   };
 
