@@ -63,7 +63,10 @@ ENV_NAME = os.getenv("ENV_NAME", "").strip()
 UNIT_NAME = os.getenv("UNIT_NAME", "").strip()
 ACCESS_MODE = os.getenv("ACCESS_MODE", "unit").strip().lower()
 
-cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+cors_origins_raw = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,https://chamadabelavista.pages.dev",
+)
 
 
 def _normalize_origin(origin: str) -> str:
@@ -75,7 +78,10 @@ origins = [
     for origin in cors_origins_raw.split(",")
     if _normalize_origin(origin)
 ]
-cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.(vercel\.app|netlify\.app)$")
+cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"^https://.*\.(vercel\.app|netlify\.app|pages\.dev)$",
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -336,8 +342,25 @@ def _append_json_list(file_path: str, items: List[Dict[str, Any]]) -> None:
                 payload = json.load(f)
             if not isinstance(payload, list):
                 raise RuntimeError(f"Arquivo JSON inválido para append: {file_path} (esperado array)")
-        except Exception as exc:
-            raise RuntimeError(f"Falha ao ler JSON existente antes do append: {file_path}") from exc
+        except Exception:
+            # Fail-open strategy for runtime persistence: corrupted/partial JSON
+            # must not break attendance writes in production.
+            try:
+                archive_dir = os.path.join(DATA_DIR, "archive")
+                os.makedirs(archive_dir, exist_ok=True)
+                ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                backup_path = os.path.join(
+                    archive_dir,
+                    f"{os.path.splitext(os.path.basename(file_path))[0]}_corrupted_{ts}.json",
+                )
+                if os.path.exists(file_path):
+                    with open(file_path, "r", encoding="utf-8") as src, open(
+                        backup_path, "w", encoding="utf-8"
+                    ) as dst:
+                        dst.write(src.read())
+            except Exception:
+                pass
+            payload = []
     payload.extend(items)
     _backup_runtime_json(file_path)
     with open(file_path, "w", encoding="utf-8") as f:
