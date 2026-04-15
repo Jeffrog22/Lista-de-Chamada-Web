@@ -164,6 +164,7 @@ class AttendanceLogPayload(BaseModel):
     professor: str = ""
     mes: str = ""
     clientSavedAt: Optional[str] = ""
+    clientMutationId: Optional[int] = None
     registros: List[AttendanceLogItem]
 
 class AttendanceSyncProbePayload(BaseModel):
@@ -1478,6 +1479,11 @@ def append_attendance_log(payload: AttendanceLogPayload):
             _horario_key = str(item.get("horario") or "").strip()
             _professor_key = str(item.get("professor") or "").strip()
             _mes_key = str(item.get("mes") or "").strip()
+            _incoming_client_mutation_id = item.get("clientMutationId")
+            try:
+                _incoming_client_mutation_id = int(_incoming_client_mutation_id)
+            except Exception:
+                _incoming_client_mutation_id = None
             _registros_to_store = item.get("registros") or []
             with _DBSession(_db_engine) as _db:
                 _existing = _db.exec(
@@ -1488,11 +1494,38 @@ def append_attendance_log(payload: AttendanceLogPayload):
                         AttendanceLog.mes == _mes_key,
                     )
                 ).first()
+                existing_metadata = _attendance_source_metadata(_existing.source) if _existing else {}
+                existing_client_mutation_id = existing_metadata.get("clientMutationId")
+                try:
+                    existing_client_mutation_id = int(existing_client_mutation_id)
+                except Exception:
+                    existing_client_mutation_id = None
+
+                if (
+                    _existing
+                    and _incoming_client_mutation_id is not None
+                    and existing_client_mutation_id is not None
+                    and _incoming_client_mutation_id < existing_client_mutation_id
+                ):
+                    return {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "stale_snapshot",
+                        "saved_at": _existing.saved_at,
+                    }
+
+                source_metadata: Dict[str, Any] = {}
+                if item.get("source"):
+                    source_metadata["source"] = item.get("source")
+                if _incoming_client_mutation_id is not None:
+                    source_metadata["clientMutationId"] = _incoming_client_mutation_id
+
+                serialized_source = json.dumps(source_metadata, ensure_ascii=False) if source_metadata else None
                 if _existing:
                     _existing.turma_label = str(item.get("turmaLabel") or "").strip()
                     _existing.saved_at = item["saved_at"]
                     _existing.client_saved_at = str(item.get("clientSavedAt") or "")
-                    _existing.source = item.get("source")
+                    _existing.source = serialized_source
                     _existing.registros_json = json.dumps(_registros_to_store, ensure_ascii=False)
                     _db.add(_existing)
                 else:
@@ -1504,7 +1537,7 @@ def append_attendance_log(payload: AttendanceLogPayload):
                         mes=_mes_key,
                         saved_at=item["saved_at"],
                         client_saved_at=str(item.get("clientSavedAt") or ""),
-                        source=item.get("source"),
+                        source=serialized_source,
                         registros_json=json.dumps(_registros_to_store, ensure_ascii=False),
                     )
                     _db.add(_log_row)
@@ -2268,6 +2301,17 @@ def _saved_at_sort_key(value: Any) -> int:
         return int(parsed.value)
     except Exception:
         return -1
+
+
+def _attendance_source_metadata(source: Any) -> Dict[str, Any]:
+    raw = str(source or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {"source": raw}
+    except Exception:
+        return {"source": raw}
 
 
 def _extract_month_key(value: Any) -> str:

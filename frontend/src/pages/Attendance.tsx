@@ -3780,7 +3780,9 @@ export const Attendance: React.FC = () => {
           latestMutationSavedRemotely = true;
           lastAcknowledgedAttendanceMutationIdRef.current = mutationId;
         }
-        refreshSyncIndicator().catch(() => undefined);
+        if (isLatestMutation) {
+          refreshSyncIndicator().catch(() => undefined);
+        }
       })
       .catch(() => undefined)
       .finally(() => {
