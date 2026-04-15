@@ -127,7 +127,7 @@ type ClimaCache = {
 
 const WEATHER_CACHE_VERSION = "cptec-v1";
 const WEATHER_CACHE_TTL_MS = 1000 * 60 * 60 * 6;
-const ATTENDANCE_SYNC_POLL_MS = 1500;
+const ATTENDANCE_SYNC_POLL_MS = 3000;
 
 // Opções de Sensação Térmica (ordem solicitada)
 const WEATHER_ICONS = {
