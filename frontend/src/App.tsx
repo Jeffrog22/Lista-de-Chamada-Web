@@ -17,12 +17,23 @@ type ViewType = "main" | "attendance" | "students" | "classes" | "exclusions" | 
 type FeatureCardView = "attendance" | "students" | "classes" | "exclusions" | "reports";
 
 const focusViewportStorageKey = "focusViewportMode";
+const desktopScaleStorageKey = "desktopUiScale";
 
 const readInitialFocusViewportMode = () => {
   try {
     return localStorage.getItem(focusViewportStorageKey) === "1";
   } catch {
     return false;
+  }
+};
+
+const readInitialDesktopScale = () => {
+  try {
+    const raw = Number(localStorage.getItem(desktopScaleStorageKey) || "1");
+    if (!Number.isFinite(raw)) return 1;
+    return Math.min(1.4, Math.max(0.55, raw));
+  } catch {
+    return 1;
   }
 };
 
@@ -69,6 +80,7 @@ export default function App() {
   const sidebarTouchStartX = useRef<number | null>(null);
   const sidebarTouchCurrentX = useRef<number | null>(null);
   const [focusViewportMode, setFocusViewportMode] = useState<boolean>(readInitialFocusViewportMode);
+  const [desktopScale, setDesktopScale] = useState<number>(readInitialDesktopScale);
 
   const formatDisplayName = (value: string) => {
     const raw = String(value || "").trim();
@@ -213,6 +225,26 @@ export default function App() {
       setSidebarOpen(false);
     }
   }, [focusViewportMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(desktopScaleStorageKey, String(desktopScale));
+    } catch {
+      // ignore
+    }
+  }, [desktopScale]);
+
+  const decreaseDesktopScale = () => {
+    setDesktopScale((prev) => Math.max(0.55, Number((prev - 0.05).toFixed(2))));
+  };
+
+  const increaseDesktopScale = () => {
+    setDesktopScale((prev) => Math.min(1.4, Number((prev + 0.05).toFixed(2))));
+  };
+
+  const resetDesktopScale = () => {
+    setDesktopScale(1);
+  };
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) => {
@@ -379,6 +411,7 @@ export default function App() {
       className={`app-container ${isMobileViewport ? "mobile-compact" : ""} ${
         isMobileViewport && currentView === "main" ? "mobile-main-menu" : ""
       } ${focusViewportMode ? "focus-viewport-mode" : ""}`}
+      style={!isMobileViewport ? ({ zoom: desktopScale } as React.CSSProperties) : undefined}
     >
       {/* HEADER */}
       {!focusViewportMode && <header className="app-header">
@@ -412,6 +445,34 @@ export default function App() {
           >
             Tela toda
           </button>
+          {!isMobileViewport && (
+            <div className="desktop-scale-controls" title="Escala da interface no desktop">
+              <button
+                type="button"
+                className="desktop-scale-btn"
+                onClick={decreaseDesktopScale}
+                disabled={desktopScale <= 0.55}
+              >
+                -
+              </button>
+              <button
+                type="button"
+                className="desktop-scale-value"
+                onClick={resetDesktopScale}
+                title="Resetar escala"
+              >
+                {Math.round(desktopScale * 100)}%
+              </button>
+              <button
+                type="button"
+                className="desktop-scale-btn"
+                onClick={increaseDesktopScale}
+                disabled={desktopScale >= 1.4}
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       </header>}
 

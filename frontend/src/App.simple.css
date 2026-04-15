@@ -141,6 +141,35 @@ body, html {
   box-shadow: 0 4px 12px rgba(245, 87, 108, 0.3);
 }
 
+.desktop-scale-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.desktop-scale-btn,
+.desktop-scale-value {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.desktop-scale-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.desktop-scale-value {
+  min-width: 56px;
+}
+
 .quick-teacher-select {
   background: rgba(255, 255, 255, 0.96);
   color: #2f3b6b;
