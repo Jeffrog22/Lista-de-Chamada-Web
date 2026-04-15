@@ -134,6 +134,8 @@ const exclusionMatches = (candidate: any, payload: any) => {
   );
   if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
 
+  // IMPROVED: Require at least one full context match (turma+horario+professor or equivalent)
+  // to avoid false positives from names alone, especially with historical data
   const candidateTurmaSet = new Set(
     [
       candidate?.turma,
@@ -163,21 +165,55 @@ const exclusionMatches = (candidate: any, payload: any) => {
       .filter(Boolean)
   );
 
-  const hasTurmaContext = candidateTurmaSet.size > 0 && payloadTurmaSet.size > 0;
-  const turmaMatches = !hasTurmaContext || Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
-  if (!turmaMatches) return false;
-
   const candidateHorario = normalizeHorarioKey(candidate?.horario || candidate?.Horario);
   const payloadHorario = normalizeHorarioKey(payload?.horario || payload?.Horario);
-  const hasHorarioContext = Boolean(candidateHorario && payloadHorario);
-  if (hasHorarioContext && candidateHorario !== payloadHorario) return false;
-
+  
   const candidateProfessor = normalizeText(candidate?.professor || candidate?.Professor);
   const payloadProfessor = normalizeText(payload?.professor || payload?.Professor);
-  const hasProfessorContext = Boolean(candidateProfessor && payloadProfessor);
-  if (hasProfessorContext && candidateProfessor !== payloadProfessor) return false;
 
-  return hasTurmaContext || hasHorarioContext || hasProfessorContext;
+  const hasTurmaContext = candidateTurmaSet.size > 0 && payloadTurmaSet.size > 0;
+  const hasHorarioContext = Boolean(candidateHorario && payloadHorario);
+  const hasProfessorContext = Boolean(candidateProfessor && payloadProfessor);
+  
+  // If both have turma + horario + professor, all must match
+  if (hasTurmaContext && hasHorarioContext && hasProfessorContext) {
+    const turmaMatches = Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
+    const horarioMatches = candidateHorario === payloadHorario;
+    const professorMatches = candidateProfessor === payloadProfessor;
+    return turmaMatches && horarioMatches && professorMatches;
+  }
+
+  // If both have turma + horario, both must match
+  if (hasTurmaContext && hasHorarioContext) {
+    const turmaMatches = Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
+    const horarioMatches = candidateHorario === payloadHorario;
+    return turmaMatches && horarioMatches;
+  }
+
+  // If both have turma + professor, both must match
+  if (hasTurmaContext && hasProfessorContext) {
+    const turmaMatches = Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
+    const professorMatches = candidateProfessor === payloadProfessor;
+    return turmaMatches && professorMatches;
+  }
+
+  // If only turma context, turma must match
+  if (hasTurmaContext) {
+    return Array.from(candidateTurmaSet).some((value) => payloadTurmaSet.has(value));
+  }
+
+  // If only horario context, horario must match
+  if (hasHorarioContext) {
+    return candidateHorario === payloadHorario;
+  }
+
+  // If only professor context, professor must match
+  if (hasProfessorContext) {
+    return candidateProfessor === payloadProfessor;
+  }
+
+  // No context at all - name alone is not enough to match (to prevent duplicates)
+  return false;
 };
 
 const readExcludedStudentsLocal = () => {
@@ -197,14 +233,36 @@ const writeExcludedStudentsLocal = (items: any[]) => {
 
 const cleanExcludedStudentsLocalCache = () => {
   const localItems = readExcludedStudentsLocal();
-  const cleaned = localItems
-    .map(normalizeExcludedStudentRecord)
-    .filter(isValidExcludedStudentRecord);
-
+  if (localItems.length === 0) return [];
+  
+  const cleaned: any[] = [];
+  const seen = new Set<string>();
+  
+  // First pass: deduplicate by UID/ID
+  localItems.forEach((item) => {
+    const uid = String(item?.student_uid || item?.studentUid || "").trim();
+    const id = String(item?.id || "").trim();
+    const key = (uid || id || "") + "|" + (normalizeText(item?.nome || item?.Nome || ""));
+    
+    if (key && !key.startsWith("|") && seen.has(key)) {
+      return; // Skip duplicates by UID/ID/Name combo
+    }
+    
+    if (key && !key.startsWith("|")) {
+      seen.add(key);
+    }
+    
+    const normalized = normalizeExcludedStudentRecord(item);
+    if (isValidExcludedStudentRecord(normalized)) {
+      cleaned.push(normalized);
+    }
+  });
+  
+  // Only persist if changes were made
   if (cleaned.length !== localItems.length || cleaned.some((item, index) => JSON.stringify(item) !== JSON.stringify(localItems[index]))) {
     writeExcludedStudentsLocal(cleaned);
   }
-
+  
   return cleaned;
 };
 

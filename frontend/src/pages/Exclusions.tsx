@@ -220,11 +220,6 @@ export const Exclusions: React.FC = () => {
     }
   }, [loadExclusionsState]);
 
-  const markWriteFailureAndRefresh = useCallback(async () => {
-    setWriteOpFailed(true);
-    await refreshExclusions();
-  }, [refreshExclusions]);
-
   useEffect(() => {
     const compactQuery = window.matchMedia("(max-width: 768px)");
     const landscapePhoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 500px)");
@@ -568,36 +563,37 @@ export const Exclusions: React.FC = () => {
 
     try {
       await restoreStudent(restorePayload);
-    } catch {
-      alert("Falha ao restaurar no backend.");
-      await markWriteFailureAndRefresh();
+      
+      const restoredStudent = {
+        ...editingStudent,
+        ...formData,
+        turma: turmaLabel,
+        grupo: turmaCodigo,
+        turmaLabel,
+        turmaCodigo,
+        idade: calculateAge(formData.dataNascimento),
+        dataExclusao: undefined,
+        DataExclusao: undefined,
+        Nome: undefined,
+        Turma: undefined,
+        Professor: undefined,
+      };
+
+      const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
+      activeStudents.push(restoredStudent);
+      localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
+
+      await refreshExclusions();
+
+      setShowModal(false);
+      setEditingStudent(null);
+      alert(`Aluno ${formData.nome} restaurado com sucesso para a turma ${formData.turma}!`);
+    } catch (err: any) {
+      const errMsg = err?.data?.error || "Falha ao restaurar no backend.";
+      alert(errMsg);
+      setWriteOpFailed(true);
       return;
     }
-
-    const restoredStudent = {
-      ...editingStudent,
-      ...formData,
-      turma: turmaLabel,
-      grupo: turmaCodigo,
-      turmaLabel,
-      turmaCodigo,
-      idade: calculateAge(formData.dataNascimento),
-      dataExclusao: undefined,
-      DataExclusao: undefined,
-      Nome: undefined,
-      Turma: undefined,
-      Professor: undefined,
-    };
-
-    const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
-    activeStudents.push(restoredStudent);
-    localStorage.setItem("activeStudents", JSON.stringify(activeStudents));
-
-    await refreshExclusions();
-
-    setShowModal(false);
-    setEditingStudent(null);
-    alert(`Aluno ${formData.nome} restaurado com sucesso para a turma ${formData.turma}!`);
   };
 
   const handlePermanentDelete = async (student: ExcludedStudent) => {
@@ -616,14 +612,13 @@ export const Exclusions: React.FC = () => {
 
     try {
       await deleteExclusion(payload);
+      await refreshExclusions();
     } catch (err: any) {
       const msg = err?.data?.error || "Falha ao excluir no backend.";
       alert(`${msg}`);
-      await markWriteFailureAndRefresh();
+      setWriteOpFailed(true);
       return;
     }
-
-    await refreshExclusions();
   };
 
   const persistExclusionReason = async (student: ExcludedStudent, reason: string) => {
@@ -646,13 +641,13 @@ export const Exclusions: React.FC = () => {
 
     try {
       await addExclusion(payload);
-    } catch {
-      alert("Falha ao atualizar o motivo da exclusão no backend.");
-      await markWriteFailureAndRefresh();
+      await refreshExclusions();
+    } catch (err: any) {
+      const errMsg = err?.data?.error || "Falha ao atualizar o motivo da exclusão no backend.";
+      alert(errMsg);
+      setWriteOpFailed(true);
       return;
     }
-
-    await refreshExclusions();
   };
 
   const persistExclusionDate = async (student: ExcludedStudent, dateExclusao: string) => {
@@ -674,13 +669,13 @@ export const Exclusions: React.FC = () => {
 
     try {
       await addExclusion(payload);
-    } catch {
-      alert("Falha ao atualizar a data da exclusão no backend.");
-      await markWriteFailureAndRefresh();
+      await refreshExclusions();
+    } catch (err: any) {
+      const errMsg = err?.data?.error || "Falha ao atualizar a data da exclusão no backend.";
+      alert(errMsg);
+      setWriteOpFailed(true);
       return;
     }
-
-    await refreshExclusions();
   };
 
   const beginDateEdit = (student: ExcludedStudent, rowKey: string) => {
