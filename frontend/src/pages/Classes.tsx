@@ -276,6 +276,13 @@ export const Classes: React.FC = () => {
           const exclusionHorario = normalizeHorarioDigits(canonicalExclusion?.horario || "");
           const exclusionProfessor = normalizeSimple(canonicalExclusion?.professor || "");
 
+          const hasExclusionContext = Boolean(
+            exclusionTurma || exclusionTurmaCodigo || exclusionHorario || exclusionProfessor
+          );
+          if (!hasExclusionContext) {
+            return false;
+          }
+
           const turmaMatches =
             !exclusionTurma && !exclusionTurmaCodigo
               ? true

@@ -240,15 +240,6 @@ const exclusionMatches = (candidate: any, payload: any) => {
     return candidateProfessor === payloadProfessor;
   }
 
-  const candidateHasAnyContext = candidateTurmaSet.size > 0 || Boolean(candidateHorario) || Boolean(candidateProfessor);
-  const payloadHasAnyContext = payloadTurmaSet.size > 0 || Boolean(payloadHorario) || Boolean(payloadProfessor);
-
-  // Backward compatibility for legacy exclusions stored only by name.
-  // If one side has no context, keep name match so old exclusions remain effective.
-  if (!candidateHasAnyContext || !payloadHasAnyContext) {
-    return true;
-  }
-
   return false;
 };
 
@@ -276,9 +267,10 @@ const cleanExcludedStudentsLocalCache = () => {
   
   // First pass: deduplicate by UID/ID
   localItems.forEach((item) => {
-    const uid = String(item?.student_uid || item?.studentUid || "").trim();
-    const id = String(item?.id || "").trim();
-    const key = (uid || id || "") + "|" + (normalizeText(item?.nome || item?.Nome || ""));
+    const normalized = toCanonicalExclusionRecord(item);
+    const uid = String(normalized?.student_uid || "").trim();
+    const id = String(normalized?.id || "").trim();
+    const key = (uid || id || "") + "|" + normalizeText(normalized?.nome || "");
     
     if (key && !key.startsWith("|") && seen.has(key)) {
       return; // Skip duplicates by UID/ID/Name combo
@@ -288,7 +280,6 @@ const cleanExcludedStudentsLocalCache = () => {
       seen.add(key);
     }
     
-    const normalized = toCanonicalExclusionRecord(item);
     if (isValidExcludedStudentRecord(normalized)) {
       cleaned.push(normalized);
     }
