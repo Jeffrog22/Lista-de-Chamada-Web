@@ -78,7 +78,11 @@ origins = [
     for origin in cors_origins_raw.split(",")
     if _normalize_origin(origin)
 ]
-for mandatory_origin in ["https://chamadabelavista.pages.dev"]:
+for mandatory_origin in [
+    "https://chamadabelavista.pages.dev",
+    "https://chamadasaomatheus.pages.dev",
+    "https://chamadavila.pages.dev",
+]:
     normalized_mandatory = _normalize_origin(mandatory_origin)
     if normalized_mandatory and normalized_mandatory not in origins:
         origins.append(normalized_mandatory)
