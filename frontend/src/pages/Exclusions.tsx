@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { addExclusion, deleteExclusion, getExcludedStudents, restoreStudent, isExclusionsWriteFailed } from "../api";
+import { addExclusion, deleteExclusion, getExcludedStudents, restoreStudent, isExclusionsWriteFailed, toCanonicalExclusionRecord } from "../api";
 import "./Exclusions.css";
 
 interface ExcludedStudent {
@@ -163,14 +163,8 @@ export const Exclusions: React.FC = () => {
   const nameParticles = new Set(["da", "de", "do", "das", "dos", "e"]);
 
   const resolveStudentName = (student: ExcludedStudent) => {
-    return String(
-      student.nome ||
-      student.Nome ||
-      student.aluno ||
-      student.aluno_nome ||
-      student.alunoNome ||
-      ""
-    ).trim();
+    const canonical = toCanonicalExclusionRecord(student);
+    return String(canonical?.nome || "").trim();
   };
 
   const readExcludedStudentsLocal = () => {
@@ -312,22 +306,21 @@ export const Exclusions: React.FC = () => {
     return digits;
   };
 
-  const getStudentUid = (student: ExcludedStudent) =>
-    String(student.student_uid || student.studentUid || "").trim();
+  const getStudentUid = (student: ExcludedStudent) => {
+    const canonical = toCanonicalExclusionRecord(student);
+    return String(canonical?.student_uid || "").trim();
+  };
 
   const getStudentId = (student: ExcludedStudent) =>
     String(student.id || "").trim();
 
   const getStudentTurmaSet = (student: ExcludedStudent) => {
+    const canonical = toCanonicalExclusionRecord(student);
     const values = [
-      student.turma,
-      student.Turma,
-      student.turmaLabel,
-      student.TurmaLabel,
-      student.turmaCodigo,
-      student.TurmaCodigo,
-      student.grupo,
-      student.Grupo,
+      canonical?.turma,
+      canonical?.turmaLabel,
+      canonical?.turmaCodigo,
+      canonical?.grupo,
     ]
       .map((value) => normalizeText(String(value || "")))
       .filter(Boolean);
@@ -335,33 +328,36 @@ export const Exclusions: React.FC = () => {
   };
 
   const exclusionsMatch = (left: ExcludedStudent, right: ExcludedStudent) => {
-    const leftUid = getStudentUid(left);
-    const rightUid = getStudentUid(right);
+    const leftCanonical = toCanonicalExclusionRecord(left);
+    const rightCanonical = toCanonicalExclusionRecord(right);
+
+    const leftUid = getStudentUid(leftCanonical);
+    const rightUid = getStudentUid(rightCanonical);
     if (leftUid && rightUid && leftUid === rightUid) return true;
 
-    const leftId = getStudentId(left);
-    const rightId = getStudentId(right);
+    const leftId = getStudentId(leftCanonical);
+    const rightId = getStudentId(rightCanonical);
     if (leftId && rightId && leftId === rightId) return true;
 
-    const leftName = normalizeText(resolveStudentName(left));
-    const rightName = normalizeText(resolveStudentName(right));
+    const leftName = normalizeText(resolveStudentName(leftCanonical));
+    const rightName = normalizeText(resolveStudentName(rightCanonical));
     if (!leftName || !rightName || leftName !== rightName) return false;
 
-    const leftTurmas = getStudentTurmaSet(left);
-    const rightTurmas = getStudentTurmaSet(right);
+    const leftTurmas = getStudentTurmaSet(leftCanonical);
+    const rightTurmas = getStudentTurmaSet(rightCanonical);
     const hasTurmaContext = leftTurmas.size > 0 && rightTurmas.size > 0;
     const turmaMatches =
       !hasTurmaContext ||
       Array.from(leftTurmas).some((value) => rightTurmas.has(value));
     if (!turmaMatches) return false;
 
-    const leftHorario = normalizeHorarioDigits(String(left.horario || left.Horario || ""));
-    const rightHorario = normalizeHorarioDigits(String(right.horario || right.Horario || ""));
+    const leftHorario = normalizeHorarioDigits(String(leftCanonical.horario || ""));
+    const rightHorario = normalizeHorarioDigits(String(rightCanonical.horario || ""));
     const hasHorarioContext = Boolean(leftHorario && rightHorario);
     if (hasHorarioContext && leftHorario !== rightHorario) return false;
 
-    const leftProfessor = normalizeText(String(left.professor || left.Professor || ""));
-    const rightProfessor = normalizeText(String(right.professor || right.Professor || ""));
+    const leftProfessor = normalizeText(String(leftCanonical.professor || ""));
+    const rightProfessor = normalizeText(String(rightCanonical.professor || ""));
     const hasProfessorContext = Boolean(leftProfessor && rightProfessor);
     if (hasProfessorContext && leftProfessor !== rightProfessor) return false;
 
@@ -379,10 +375,7 @@ export const Exclusions: React.FC = () => {
 
     source.forEach((raw) => {
       if (!raw || typeof raw !== "object") return;
-      const item: ExcludedStudent = {
-        ...raw,
-        horario: normalizeHorarioDigits(String(raw.horario || raw.Horario || "")),
-      };
+      const item = toCanonicalExclusionRecord(raw) as ExcludedStudent;
 
       const hasUid = Boolean(getStudentUid(item));
       const hasName = Boolean(normalizeText(resolveStudentName(item)));

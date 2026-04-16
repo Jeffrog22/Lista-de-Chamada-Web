@@ -72,6 +72,14 @@ const logPersistenceDebug = (action: string, payload: Record<string, unknown>) =
 
 const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
 
+const firstNonEmpty = (...values: unknown[]) => {
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (normalized) return normalized;
+  }
+  return "";
+};
+
 const normalizeHorarioKey = (value: unknown) => {
   const digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "";
@@ -85,91 +93,111 @@ const resolveExclusionName = (item: any) =>
 
 const isPendingExcludedSync = (item: any) => Boolean(item?._pendingSync);
 
-const normalizeExcludedStudentRecord = (item: any) => {
-  const normalizedName = resolveExclusionName(item);
+export const toCanonicalExclusionRecord = (item: any) => {
   const pendingSync = isPendingExcludedSync(item);
-  const normalizedUid = String(item?.student_uid || item?.studentUid || "").trim();
-  if (!normalizedName) return { ...item, _pendingSync: pendingSync };
+  const next = { ...(item || {}) };
 
-  const next = { ...item };
-  if (!next.nome) next.nome = normalizedName;
-  if (!next.Nome) next.Nome = normalizedName;
-  if (normalizedUid) {
-    next.student_uid = normalizedUid;
-    next.studentUid = normalizedUid;
+  const nome = resolveExclusionName(item);
+  const studentUid = firstNonEmpty(item?.student_uid, item?.studentUid);
+  const turmaLabel = firstNonEmpty(item?.turmaLabel, item?.TurmaLabel, item?.turma, item?.Turma);
+  const turmaCodigo = firstNonEmpty(item?.turmaCodigo, item?.TurmaCodigo, item?.grupo, item?.Grupo);
+  const horario = normalizeHorarioKey(firstNonEmpty(item?.horario, item?.Horario));
+  const professor = firstNonEmpty(item?.professor, item?.Professor);
+  const dataExclusao = firstNonEmpty(item?.dataExclusao, item?.DataExclusao);
+  const motivoExclusao = firstNonEmpty(item?.motivo_exclusao, item?.MotivoExclusao);
+
+  if (nome) next.nome = nome;
+  if (studentUid) next.student_uid = studentUid;
+  if (turmaLabel) {
+    next.turma = turmaLabel;
+    next.turmaLabel = turmaLabel;
   }
+  if (turmaCodigo) {
+    next.turmaCodigo = turmaCodigo;
+    next.grupo = turmaCodigo;
+  }
+  if (horario) next.horario = horario;
+  if (professor) next.professor = professor;
+  if (dataExclusao) next.dataExclusao = dataExclusao;
+  if (motivoExclusao) next.motivo_exclusao = motivoExclusao;
+
+  // Strip legacy aliases after canonicalization.
+  delete next.Nome;
+  delete next.Turma;
+  delete next.TurmaLabel;
+  delete next.Grupo;
+  delete next.TurmaCodigo;
+  delete next.Horario;
+  delete next.Professor;
+  delete next.DataExclusao;
+  delete next.MotivoExclusao;
+  delete next.studentUid;
+
   next._pendingSync = pendingSync;
   return next;
 };
 
 const isValidExcludedStudentRecord = (item: any) => {
-  const uid = String(item?.student_uid || item?.studentUid || "").trim();
+  const normalized = toCanonicalExclusionRecord(item);
+
+  const uid = String(normalized?.student_uid || "").trim();
   if (uid) return true;
 
-  const name = normalizeText(resolveExclusionName(item));
+  const name = normalizeText(normalized?.nome || "");
   if (name) return true;
 
-  const id = String(item?.id || "").trim();
-  const turma = normalizeText(item?.turma || item?.Turma || item?.turmaLabel || item?.TurmaLabel || item?.grupo || item?.Grupo || item?.turmaCodigo || item?.TurmaCodigo);
-  const horario = normalizeHorarioKey(item?.horario || item?.Horario);
-  const professor = normalizeText(item?.professor || item?.Professor);
+  const id = String(normalized?.id || "").trim();
+  const turma = normalizeText(normalized?.turmaLabel || normalized?.turma || normalized?.turmaCodigo || normalized?.grupo);
+  const horario = normalizeHorarioKey(normalized?.horario);
+  const professor = normalizeText(normalized?.professor);
 
   return Boolean(id && turma && (horario || professor));
 };
 
 const exclusionMatches = (candidate: any, payload: any) => {
-  const candidateUid = String(candidate?.student_uid || candidate?.studentUid || "").trim();
-  const payloadUid = String(payload?.student_uid || payload?.studentUid || "").trim();
+  const normalizedCandidate = toCanonicalExclusionRecord(candidate);
+  const normalizedPayload = toCanonicalExclusionRecord(payload);
+
+  const candidateUid = String(normalizedCandidate?.student_uid || "").trim();
+  const payloadUid = String(normalizedPayload?.student_uid || "").trim();
   if (candidateUid && payloadUid && candidateUid === payloadUid) return true;
 
-  const candidateId = String(candidate?.id || "").trim();
-  const payloadId = String(payload?.id || "").trim();
+  const candidateId = String(normalizedCandidate?.id || "").trim();
+  const payloadId = String(normalizedPayload?.id || "").trim();
   if (candidateId && payloadId && candidateId === payloadId) return true;
 
-  const candidateNome = normalizeText(
-    candidate?.nome || candidate?.Nome || candidate?.aluno || candidate?.aluno_nome || candidate?.alunoNome
-  );
-  const payloadNome = normalizeText(
-    payload?.nome || payload?.Nome || payload?.aluno || payload?.aluno_nome || payload?.alunoNome
-  );
+  const candidateNome = normalizeText(normalizedCandidate?.nome);
+  const payloadNome = normalizeText(normalizedPayload?.nome);
   if (!candidateNome || !payloadNome || candidateNome !== payloadNome) return false;
 
   // IMPROVED: Require at least one full context match (turma+horario+professor or equivalent)
   // to avoid false positives from names alone, especially with historical data
   const candidateTurmaSet = new Set(
     [
-      candidate?.turma,
-      candidate?.Turma,
-      candidate?.turmaLabel,
-      candidate?.TurmaLabel,
-      candidate?.turmaCodigo,
-      candidate?.TurmaCodigo,
-      candidate?.grupo,
-      candidate?.Grupo,
+      normalizedCandidate?.turma,
+      normalizedCandidate?.turmaLabel,
+      normalizedCandidate?.turmaCodigo,
+      normalizedCandidate?.grupo,
     ]
       .map((value) => normalizeText(value))
       .filter(Boolean)
   );
   const payloadTurmaSet = new Set(
     [
-      payload?.turma,
-      payload?.Turma,
-      payload?.turmaLabel,
-      payload?.TurmaLabel,
-      payload?.turmaCodigo,
-      payload?.TurmaCodigo,
-      payload?.grupo,
-      payload?.Grupo,
+      normalizedPayload?.turma,
+      normalizedPayload?.turmaLabel,
+      normalizedPayload?.turmaCodigo,
+      normalizedPayload?.grupo,
     ]
       .map((value) => normalizeText(value))
       .filter(Boolean)
   );
 
-  const candidateHorario = normalizeHorarioKey(candidate?.horario || candidate?.Horario);
-  const payloadHorario = normalizeHorarioKey(payload?.horario || payload?.Horario);
+  const candidateHorario = normalizeHorarioKey(normalizedCandidate?.horario);
+  const payloadHorario = normalizeHorarioKey(normalizedPayload?.horario);
   
-  const candidateProfessor = normalizeText(candidate?.professor || candidate?.Professor);
-  const payloadProfessor = normalizeText(payload?.professor || payload?.Professor);
+  const candidateProfessor = normalizeText(normalizedCandidate?.professor);
+  const payloadProfessor = normalizeText(normalizedPayload?.professor);
 
   const hasTurmaContext = candidateTurmaSet.size > 0 && payloadTurmaSet.size > 0;
   const hasHorarioContext = Boolean(candidateHorario && payloadHorario);
@@ -260,7 +288,7 @@ const cleanExcludedStudentsLocalCache = () => {
       seen.add(key);
     }
     
-    const normalized = normalizeExcludedStudentRecord(item);
+    const normalized = toCanonicalExclusionRecord(item);
     if (isValidExcludedStudentRecord(normalized)) {
       cleaned.push(normalized);
     }
@@ -275,7 +303,7 @@ const cleanExcludedStudentsLocalCache = () => {
 };
 
 const upsertExcludedStudentLocal = (payload: any, pendingSync?: boolean) => {
-  const normalizedPayload = normalizeExcludedStudentRecord(
+  const normalizedPayload = toCanonicalExclusionRecord(
     pendingSync === undefined ? payload : { ...payload, _pendingSync: pendingSync }
   );
   const items = cleanExcludedStudentsLocalCache();
@@ -284,7 +312,7 @@ const upsertExcludedStudentLocal = (payload: any, pendingSync?: boolean) => {
   if (idx >= 0) {
     const currentPending = isPendingExcludedSync(nextItems[idx]);
     const resolvedPending = pendingSync === undefined ? currentPending : pendingSync;
-    nextItems[idx] = normalizeExcludedStudentRecord({
+    nextItems[idx] = toCanonicalExclusionRecord({
       ...nextItems[idx],
       ...normalizedPayload,
       _pendingSync: resolvedPending,
@@ -520,7 +548,7 @@ export const addExclusion = (data: any) => {
 };
 
 export const addExclusionsBulk = (items: any[], replace = false) => {
-  const payloadItems = (Array.isArray(items) ? items : []).map((item) => normalizeExcludedStudentRecord(item));
+  const payloadItems = (Array.isArray(items) ? items : []).map((item) => toCanonicalExclusionRecord(item));
   if (payloadItems.length === 0) {
     return Promise.resolve({ data: { ok: true, added: 0, updated: 0, skipped: 0, total: readExcludedStudentsLocal().length } });
   }
@@ -531,9 +559,9 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
       const next = [...current];
       payloadItems.forEach((item) => {
         const idx = next.findIndex((existing) => exclusionMatches(existing, item));
-        const normalized = normalizeExcludedStudentRecord({ ...item, _pendingSync: false });
+        const normalized = toCanonicalExclusionRecord({ ...item, _pendingSync: false });
         if (idx >= 0) {
-          next[idx] = normalizeExcludedStudentRecord({ ...next[idx], ...normalized, _pendingSync: false });
+          next[idx] = toCanonicalExclusionRecord({ ...next[idx], ...normalized, _pendingSync: false });
         } else {
           next.push(normalized);
         }
@@ -546,9 +574,9 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
       const next = [...current];
       payloadItems.forEach((item) => {
         const idx = next.findIndex((existing) => exclusionMatches(existing, item));
-        const normalized = normalizeExcludedStudentRecord({ ...item, _pendingSync: true });
+        const normalized = toCanonicalExclusionRecord({ ...item, _pendingSync: true });
         if (idx >= 0) {
-          next[idx] = normalizeExcludedStudentRecord({ ...next[idx], ...normalized, _pendingSync: true });
+          next[idx] = toCanonicalExclusionRecord({ ...next[idx], ...normalized, _pendingSync: true });
         } else {
           next.push(normalized);
         }
