@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { getBootstrap, addClass, updateClass } from "../api";
+import { getBootstrap, addClass, toCanonicalExclusionRecord, updateClass } from "../api";
 import "./Classes.css";
 
 interface Class {
@@ -242,20 +242,22 @@ export const Classes: React.FC = () => {
         const excluded = excludedRaw ? JSON.parse(excludedRaw) : [];
 
         const isExcludedStudent = (student: any, exclusion: any) => {
-          const studentUid = String(student?.studentUid || student?.student_uid || "").trim();
-          const exclusionUid = String(exclusion?.student_uid || exclusion?.studentUid || "").trim();
+          const canonicalExclusion = toCanonicalExclusionRecord(exclusion);
+
+          const studentUid = String(student?.studentUid || "").trim();
+          const exclusionUid = String(canonicalExclusion?.student_uid || "").trim();
           if (studentUid && exclusionUid && studentUid === exclusionUid) {
             return true;
           }
 
           const studentId = String(student?.id || "").trim();
-          const exclusionId = String(exclusion?.id || "").trim();
+          const exclusionId = String(canonicalExclusion?.id || "").trim();
           if (studentId && exclusionId && studentId === exclusionId) {
             return true;
           }
 
           const studentName = normalizeSimple(student?.nome || "");
-          const exclusionName = normalizeSimple(exclusion?.nome || exclusion?.Nome || "");
+          const exclusionName = normalizeSimple(canonicalExclusion?.nome || "");
           if (!studentName || !exclusionName || studentName !== exclusionName) {
             return false;
           }
@@ -266,13 +268,13 @@ export const Classes: React.FC = () => {
           const studentProfessor = normalizeSimple(student?.professor || "");
 
           const exclusionTurma = normalizeSimple(
-            exclusion?.turmaLabel || exclusion?.TurmaLabel || exclusion?.turma || exclusion?.Turma || ""
+            canonicalExclusion?.turmaLabel || canonicalExclusion?.turma || ""
           );
           const exclusionTurmaCodigo = normalizeSimple(
-            exclusion?.grupo || exclusion?.Grupo || exclusion?.turmaCodigo || exclusion?.TurmaCodigo || ""
+            canonicalExclusion?.grupo || canonicalExclusion?.turmaCodigo || ""
           );
-          const exclusionHorario = normalizeHorarioDigits(exclusion?.horario || exclusion?.Horario || "");
-          const exclusionProfessor = normalizeSimple(exclusion?.professor || exclusion?.Professor || "");
+          const exclusionHorario = normalizeHorarioDigits(canonicalExclusion?.horario || "");
+          const exclusionProfessor = normalizeSimple(canonicalExclusion?.professor || "");
 
           const turmaMatches =
             !exclusionTurma && !exclusionTurmaCodigo

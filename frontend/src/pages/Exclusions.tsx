@@ -5,6 +5,7 @@ import "./Exclusions.css";
 
 interface ExcludedStudent {
   id?: string;
+  student_uid?: string;
   grupo?: string;
   nome?: string;
   turma?: string;
@@ -22,16 +23,6 @@ interface ExcludedStudent {
   dataAtestado?: string;
   dataExclusao?: string;
   motivo_exclusao?: string;
-  Nome?: string;
-  Turma?: string;
-  TurmaLabel?: string;
-  Grupo?: string;
-  TurmaCodigo?: string;
-  Horario?: string;
-  Professor?: string;
-  DataExclusao?: string;
-  MotivoExclusao?: string;
-  [key: string]: any;
 }
 
 export const Exclusions: React.FC = () => {
@@ -434,9 +425,10 @@ export const Exclusions: React.FC = () => {
   };
 
   const resolveStudentTurmaLabel = (student: ExcludedStudent) => {
-    const raw = String(student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "").trim();
-    const horario = String(student.horario || student.Horario || "");
-    const professor = String(student.professor || student.Professor || "");
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
+    const raw = String(canonical.turmaLabel || canonical.turma || "").trim();
+    const horario = String(canonical.horario || "");
+    const professor = String(canonical.professor || "");
 
     const cls = resolveClassFromTriple(raw, horario, professor);
     const fromClass = String(cls?.Turma || "").trim();
@@ -480,29 +472,30 @@ export const Exclusions: React.FC = () => {
       alert("⚠️ Backend não está disponível!\n\nOperações de restauração estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
       return;
     }
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
     const rawTurma = resolveStudentTurmaLabel(student);
     const turmaValue = resolveTurmaLabel(rawTurma) || lastTurma || rawTurma;
-    const dataNascimento = normalizeDateValue(student.dataNascimento || "").trim();
+    const dataNascimento = normalizeDateValue(canonical.dataNascimento || "").trim();
     const idade = calculateAge(dataNascimento);
-    const categoriaCalc = getCategoriaByAge(idade) || student.categoria || "";
+    const categoriaCalc = getCategoriaByAge(idade) || canonical.categoria || "";
 
-    setEditingStudent(student);
+    setEditingStudent(canonical);
     if (turmaValue) {
       setLastTurma(turmaValue);
     }
     setFormData({
-      nome: student.nome || student.Nome || "",
+      nome: canonical.nome || "",
       dataNascimento,
-      genero: student.genero || "Masculino",
-      whatsapp: student.whatsapp || "",
+      genero: canonical.genero || "Masculino",
+      whatsapp: canonical.whatsapp || "",
       turma: turmaValue,
-      horario: formatHorario(student.horario || student.Horario || ""),
-      professor: student.professor || student.Professor || "",
-      nivel: student.nivel || "",
+      horario: formatHorario(canonical.horario || ""),
+      professor: canonical.professor || "",
+      nivel: canonical.nivel || "",
       categoria: categoriaCalc,
-      parQ: student.parQ || "Não",
-      atestado: !!student.atestado,
-      dataAtestado: normalizeDateValue(student.dataAtestado || ""),
+      parQ: canonical.parQ || "Não",
+      atestado: !!canonical.atestado,
+      dataAtestado: normalizeDateValue(canonical.dataAtestado || ""),
     });
     setShowModal(true);
   };
@@ -542,12 +535,13 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
+    const canonicalEditing = toCanonicalExclusionRecord(editingStudent) as ExcludedStudent;
     const classMatch = resolveClassFromTriple(formData.turma, formData.horario, formData.professor);
     const turmaLabel = classMatch?.Turma || formData.turma;
-    const turmaCodigo = classMatch?.Grupo || classMatch?.TurmaCodigo || editingStudent.grupo || editingStudent.turmaCodigo || editingStudent.Grupo || editingStudent.TurmaCodigo || "";
+    const turmaCodigo = classMatch?.Grupo || classMatch?.TurmaCodigo || canonicalEditing.grupo || canonicalEditing.turmaCodigo || "";
 
     const restorePayload = {
-      id: editingStudent.id,
+      id: canonicalEditing.id,
       nome: formData.nome,
       turma: turmaLabel,
       horario: formData.horario,
@@ -558,7 +552,7 @@ export const Exclusions: React.FC = () => {
       await restoreStudent(restorePayload);
       
       const restoredStudent = {
-        ...editingStudent,
+        ...canonicalEditing,
         ...formData,
         turma: turmaLabel,
         grupo: turmaCodigo,
@@ -566,10 +560,6 @@ export const Exclusions: React.FC = () => {
         turmaCodigo,
         idade: calculateAge(formData.dataNascimento),
         dataExclusao: undefined,
-        DataExclusao: undefined,
-        Nome: undefined,
-        Turma: undefined,
-        Professor: undefined,
       };
 
       const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
@@ -594,13 +584,14 @@ export const Exclusions: React.FC = () => {
       alert("⚠️ Backend não está disponível!\n\nOperações de exclusão estão bloqueadas.\n\nPor favor, verifique sua conexão com o servidor e tente novamente.");
       return;
     }
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
     if (!confirm(`Excluir definitivamente ${getDisplayStudentName(student)}?`)) return;
     const payload = {
-      id: student.id,
-      nome: student.nome || student.Nome,
-      turma: student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "",
-      horario: student.horario || student.Horario || "",
-      professor: student.professor || student.Professor || "",
+      id: canonical.id,
+      nome: canonical.nome,
+      turma: canonical.turmaLabel || canonical.turma || "",
+      horario: canonical.horario || "",
+      professor: canonical.professor || "",
     };
 
     try {
@@ -621,14 +612,15 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
     const normalized = reason.trim();
     const payload = {
-      ...student,
-      nome: student.nome || student.Nome || "",
-      turma: student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "",
-      horario: student.horario || student.Horario || "",
-      professor: student.professor || student.Professor || "",
-      dataExclusao: student.dataExclusao || student.DataExclusao || "",
+      ...canonical,
+      nome: canonical.nome || "",
+      turma: canonical.turmaLabel || canonical.turma || "",
+      horario: canonical.horario || "",
+      professor: canonical.professor || "",
+      dataExclusao: canonical.dataExclusao || "",
       motivo_exclusao: normalized,
     };
 
@@ -650,14 +642,15 @@ export const Exclusions: React.FC = () => {
       return;
     }
 
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
     const payload = {
-      ...student,
-      nome: student.nome || student.Nome || "",
-      turma: student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "",
-      horario: student.horario || student.Horario || "",
-      professor: student.professor || student.Professor || "",
+      ...canonical,
+      nome: canonical.nome || "",
+      turma: canonical.turmaLabel || canonical.turma || "",
+      horario: canonical.horario || "",
+      professor: canonical.professor || "",
       dataExclusao: dateExclusao,
-      motivo_exclusao: (student.motivo_exclusao || student.MotivoExclusao || "").trim(),
+      motivo_exclusao: (canonical.motivo_exclusao || "").trim(),
     };
 
     try {
@@ -677,7 +670,8 @@ export const Exclusions: React.FC = () => {
       return;
     }
     setEditingDateKey(rowKey);
-    setEditingDateValue(normalizeDateValue(student.dataExclusao || student.DataExclusao || ""));
+    const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
+    setEditingDateValue(normalizeDateValue(canonical.dataExclusao || ""));
   };
 
   const cancelDateEdit = () => {
@@ -732,8 +726,8 @@ export const Exclusions: React.FC = () => {
       const bName = normalizeText(resolveStudentName(b));
       cmp = aName.localeCompare(bName, "pt-BR");
     } else {
-      const aDate = parseExclusionDate(String(a.dataExclusao || a.DataExclusao || ""));
-      const bDate = parseExclusionDate(String(b.dataExclusao || b.DataExclusao || ""));
+      const aDate = parseExclusionDate(String((toCanonicalExclusionRecord(a) as ExcludedStudent).dataExclusao || ""));
+      const bDate = parseExclusionDate(String((toCanonicalExclusionRecord(b) as ExcludedStudent).dataExclusao || ""));
       cmp = aDate - bDate;
     }
     return sortDirection === "asc" ? cmp : -cmp;
@@ -745,7 +739,10 @@ export const Exclusions: React.FC = () => {
       : Array.from(
           new Set(
             students
-              .map((student) => student.turmaLabel || student.TurmaLabel || student.turma || student.Turma || "")
+              .map((student) => {
+                const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
+                return canonical.turmaLabel || canonical.turma || "";
+              })
               .map((value) => String(value || "").trim())
               .filter(Boolean)
           )
@@ -902,6 +899,8 @@ export const Exclusions: React.FC = () => {
           {sortedStudents.map((student, idx) => {
             const rowKey = getExclusionRowKey(student, idx);
             const isEditingRowDate = editingDateKey === rowKey;
+            const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
+            const exclusionReason = (canonical.motivo_exclusao || "").trim();
             return (
             <div
               key={rowKey}
@@ -920,10 +919,10 @@ export const Exclusions: React.FC = () => {
             >
               <span style={{ fontWeight: 600, textAlign: "left" }}>{getDisplayStudentName(student)}</span>
               <span>{resolveStudentTurmaLabel(student)}</span>
-              <span>{formatHorario(student.horario || student.Horario || "") || "-"}</span>
-              <span>{student.professor || student.Professor || "-"}</span>
+              <span>{formatHorario(canonical.horario || "") || "-"}</span>
+              <span>{canonical.professor || "-"}</span>
               <select
-                value={student.motivo_exclusao || student.MotivoExclusao || ""}
+                value={exclusionReason}
                 disabled={isReadOnlyMode}
                 onChange={(e) => {
                   const value = e.target.value;
@@ -947,10 +946,10 @@ export const Exclusions: React.FC = () => {
                     {option}
                   </option>
                 ))}
-                {(student.motivo_exclusao || student.MotivoExclusao) &&
-                  !exclusionReasonOptions.includes((student.motivo_exclusao || student.MotivoExclusao || "").trim()) && (
-                    <option value={student.motivo_exclusao || student.MotivoExclusao}>
-                      {student.motivo_exclusao || student.MotivoExclusao}
+                {exclusionReason &&
+                  !exclusionReasonOptions.includes(exclusionReason) && (
+                    <option value={exclusionReason}>
+                      {exclusionReason}
                     </option>
                   )}
               </select>
@@ -999,7 +998,7 @@ export const Exclusions: React.FC = () => {
                     opacity: isReadOnlyMode ? 0.7 : 1,
                   }}
                 >
-                  {normalizeDateValue(student.dataExclusao || student.DataExclusao || "") || "-"}
+                  {normalizeDateValue(canonical.dataExclusao || "") || "-"}
                 </button>
               )}
               <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
