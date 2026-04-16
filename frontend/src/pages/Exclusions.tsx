@@ -297,13 +297,20 @@ export const Exclusions: React.FC = () => {
     return digits;
   };
 
+  const normalizeRealExclusionId = (value: unknown) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return "";
+    if (/^excl-\d+$/i.test(normalized)) return "";
+    return normalized;
+  };
+
   const getStudentUid = (student: ExcludedStudent) => {
     const canonical = toCanonicalExclusionRecord(student);
     return String(canonical?.student_uid || "").trim();
   };
 
   const getStudentId = (student: ExcludedStudent) =>
-    String(student.id || "").trim();
+    normalizeRealExclusionId(student.id);
 
   const getStudentTurmaSet = (student: ExcludedStudent) => {
     const canonical = toCanonicalExclusionRecord(student);
@@ -541,12 +548,15 @@ export const Exclusions: React.FC = () => {
     const turmaCodigo = classMatch?.Grupo || classMatch?.TurmaCodigo || canonicalEditing.grupo || canonicalEditing.turmaCodigo || "";
 
     const restorePayload = {
-      id: canonicalEditing.id,
       nome: formData.nome,
       turma: turmaLabel,
       horario: formData.horario,
       professor: formData.professor,
     };
+    const restoredId = normalizeRealExclusionId(canonicalEditing.id);
+    if (restoredId) {
+      (restorePayload as any).id = restoredId;
+    }
 
     try {
       await restoreStudent(restorePayload);
@@ -587,12 +597,15 @@ export const Exclusions: React.FC = () => {
     const canonical = toCanonicalExclusionRecord(student) as ExcludedStudent;
     if (!confirm(`Excluir definitivamente ${getDisplayStudentName(student)}?`)) return;
     const payload = {
-      id: canonical.id,
       nome: canonical.nome,
       turma: canonical.turmaLabel || canonical.turma || "",
       horario: canonical.horario || "",
       professor: canonical.professor || "",
     };
+    const canonicalId = normalizeRealExclusionId(canonical.id);
+    if (canonicalId) {
+      (payload as any).id = canonicalId;
+    }
 
     try {
       await deleteExclusion(payload);

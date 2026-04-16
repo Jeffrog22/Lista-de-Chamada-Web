@@ -88,6 +88,13 @@ const normalizeHorarioKey = (value: unknown) => {
   return digits;
 };
 
+const normalizeRealExclusionId = (value: unknown) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  if (/^excl-\d+$/i.test(normalized)) return "";
+  return normalized;
+};
+
 const migrateLegacyExclusionRecord = (item: any) => {
   const source = item || {};
   const next = { ...source };
@@ -177,7 +184,7 @@ const isValidExcludedStudentRecord = (item: any) => {
   const name = normalizeText(normalized?.nome || "");
   if (name) return true;
 
-  const id = String(normalized?.id || "").trim();
+  const id = normalizeRealExclusionId(normalized?.id);
   const turma = normalizeText(normalized?.turmaLabel || normalized?.turma || normalized?.turmaCodigo || normalized?.grupo);
   const horario = normalizeHorarioKey(normalized?.horario);
   const professor = normalizeText(normalized?.professor);
@@ -193,8 +200,8 @@ const exclusionMatches = (candidate: any, payload: any) => {
   const payloadUid = String(normalizedPayload?.student_uid || "").trim();
   if (candidateUid && payloadUid && candidateUid === payloadUid) return true;
 
-  const candidateId = String(normalizedCandidate?.id || "").trim();
-  const payloadId = String(normalizedPayload?.id || "").trim();
+  const candidateId = normalizeRealExclusionId(normalizedCandidate?.id);
+  const payloadId = normalizeRealExclusionId(normalizedPayload?.id);
   if (candidateId && payloadId && candidateId === payloadId) return true;
 
   const candidateNome = normalizeText(normalizedCandidate?.nome);
@@ -304,8 +311,12 @@ const cleanExcludedStudentsLocalCache = () => {
   localItems.forEach((item) => {
     const normalized = normalizeIncomingExclusionRecord(item);
     const uid = String(normalized?.student_uid || "").trim();
-    const id = String(normalized?.id || "").trim();
+    const id = normalizeRealExclusionId(normalized?.id);
     const key = (uid || id || "") + "|" + normalizeText(normalized?.nome || "");
+
+    if (!id && normalized?.id) {
+      delete normalized.id;
+    }
     
     if (key && !key.startsWith("|") && seen.has(key)) {
       return; // Skip duplicates by UID/ID/Name combo

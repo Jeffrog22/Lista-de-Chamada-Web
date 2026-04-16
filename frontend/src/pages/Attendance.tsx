@@ -3870,6 +3870,13 @@ export const Attendance: React.FC = () => {
     if (window.confirm("O aluno excedeu o limite de faltas. Deseja excluí-lo da lista?")) {
       const student = attendance.find((item) => item.id === id);
       if (student) {
+        const resolveRealStudentId = (value: unknown) => {
+          const normalized = String(value || "").trim();
+          if (!normalized) return "";
+          if (/^excl-\d+$/i.test(normalized)) return "";
+          return normalized;
+        };
+
         const activeStudents = JSON.parse(localStorage.getItem("activeStudents") || "[]");
         const turmaKey = selectedClass.turmaLabel || selectedClass.turmaCodigo || selectedTurma || "";
         const horarioKey = selectedClass.horario || selectedHorario || "";
@@ -3880,10 +3887,11 @@ export const Attendance: React.FC = () => {
           s.horario === horarioKey &&
           s.professor === professorKey
         );
-        const payload = {
+        const studentUid = String((full as any)?.studentUid || (full as any)?.student_uid || "").trim();
+        const studentId = resolveRealStudentId((full as any)?.id ?? id);
+
+        const payload: Record<string, any> = {
           ...(full || {
-            id: `excl-${Date.now()}`,
-            studentUid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
             grupo: selectedClass.turmaCodigo || "",
             nome: student.aluno,
             turma: turmaKey,
@@ -3906,10 +3914,12 @@ export const Attendance: React.FC = () => {
           horario: horarioKey,
           professor: professorKey,
           grupo: selectedClass.turmaCodigo || "",
-          student_uid: String((full as any)?.studentUid || (full as any)?.student_uid || ""),
           dataExclusao: new Date().toLocaleDateString("pt-BR"),
           motivo_exclusao: "Falta",
         };
+
+        if (studentId) payload.id = studentId;
+        if (studentUid) payload.student_uid = studentUid;
 
         await addExclusion(payload).catch(() => {
           alert("Falha ao enviar exclusão ao backend. Tente novamente.");
