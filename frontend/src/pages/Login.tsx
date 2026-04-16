@@ -31,6 +31,7 @@ const isUnitAllowedForEnvironment = (typedUnit: string) => {
 export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin }) => {
   const teacherProfileStorageKey = "teacherProfile";
   const quickProfessorsStorageKey = "quickProfessorProfiles";
+  const quickProfilesDisabledStorageKey = "quickProfessorProfilesDisabled";
   const [profile, setProfile] = useState<TeacherProfile>({
     name: "",
     unit: "",
@@ -145,6 +146,15 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           // ignore invalid local payload
         }
 
+        const quickProfilesDisabled = localStorage.getItem(quickProfilesDisabledStorageKey) === "1";
+
+        if (quickProfilesDisabled) {
+          const sanitizedSaved = buildMergedQuickProfessors([], savedQuickProfessors);
+          setQuickProfessors(sanitizedSaved);
+          saveQuickProfessors(sanitizedSaved);
+          return;
+        }
+
         const mergedProfessors = buildMergedQuickProfessors(professorsFromClasses, savedQuickProfessors);
         setQuickProfessors(mergedProfessors);
         saveQuickProfessors(mergedProfessors);
@@ -191,6 +201,8 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     try {
       localStorage.removeItem(teacherProfileStorageKey);
       localStorage.removeItem("access_token");
+      localStorage.removeItem(quickProfessorsStorageKey);
+      localStorage.setItem(quickProfilesDisabledStorageKey, "1");
     } catch {
       // ignore storage errors
     }
@@ -198,6 +210,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setProfile({ name: "", unit: "" });
     setRememberProfile(false);
     setHasSavedProfile(false);
+    setQuickProfessors([]);
     setError(null);
     setStatus("Login automático limpo neste dispositivo.");
   };
@@ -298,6 +311,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       const updatedQuickProfessors = buildMergedQuickProfessors(quickProfessors, [normalizedProfile.name]);
       setQuickProfessors(updatedQuickProfessors);
       saveQuickProfessors(updatedQuickProfessors);
+      localStorage.removeItem(quickProfilesDisabledStorageKey);
 
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
@@ -350,6 +364,11 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     try {
       const res = await getBootstrap(undefined, { professor: normalizedName });
       applyBootstrap(res.data);
+
+      const updatedQuickProfessors = buildMergedQuickProfessors(quickProfessors, [normalizedName]);
+      setQuickProfessors(updatedQuickProfessors);
+      saveQuickProfessors(updatedQuickProfessors);
+      localStorage.removeItem(quickProfilesDisabledStorageKey);
 
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
