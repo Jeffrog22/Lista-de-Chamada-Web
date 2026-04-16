@@ -20,7 +20,7 @@
     "deploy:pages:sao": "npm run build:pages:sao && wrangler pages deploy dist --project-name=chamadasaomatheus --branch=master",
     "deploy:pages:vila": "npm run build:pages:vila && wrangler pages deploy dist --project-name=chamadavila --branch=master",
     "deploy:pages:all": "npm run deploy:pages:bela && npm run deploy:pages:sao && npm run deploy:pages:vila",
-    "deploy": "npm run deploy:pages:all"
+    "deploy": "npm run deploy:pages:bela"
   },
   "dependencies": {
     "axios": "^1.13.2",

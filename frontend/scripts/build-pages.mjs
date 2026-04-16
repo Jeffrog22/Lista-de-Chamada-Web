@@ -6,7 +6,7 @@ const profiles = {
   bela: {
     mode: "bela-vista",
     env: {
-      VITE_ENV_NAME: "bela-vista-mirror",
+      VITE_ENV_NAME: "bela-vista",
       VITE_UNIT_NAME: "Piscina Bela Vista",
     },
   },
@@ -29,6 +29,12 @@ const profiles = {
 if (!profiles[profile]) {
   const options = Object.keys(profiles).join(", ");
   throw new Error(`Perfil invalido: ${profile || "(vazio)"}. Use: ${options}`);
+}
+
+if (profile !== "bela" && String(process.env.ALLOW_NON_BELA_DEPLOY || "").trim() !== "1") {
+  throw new Error(
+    "Deploy bloqueado para este perfil. Sao Matheus/Vila so podem ser publicados apos liberacao explicita (defina ALLOW_NON_BELA_DEPLOY=1)."
+  );
 }
 
 const { mode, env } = profiles[profile];
