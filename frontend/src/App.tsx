@@ -432,7 +432,7 @@ export default function App() {
           <span className="app-version-tag" title="Versão da aplicação">{appVersion}</span>
           <span className="user-info">
             {teacherName ? `Conectado: ${formatDisplayName(teacherName)}` : "Conectado"}
-            {teacherUnit ? ` - Unidade validada: ${teacherUnit}` : ""}
+            {teacherUnit ? ` - Unidade/ Piscina: ${teacherUnit}` : ""}
           </span>
           <span className="user-info">
             Atualizado em: {formatImportDate(lastImportInfo?.last_import_at)}

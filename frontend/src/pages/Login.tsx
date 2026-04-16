@@ -44,6 +44,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
   const [backendOnline, setBackendOnline] = useState(false);
   const [importStatusInfo, setImportStatusInfo] = useState<any>(null);
   const [quickProfessors, setQuickProfessors] = useState<string[]>([]);
+  const [hasSavedProfile, setHasSavedProfile] = useState(false);
   const [adminInputsUnlocked, setAdminInputsUnlocked] = useState(false);
   const mobileTapTimestampsRef = useRef<number[]>([]);
 
@@ -118,6 +119,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           unit: String(parsed?.unit || ""),
         });
         setRememberProfile(true);
+        setHasSavedProfile(true);
       }
     } catch {
       // ignore invalid local profile payload
@@ -178,10 +180,26 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     if (!checked) {
       try {
         localStorage.removeItem(teacherProfileStorageKey);
+        setHasSavedProfile(false);
       } catch {
         // ignore storage errors
       }
     }
+  };
+
+  const handleResetAutoLogin = () => {
+    try {
+      localStorage.removeItem(teacherProfileStorageKey);
+      localStorage.removeItem("access_token");
+    } catch {
+      // ignore storage errors
+    }
+
+    setProfile({ name: "", unit: "" });
+    setRememberProfile(false);
+    setHasSavedProfile(false);
+    setError(null);
+    setStatus("Login automático limpo neste dispositivo.");
   };
 
   const formatImportDate = (value?: string | null) => {
@@ -283,8 +301,10 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
 
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
+        setHasSavedProfile(true);
       } else {
         localStorage.removeItem(teacherProfileStorageKey);
+        setHasSavedProfile(false);
       }
       localStorage.setItem("access_token", "local-session");
       onLogin("local-session");
@@ -333,6 +353,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
 
       if (rememberProfile) {
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
+        setHasSavedProfile(true);
       }
       localStorage.setItem("access_token", "local-session");
       onLogin("local-session");
@@ -454,6 +475,26 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           />
           <span>Lembrar meus dados neste dispositivo</span>
         </label>
+
+        {hasSavedProfile && (
+          <button
+            type="button"
+            onClick={handleResetAutoLogin}
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: 10,
+              background: "#f8fafc",
+              color: "#1f2937",
+              border: "1px solid #cbd5e1",
+              borderRadius: 4,
+              cursor: loading ? "not-allowed" : "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Resetar login automático (somente neste dispositivo)
+          </button>
+        )}
 
         <button
           type="submit"
