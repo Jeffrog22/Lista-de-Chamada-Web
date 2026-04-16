@@ -7,7 +7,7 @@ const profiles = {
     mode: "bela-vista",
     env: {
       VITE_ENV_NAME: "bela-vista",
-      VITE_UNIT_NAME: "Piscina Bela Vista",
+      VITE_UNIT_NAME: "Bela Vista",
     },
   },
   sao: {

@@ -344,7 +344,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     setStatus("Entrando com perfil rápido...");
     setLoading(true);
 
-    const unitForQuickLogin = expectedUnitName || String(profile.unit || "Piscina Bela Vista").trim() || "Piscina Bela Vista";
+    const unitForQuickLogin = expectedUnitName || String(profile.unit || "Bela Vista").trim() || "Bela Vista";
     if (!isUnitAllowedForEnvironment(unitForQuickLogin)) {
       setError(
         expectedUnitName

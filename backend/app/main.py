@@ -111,7 +111,10 @@ def _normalize_unit_name(value: str) -> str:
     if not raw:
         return ""
     normalized = unicodedata.normalize("NFD", raw)
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    folded = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    if folded in {"bela vista", "piscina bela vista"}:
+        return "bela vista"
+    return folded
 
 
 def _validate_unit_for_environment(typed_unit: Optional[str]) -> None:
