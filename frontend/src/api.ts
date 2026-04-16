@@ -88,8 +88,36 @@ const normalizeHorarioKey = (value: unknown) => {
   return digits;
 };
 
-const resolveExclusionName = (item: any) =>
-  String(item?.nome || item?.Nome || item?.aluno || item?.aluno_nome || item?.alunoNome || "").trim();
+const migrateLegacyExclusionRecord = (item: any) => {
+  const source = item || {};
+  const next = { ...source };
+
+  const nome = firstNonEmpty(source?.nome, source?.Nome, source?.aluno, source?.aluno_nome, source?.alunoNome);
+  const studentUid = firstNonEmpty(source?.student_uid, source?.studentUid);
+  const turmaLabel = firstNonEmpty(source?.turmaLabel, source?.TurmaLabel, source?.turma, source?.Turma);
+  const turmaCodigo = firstNonEmpty(source?.turmaCodigo, source?.TurmaCodigo, source?.grupo, source?.Grupo);
+  const horario = normalizeHorarioKey(firstNonEmpty(source?.horario, source?.Horario));
+  const professor = firstNonEmpty(source?.professor, source?.Professor);
+  const dataExclusao = firstNonEmpty(source?.dataExclusao, source?.DataExclusao);
+  const motivoExclusao = firstNonEmpty(source?.motivo_exclusao, source?.MotivoExclusao);
+
+  if (nome) next.nome = nome;
+  if (studentUid) next.student_uid = studentUid;
+  if (turmaLabel) {
+    next.turma = turmaLabel;
+    next.turmaLabel = turmaLabel;
+  }
+  if (turmaCodigo) {
+    next.turmaCodigo = turmaCodigo;
+    next.grupo = turmaCodigo;
+  }
+  if (horario) next.horario = horario;
+  if (professor) next.professor = professor;
+  if (dataExclusao) next.dataExclusao = dataExclusao;
+  if (motivoExclusao) next.motivo_exclusao = motivoExclusao;
+
+  return next;
+};
 
 const isPendingExcludedSync = (item: any) => Boolean(item?._pendingSync);
 
@@ -97,14 +125,14 @@ export const toCanonicalExclusionRecord = (item: any) => {
   const pendingSync = isPendingExcludedSync(item);
   const next = { ...(item || {}) };
 
-  const nome = resolveExclusionName(item);
-  const studentUid = firstNonEmpty(item?.student_uid, item?.studentUid);
-  const turmaLabel = firstNonEmpty(item?.turmaLabel, item?.TurmaLabel, item?.turma, item?.Turma);
-  const turmaCodigo = firstNonEmpty(item?.turmaCodigo, item?.TurmaCodigo, item?.grupo, item?.Grupo);
-  const horario = normalizeHorarioKey(firstNonEmpty(item?.horario, item?.Horario));
-  const professor = firstNonEmpty(item?.professor, item?.Professor);
-  const dataExclusao = firstNonEmpty(item?.dataExclusao, item?.DataExclusao);
-  const motivoExclusao = firstNonEmpty(item?.motivo_exclusao, item?.MotivoExclusao);
+  const nome = firstNonEmpty(item?.nome);
+  const studentUid = firstNonEmpty(item?.student_uid);
+  const turmaLabel = firstNonEmpty(item?.turmaLabel, item?.turma);
+  const turmaCodigo = firstNonEmpty(item?.turmaCodigo, item?.grupo);
+  const horario = normalizeHorarioKey(firstNonEmpty(item?.horario));
+  const professor = firstNonEmpty(item?.professor);
+  const dataExclusao = firstNonEmpty(item?.dataExclusao);
+  const motivoExclusao = firstNonEmpty(item?.motivo_exclusao);
 
   if (nome) next.nome = nome;
   if (studentUid) next.student_uid = studentUid;
@@ -136,6 +164,9 @@ export const toCanonicalExclusionRecord = (item: any) => {
   next._pendingSync = pendingSync;
   return next;
 };
+
+const normalizeIncomingExclusionRecord = (item: any) =>
+  toCanonicalExclusionRecord(migrateLegacyExclusionRecord(item));
 
 const isValidExcludedStudentRecord = (item: any) => {
   const normalized = toCanonicalExclusionRecord(item);
@@ -255,7 +286,11 @@ const readExcludedStudentsLocal = () => {
 };
 
 const writeExcludedStudentsLocal = (items: any[]) => {
-  localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(Array.isArray(items) ? items : []));
+  const source = Array.isArray(items) ? items : [];
+  const normalized = source
+    .map((item) => normalizeIncomingExclusionRecord(item))
+    .filter((item) => isValidExcludedStudentRecord(item));
+  localStorage.setItem(EXCLUDED_STUDENTS_STORAGE_KEY, JSON.stringify(normalized));
 };
 
 const cleanExcludedStudentsLocalCache = () => {
@@ -267,7 +302,7 @@ const cleanExcludedStudentsLocalCache = () => {
   
   // First pass: deduplicate by UID/ID
   localItems.forEach((item) => {
-    const normalized = toCanonicalExclusionRecord(item);
+    const normalized = normalizeIncomingExclusionRecord(item);
     const uid = String(normalized?.student_uid || "").trim();
     const id = String(normalized?.id || "").trim();
     const key = (uid || id || "") + "|" + normalizeText(normalized?.nome || "");
@@ -294,7 +329,7 @@ const cleanExcludedStudentsLocalCache = () => {
 };
 
 const upsertExcludedStudentLocal = (payload: any, pendingSync?: boolean) => {
-  const normalizedPayload = toCanonicalExclusionRecord(
+  const normalizedPayload = normalizeIncomingExclusionRecord(
     pendingSync === undefined ? payload : { ...payload, _pendingSync: pendingSync }
   );
   const items = cleanExcludedStudentsLocalCache();
@@ -303,7 +338,7 @@ const upsertExcludedStudentLocal = (payload: any, pendingSync?: boolean) => {
   if (idx >= 0) {
     const currentPending = isPendingExcludedSync(nextItems[idx]);
     const resolvedPending = pendingSync === undefined ? currentPending : pendingSync;
-    nextItems[idx] = toCanonicalExclusionRecord({
+    nextItems[idx] = normalizeIncomingExclusionRecord({
       ...nextItems[idx],
       ...normalizedPayload,
       _pendingSync: resolvedPending,
@@ -512,7 +547,11 @@ export const deleteClass = (turma: string, horario: string, professor: string) =
 export const getExcludedStudents = () =>
   API.get("/exclusions", { ...noCacheConfig, params: { _ts: Date.now() } })
     .then(async (response) => {
-      const remoteItems = Array.isArray(response?.data) ? response.data : [];
+      const remoteItems = Array.isArray(response?.data)
+        ? response.data
+            .map((item: any) => normalizeIncomingExclusionRecord(item))
+            .filter((item: any) => isValidExcludedStudentRecord(item))
+        : [];
       writeExcludedStudentsLocal(remoteItems);
       setExclusionsWriteFailed(false);
       return { ...response, data: remoteItems, _fromFallback: false };
@@ -523,9 +562,10 @@ export const getExcludedStudents = () =>
     });
 
 export const addExclusion = (data: any) => {
-  return API.post("/exclusions", data)
+  const payload = normalizeIncomingExclusionRecord(data);
+  return API.post("/exclusions", payload)
     .then((response) => {
-      upsertExcludedStudentLocal(data, false);
+      upsertExcludedStudentLocal(payload, false);
       setExclusionsWriteFailed(false);
       return response;
     })
@@ -539,7 +579,7 @@ export const addExclusion = (data: any) => {
 };
 
 export const addExclusionsBulk = (items: any[], replace = false) => {
-  const payloadItems = (Array.isArray(items) ? items : []).map((item) => toCanonicalExclusionRecord(item));
+  const payloadItems = (Array.isArray(items) ? items : []).map((item) => normalizeIncomingExclusionRecord(item));
   if (payloadItems.length === 0) {
     return Promise.resolve({ data: { ok: true, added: 0, updated: 0, skipped: 0, total: readExcludedStudentsLocal().length } });
   }
@@ -550,9 +590,9 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
       const next = [...current];
       payloadItems.forEach((item) => {
         const idx = next.findIndex((existing) => exclusionMatches(existing, item));
-        const normalized = toCanonicalExclusionRecord({ ...item, _pendingSync: false });
+        const normalized = normalizeIncomingExclusionRecord({ ...item, _pendingSync: false });
         if (idx >= 0) {
-          next[idx] = toCanonicalExclusionRecord({ ...next[idx], ...normalized, _pendingSync: false });
+          next[idx] = normalizeIncomingExclusionRecord({ ...next[idx], ...normalized, _pendingSync: false });
         } else {
           next.push(normalized);
         }
@@ -565,9 +605,9 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
       const next = [...current];
       payloadItems.forEach((item) => {
         const idx = next.findIndex((existing) => exclusionMatches(existing, item));
-        const normalized = toCanonicalExclusionRecord({ ...item, _pendingSync: true });
+        const normalized = normalizeIncomingExclusionRecord({ ...item, _pendingSync: true });
         if (idx >= 0) {
-          next[idx] = toCanonicalExclusionRecord({ ...next[idx], ...normalized, _pendingSync: true });
+          next[idx] = normalizeIncomingExclusionRecord({ ...next[idx], ...normalized, _pendingSync: true });
         } else {
           next.push(normalized);
         }
