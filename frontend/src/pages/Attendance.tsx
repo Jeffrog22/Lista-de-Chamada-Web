@@ -3546,6 +3546,18 @@ export const Attendance: React.FC = () => {
                     merged[date] = value;
                   }
                 });
+              } else {
+                // Defensive merge to avoid subtle rollbacks: if backend arrives partially
+                // and leaves a date empty, keep local non-empty value for that date.
+                Object.entries(storedAttendance).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  const localValue = String(value || "").trim();
+                  if (!localValue) return;
+                  const backendValue = String(merged[date] || "").trim();
+                  if (!backendValue) {
+                    merged[date] = localValue as "Presente" | "Falta" | "Justificado" | "";
+                  }
+                });
               }
 
               return merged;
@@ -3564,6 +3576,15 @@ export const Attendance: React.FC = () => {
                   merged[date] = normalized;
                 });
               } else if (!backendSnapshotTrusted || !backend) {
+                Object.entries(storedJustifications).forEach(([date, value]) => {
+                  if (!newDates.includes(date)) return;
+                  const normalized = String(value || "").trim();
+                  if (!normalized) return;
+                  if (!String(merged[date] || "").trim()) {
+                    merged[date] = normalized;
+                  }
+                });
+              } else {
                 Object.entries(storedJustifications).forEach(([date, value]) => {
                   if (!newDates.includes(date)) return;
                   const normalized = String(value || "").trim();
