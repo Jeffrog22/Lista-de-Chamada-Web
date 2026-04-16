@@ -442,17 +442,8 @@ export default function App() {
               diag b:{maintenanceDiag?.bootstrap?.students ?? "-"} c:{maintenanceDiag?.bootstrap?.classes ?? "-"} fev:{(maintenanceDiag?.feb2026?.attendance ?? 0) + (maintenanceDiag?.feb2026?.justifications ?? 0) + (maintenanceDiag?.feb2026?.exclusions ?? 0)}
             </span>
           )}
-          <button className="logout-button" onClick={onLogout}>
-            Sair
-          </button>
-          <button
-            className="logout-button"
-            onClick={() => setFocusViewportMode(true)}
-            title="Usar tela toda (Ctrl+Alt+F)"
-          >
-            Tela toda
-          </button>
-          <div className="zoom-controls" title="Ajuste de escala da interface">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div className="zoom-controls" title="Ajuste de escala da interface">
             <button
               type="button"
               className="zoom-control-button"
@@ -467,6 +458,20 @@ export default function App() {
               onClick={() => setViewportScale((prev) => clampScale(prev + 0.05, 0.5, 1.75))}
             >
               A+
+            </button>
+            </div>
+            <button
+              className="logout-button"
+              onClick={() => setFocusViewportMode(true)}
+              title="Usar tela toda (Ctrl+Alt+F)"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "8px 12px" }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
+            </button>
+            <button className="logout-button" onClick={onLogout}>
+              Sair
             </button>
           </div>
         </div>

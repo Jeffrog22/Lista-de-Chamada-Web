@@ -1668,7 +1668,7 @@ export const Students: React.FC = () => {
               </th>
               <th
                 onClick={() => handleSort("turma")}
-                style={{ padding: "8px 6px", textAlign: "center", cursor: "pointer", whiteSpace: "nowrap", width: "112px" }}
+                style={{ padding: "8px 6px", textAlign: "center", cursor: "pointer", whiteSpace: "nowrap", width: "160px" }}
               >
                 Turma{getSortIndicator("turma")}
               </th>
