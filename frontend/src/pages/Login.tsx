@@ -155,12 +155,18 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           const sanitizedSaved = buildMergedQuickProfessors([], savedQuickProfessors);
           setQuickProfessors(sanitizedSaved);
           saveQuickProfessors(sanitizedSaved);
+          if (sanitizedSaved.length > 0) {
+            setFirstLoginMode(false);
+          }
           return;
         }
 
         const mergedProfessors = buildMergedQuickProfessors(professorsFromClasses, savedQuickProfessors);
         setQuickProfessors(mergedProfessors);
         saveQuickProfessors(mergedProfessors);
+        if (mergedProfessors.length > 0) {
+          setFirstLoginMode(false);
+        }
       })
       .catch(() => setBackendOnline(false));
     getImportDataStatus()
