@@ -490,6 +490,9 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           />
           <span>Cadastro / Primeiro Login</span>
         </label>
+        <div style={{ marginTop: -6, fontSize: 12, color: "#6b7280", lineHeight: 1.35 }}>
+          Depois do primeiro acesso, esse modo fica desmarcado por padrão.
+        </div>
 
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#333" }}>
           <input
