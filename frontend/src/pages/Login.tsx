@@ -36,7 +36,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
     name: "",
     unit: "",
   });
-  const [firstLoginMode, setFirstLoginMode] = useState(true);
+  const [firstLoginMode, setFirstLoginMode] = useState(false);
   const [rememberProfile, setRememberProfile] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -120,7 +120,10 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           unit: String(parsed?.unit || ""),
         });
         setRememberProfile(true);
+        setFirstLoginMode(false);
         setHasSavedProfile(true);
+      } else {
+        setFirstLoginMode(true);
       }
     } catch {
       // ignore invalid local profile payload
@@ -320,6 +323,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         localStorage.removeItem(teacherProfileStorageKey);
         setHasSavedProfile(false);
       }
+      setFirstLoginMode(false);
       localStorage.setItem("access_token", "local-session");
       onLogin("local-session");
     } catch (err: any) {
@@ -374,6 +378,7 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
         localStorage.setItem(teacherProfileStorageKey, JSON.stringify(normalizedProfile));
         setHasSavedProfile(true);
       }
+      setFirstLoginMode(false);
       localStorage.setItem("access_token", "local-session");
       onLogin("local-session");
     } catch (err: any) {
