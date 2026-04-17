@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { getBootstrap, getImportDataStatus, importDataFile } from "../api";
+import { getBackendHealth, getBootstrap, getImportDataStatus, importDataFile } from "../api";
 import { mapBootstrapForStorage } from "../utils/bootstrapMapping";
 
 type ApiResponse<T = any> = { data: T };
@@ -129,9 +129,12 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
       // ignore invalid local profile payload
     }
 
+    getBackendHealth()
+      .then(() => setBackendOnline(true))
+      .catch(() => setBackendOnline(false));
+
     getBootstrap()
       .then((res: ApiResponse) => {
-        setBackendOnline(true);
         const classes = Array.isArray(res?.data?.classes) ? res.data.classes : [];
         const professorsFromClasses: string[] = Array.from(
           new Set(
@@ -168,7 +171,24 @@ export const Login: React.FC<{ onLogin: (token: string) => void }> = ({ onLogin 
           setFirstLoginMode(false);
         }
       })
-      .catch(() => setBackendOnline(false));
+      .catch(() => {
+        // Keep quick profiles from local cache when bootstrap prefetch is unavailable.
+        try {
+          const raw = localStorage.getItem(quickProfessorsStorageKey);
+          const parsed = raw ? JSON.parse(raw) : [];
+          const savedQuickProfessors = Array.isArray(parsed)
+            ? parsed.map((name) => String(name || "").trim()).filter(Boolean)
+            : [];
+          const sanitizedSaved = buildMergedQuickProfessors([], savedQuickProfessors);
+          setQuickProfessors(sanitizedSaved);
+          saveQuickProfessors(sanitizedSaved);
+          if (sanitizedSaved.length > 0) {
+            setFirstLoginMode(false);
+          }
+        } catch {
+          // ignore invalid local payload
+        }
+      });
     getImportDataStatus()
       .then((res: ApiResponse) => {
         const backendStatus = res.data || {};

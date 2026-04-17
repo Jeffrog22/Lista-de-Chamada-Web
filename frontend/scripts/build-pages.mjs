@@ -8,6 +8,7 @@ const profiles = {
     env: {
       VITE_ENV_NAME: "bela-vista",
       VITE_UNIT_NAME: "Bela Vista",
+      VITE_API_URL: "https://lista-de-chamada-web.onrender.com",
     },
   },
   sao: {
