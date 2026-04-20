@@ -1709,7 +1709,7 @@ export const Students: React.FC = () => {
                 <select
                   value={filters.nivel}
                   onChange={(e) => setFilters((f) => ({ ...f, nivel: e.target.value }))}
-                  style={{ width: "100%", padding: "3px" }}
+                  style={{ width: "100%", padding: "3px", border: "1px solid #ccc", borderRadius: "3px" }}
                 >
                   <option value="">Todos</option>
                   {nivelOptions.map((n) => (
@@ -1722,7 +1722,7 @@ export const Students: React.FC = () => {
                 <select
                   value={filters.categoria}
                   onChange={(e) => setFilters((f) => ({ ...f, categoria: e.target.value }))}
-                  style={{ width: "100%", padding: "3px" }}
+                  style={{ width: "100%", padding: "3px", border: "1px solid #ccc", borderRadius: "3px" }}
                 >
                   <option value="">Todos</option>
                   {categoriaOptions.map((c) => (
@@ -1734,7 +1734,7 @@ export const Students: React.FC = () => {
                 <select
                   value={filters.turma}
                   onChange={(e) => setFilters((f) => ({ ...f, turma: e.target.value }))}
-                  style={{ width: "100%", padding: "3px" }}
+                  style={{ width: "100%", padding: "3px", border: "1px solid #ccc", borderRadius: "3px" }}
                 >
                   <option value="">Todos</option>
                   {turmaOptions.map((t) => (
@@ -1746,7 +1746,7 @@ export const Students: React.FC = () => {
                 <select
                   value={filters.horario}
                   onChange={(e) => setFilters((f) => ({ ...f, horario: e.target.value }))}
-                  style={{ width: "100%", padding: "3px" }}
+                  style={{ width: "100%", padding: "3px", border: "1px solid #ccc", borderRadius: "3px" }}
                 >
                   <option value="">Todos</option>
                   {horarioOptions.map((h) => (
