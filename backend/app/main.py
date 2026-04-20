@@ -2078,6 +2078,8 @@ def _exclusion_turma_set(item: Dict[str, Any]) -> set[str]:
 
 
 def _exclusion_records_match(item: Dict[str, Any], payload_dict: Dict[str, Any]) -> bool:
+    """Match exclusion records prioritizing context to avoid homonímia collisions."""
+    # High-confidence matches (UID or ID)
     item_uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
     payload_uid = str(payload_dict.get("student_uid") or payload_dict.get("studentUid") or "").strip()
     if item_uid and payload_uid and item_uid == payload_uid:
@@ -2088,35 +2090,43 @@ def _exclusion_records_match(item: Dict[str, Any], payload_dict: Dict[str, Any])
     if item_id and payload_id and item_id == payload_id:
         return True
 
+    # Low-confidence match (name only): ALWAYS require context to avoid homonímia
     item_nome = _normalize_text(item.get("nome") or item.get("Nome") or "")
     payload_nome = _normalize_text(payload_dict.get("nome") or payload_dict.get("Nome") or "")
     if not item_nome or not payload_nome or item_nome != payload_nome:
-        return False
+        return False  # Names must match as baseline
 
+    # Now check context FIRST before considering name-match valid
     item_turmas = _exclusion_turma_set(item)
     payload_turmas = _exclusion_turma_set(payload_dict)
     has_turma_context = bool(item_turmas) and bool(payload_turmas)
     turma_matches = not has_turma_context or bool(item_turmas.intersection(payload_turmas))
-    if not turma_matches:
-        return False
 
     item_horario = _normalize_horario_key(item.get("horario") or item.get("Horario") or "")
     payload_horario = _normalize_horario_key(payload_dict.get("horario") or payload_dict.get("Horario") or "")
     has_horario_context = bool(item_horario) and bool(payload_horario)
-    if has_horario_context and item_horario != payload_horario:
-        return False
+    horario_matches = not has_horario_context or item_horario == payload_horario
 
     item_professor = _normalize_text(item.get("professor") or item.get("Professor") or "")
     payload_professor = _normalize_text(payload_dict.get("professor") or payload_dict.get("Professor") or "")
     has_professor_context = bool(item_professor) and bool(payload_professor)
-    if has_professor_context and item_professor != payload_professor:
-        return False
+    professor_matches = not has_professor_context or item_professor == payload_professor
 
-    return has_turma_context or has_horario_context or has_professor_context
+    # Accept match only if all provided context matches (no mismatches allowed)
+    context_valid = (not has_turma_context or turma_matches) and \
+                    (not has_horario_context or horario_matches) and \
+                    (not has_professor_context or professor_matches)
+
+    # Require at least ONE context field to be present (avoid bare name matching)
+    has_any_context = has_turma_context or has_horario_context or has_professor_context
+    return context_valid and has_any_context
 
 
 def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate and validate exclusion records. Logs discarded items."""
     cleaned: List[Dict[str, Any]] = []
+    discarded_count = 0
+    
     for raw in items or []:
         if not isinstance(raw, dict):
             continue
@@ -2125,17 +2135,26 @@ def _clean_exclusions_list(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         uid = str(item.get("student_uid") or item.get("studentUid") or "").strip()
         item_id = str(item.get("id") or "").strip()
         nome = _normalize_text(item.get("nome") or item.get("Nome") or "")
+        
+        # Validate: must have at least one identifier
         if not uid and not item_id and not nome:
+            discarded_count += 1
             continue
 
+        # Dedup using strict matching
         existing_idx = next(
             (idx for idx, existing in enumerate(cleaned) if _exclusion_records_match(existing, item)),
             -1,
         )
         if existing_idx >= 0:
+            # Merge: preserve existing + override with new values
             cleaned[existing_idx] = {**cleaned[existing_idx], **item}
         else:
             cleaned.append(item)
+    
+    if discarded_count > 0:
+        import logging
+        logging.warning(f"_clean_exclusions_list: discarded {discarded_count} items (missing all identifiers)")
 
     return cleaned
 
@@ -2235,14 +2254,24 @@ def _read_exclusions_state(clean: bool = True) -> List[Dict[str, Any]]:
 
 
 def _write_exclusions_state(items: List[Dict[str, Any]], clean: bool = True) -> List[Dict[str, Any]]:
-    payload = _clean_exclusions_list(items) if clean else [
-        _normalize_exclusion_item(item) for item in (items or []) if isinstance(item, dict)
-    ]
+    """Write exclusions to DB and file with optional cleaning. Always normalizes."""
+    if clean:
+        # Cleanliness-first: deduplicate before saving
+        payload = _clean_exclusions_list(items or [])
+    else:
+        # Just normalize, no dedup
+        payload = [
+            _normalize_exclusion_item(item) for item in (items or []) if isinstance(item, dict)
+        ]
+    
+    # Save to both DB and file atomically where possible
     _save_exclusions_to_db(payload)
     try:
         _save_json_list(_exclusions_file_path(), payload)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to save exclusions to JSON file: {e}")
+    
     return payload
 
 
@@ -2273,16 +2302,24 @@ def _list_exclusions_backups(limit: int = 30) -> List[Dict[str, Any]]:
 
 
 def _merge_exclusions(base_items: List[Dict[str, Any]], incoming_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    merged = _clean_exclusions_list(base_items)
-    for incoming in _clean_exclusions_list(incoming_items):
+    """Merge exclusion lists efficiently: clean once upfront, merge, then finalize clean."""
+    # Clean both inputs once
+    base_cleaned = _clean_exclusions_list(base_items or [])
+    incoming_cleaned = _clean_exclusions_list(incoming_items or [])
+    
+    # Merge incoming into base
+    merged = list(base_cleaned)  # Shallow copy
+    for incoming in incoming_cleaned:
         idx = next(
             (existing_idx for existing_idx, existing in enumerate(merged) if _exclusion_records_match(existing, incoming)),
             -1,
         )
         if idx >= 0:
-            merged[idx] = {**merged[idx], **incoming}
+            merged[idx] = {**merged[idx], **incoming}  # Merge fields
         else:
-            merged.append(incoming)
+            merged.append(incoming)  # Add new record
+    
+    # Final clean pass to catch any dedup edge cases introduced during merge
     return _clean_exclusions_list(merged)
 
 def _resolve_exclusion_match(item: Dict[str, Any], payload: ExclusionEntry) -> bool:
@@ -3385,7 +3422,7 @@ def bulk_upsert_exclusions(payload: ExclusionsBulkPayload):
                 continue
 
             match_index = next(
-                (idx for idx, existing in enumerate(existing_items) if _resolve_exclusion_match(existing, entry)),
+                (idx for idx, existing in enumerate(existing_items) if _exclusion_records_match(existing, normalized_entry)),
                 -1,
             )
             if match_index >= 0:

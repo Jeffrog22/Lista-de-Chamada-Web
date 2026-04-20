@@ -70,6 +70,25 @@ const logPersistenceDebug = (action: string, payload: Record<string, unknown>) =
   }
 };
 
+const logExclusionDebug = (action: string, payload: Record<string, unknown>) => {
+  if (!isPersistenceDebugEnabled()) return;
+  const entry = {
+    ts: new Date().toISOString(),
+    source: "api",
+    action,
+    payload,
+  };
+  console.info("[exclusions:sync]", { action, ...payload });
+  try {
+    const key = "EXCLUSIONS_DEBUG_EVENTS";
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const list = Array.isArray(parsed) ? parsed : [];
+    const next = [...list, entry].slice(-100);
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch {}
+};
+
 const normalizeText = (value: unknown) => String(value || "").trim().toLowerCase();
 
 const firstNonEmpty = (...values: unknown[]) => {
@@ -595,6 +614,13 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
     return Promise.resolve({ data: { ok: true, added: 0, updated: 0, skipped: 0, total: readExcludedStudentsLocal().length } });
   }
 
+  const requestId = `bulk_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  logExclusionDebug("bulk:start", {
+    requestId,
+    itemCount: payloadItems.length,
+    replace,
+  });
+
   return API.post("/exclusions/bulk", { items: payloadItems, replace })
     .then((response) => {
       const current = replace ? [] : readExcludedStudentsLocal();
@@ -609,9 +635,15 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
         }
       });
       writeExcludedStudentsLocal(next);
+      logExclusionDebug("bulk:ok", {
+        requestId,
+        added: response?.data?.added || 0,
+        updated: response?.data?.updated || 0,
+        total: next.length,
+      });
       return response;
     })
-    .catch(() => {
+    .catch((err) => {
       const current = replace ? [] : readExcludedStudentsLocal();
       const next = [...current];
       payloadItems.forEach((item) => {
@@ -624,6 +656,12 @@ export const addExclusionsBulk = (items: any[], replace = false) => {
         }
       });
       writeExcludedStudentsLocal(next);
+      logExclusionDebug("bulk:fallback", {
+        requestId,
+        error: err?.response?.status || err?.message || "unknown",
+        itemsQueued: payloadItems.length,
+        localTotal: next.length,
+      });
       return { data: { ok: true, fallback: true, items: next, queued: payloadItems.length } };
     });
 };
