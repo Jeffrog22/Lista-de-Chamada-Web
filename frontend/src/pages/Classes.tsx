@@ -155,14 +155,17 @@ const buildNextTurmaCode = (professor: string, days: WeekdayValue[], existingCla
   if (!profCode || !diasCode) return "";
 
   const base = `${profCode}${diasCode}`;
-  let nextIndex = 1;
-  existingClasses.forEach((cls) => {
-    const currentCode = getClassGroup(cls).toLowerCase();
-    const match = currentCode.match(new RegExp(`^${base}(\\d{2})$`, "i"));
-    if (!match) return;
-    const numeric = parseInt(match[1], 10);
-    if (numeric >= nextIndex) nextIndex = numeric + 1;
-  });
+  // Filtra todas as turmas existentes com mesmo base (professor+dias)
+  const sameBase = existingClasses
+    .filter((cls) => {
+      const code = getClassGroup(cls).toLowerCase();
+      return code.startsWith(base);
+    })
+    // Ordena por horário para garantir sequência
+    .sort((a, b) => String(a.Horario).localeCompare(String(b.Horario)));
+
+  // O próximo índice é o número de turmas já existentes com esse base + 1
+  const nextIndex = sameBase.length + 1;
   return `${base}${String(nextIndex).padStart(2, "0")}`;
 };
 
@@ -300,7 +303,18 @@ export const Classes: React.FC = () => {
 
         const counts: { [key: string]: number } = {};
         filteredStudents.forEach((s: any) => {
-          const key = s.grupo || s.turmaCodigo || s.turma;
+          // Use id da turma se disponível, senão uma chave composta única
+          const turmaId = s.turmaId || s.classId || s.id;
+          let key = turmaId;
+          if (!key) {
+            // fallback: combinação única de campos principais
+            key = [
+              s.grupo || s.turmaCodigo || "",
+              s.turma || "",
+              s.horario || "",
+              s.professor || ""
+            ].map(String).join("|#|");
+          }
           if (key) {
             counts[key] = (counts[key] || 0) + 1;
           }
@@ -901,7 +915,7 @@ export const Classes: React.FC = () => {
                   <span
                     style={{
                       ...getLotacaoStyle(
-                        studentCounts[getClassGroup(classData) || classData.Turma] || 0,
+                        studentCounts[classData.id || [classData.TurmaCodigo, classData.Turma, classData.Horario, classData.Professor].map(String).join("|#|")] || 0,
                         classData.CapacidadeMaxima || 0
                       ),
                       padding: "4px 10px",
@@ -910,7 +924,7 @@ export const Classes: React.FC = () => {
                       fontSize: "12px",
                     }}
                   >
-                    {studentCounts[getClassGroup(classData) || classData.Turma] || 0} / {classData.CapacidadeMaxima || 0}
+                    {studentCounts[classData.id || [classData.TurmaCodigo, classData.Turma, classData.Horario, classData.Professor].map(String).join("|#|")] || 0} / {classData.CapacidadeMaxima || 0}
                   </span>
                 </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>
