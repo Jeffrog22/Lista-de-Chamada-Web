@@ -3893,6 +3893,34 @@ def generate_chamada_pdf_file(payload: ExcelExportPayload, session: Session = De
     reports = get_reports(month=month, session=session)
     selected_reports = _resolve_export_targets(payload, reports)
 
+    # --- Debug logging (temporary) ---
+    try:
+        export_dir = os.path.join(DATA_DIR, "exports")
+        os.makedirs(export_dir, exist_ok=True)
+        debug_path = os.path.join(export_dir, "report_debug_logs.jsonl")
+        # Summarize selected_reports for compact log
+        summary = []
+        for s in selected_reports:
+            summary.append({
+                "turmaCodigo": getattr(s, "turmaCodigo", ""),
+                "turma": getattr(s, "turma", ""),
+                "horario": getattr(s, "horario", ""),
+                "professor": getattr(s, "professor", ""),
+                "nivel": getattr(s, "nivel", ""),
+                "alunos_count": len(getattr(s, "alunos", []) or []),
+                "alunos_sample": [a.nome for a in (getattr(s, "alunos", []) or [])[:8]],
+            })
+        log_entry = {
+            "ts": datetime.utcnow().isoformat(),
+            "month": month,
+            "payload": payload.model_dump() if hasattr(payload, "model_dump") else payload.dict() if hasattr(payload, "dict") else payload,
+            "resolved": summary,
+        }
+        with open(debug_path, "a", encoding="utf-8") as df:
+            df.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
     pdf_bytes = _build_chamada_pdf(selected_reports=selected_reports, month=month, session=session)
 
     export_dir = os.path.join(DATA_DIR, "exports")
@@ -3908,6 +3936,23 @@ def generate_chamada_pdf_file(payload: ExcelExportPayload, session: Session = De
         media_type="application/pdf",
         filename=output_name,
     )
+
+
+@app.get("/reports/debug-last")
+def get_last_report_debug():
+    """Temporary: returns the last debug log entry written by PDF generation (if any)."""
+    debug_path = os.path.join(DATA_DIR, "exports", "report_debug_logs.jsonl")
+    if not os.path.exists(debug_path):
+        return {"ok": False, "detail": "no debug log found"}
+    try:
+        with open(debug_path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        if not lines:
+            return {"ok": False, "detail": "no entries"}
+        last = json.loads(lines[-1])
+        return {"ok": True, "last": last}
+    except Exception as e:
+        return {"ok": False, "detail": str(e)}
 
 
 def _build_vacancies_workbook(payload: VacancyExportPayload):
