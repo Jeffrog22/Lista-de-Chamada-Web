@@ -1,0 +1,267 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - button "☰" [ref=e6] [cursor=pointer]
+      - heading "📋 Protótipo" [level=1] [ref=e7]
+    - generic [ref=e8]:
+      - generic "Versão da aplicação" [ref=e9]: v.004.00-01h
+      - generic [ref=e10]: Conectado
+      - generic [ref=e11]: "Atualizado em: -"
+      - generic "Diagnóstico de integridade do backend" [ref=e12]: diag b:- c:- fev:0
+      - button "Atualizar Base" [ref=e13] [cursor=pointer]
+      - button "Sair" [ref=e14] [cursor=pointer]
+  - generic [ref=e15]:
+    - complementary [ref=e16]:
+      - navigation [ref=e17]:
+        - generic [ref=e18]: Menu Principal
+        - generic [ref=e19]:
+          - button "Chamada" [ref=e20] [cursor=pointer]
+          - button "Alunos" [ref=e21] [cursor=pointer]
+          - button "Turmas" [ref=e22] [cursor=pointer]
+      - navigation [ref=e23]:
+        - generic [ref=e24]: Mais Opções
+        - generic [ref=e25]:
+          - button "❌ Exclusões" [ref=e26] [cursor=pointer]
+          - button "📊 Relatórios" [ref=e27] [cursor=pointer]
+          - button "🏊 Gestão de Vagas" [ref=e28] [cursor=pointer]
+    - main [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e32]:
+          - heading "Relatórios e Análises" [level=2] [ref=e33]
+          - paragraph [ref=e34]: Selecione um módulo para visualizar os dados.
+        - generic [ref=e35]:
+          - button "📊 Resumo Geral" [ref=e36] [cursor=pointer]
+          - button "📈 Gráficos" [ref=e37] [cursor=pointer]
+          - button "📈 Estatísticas" [ref=e38] [cursor=pointer]
+          - button "📅 Frequência e Planejamento" [ref=e39] [cursor=pointer]
+          - button "🧩 Vagas" [ref=e40] [cursor=pointer]
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - generic [ref=e45]:
+              - heading "Períodos Letivos" [level=3] [ref=e46]
+              - button "Editar" [ref=e47] [cursor=pointer]
+            - generic [ref=e48]:
+              - generic [ref=e49]:
+                - generic [ref=e50]:
+                  - heading "Calendário/ Planejamento" [level=3] [ref=e51]
+                  - generic [ref=e52]:
+                    - button "Mês anterior" [ref=e53] [cursor=pointer]: ◀
+                    - combobox [ref=e54]:
+                      - option "Janeiro"
+                      - option "Fevereiro"
+                      - option "Março"
+                      - option "Abril" [selected]
+                      - option "Maio"
+                      - option "Junho"
+                      - option "Julho"
+                      - option "Agosto"
+                      - option "Setembro"
+                      - option "Outubro"
+                      - option "Novembro"
+                      - option "Dezembro"
+                    - combobox [ref=e55]:
+                      - option "2022"
+                      - option "2023"
+                      - option "2024"
+                      - option "2025"
+                      - option "2026" [selected]
+                      - option "2027"
+                      - option "2028"
+                      - option "2029"
+                      - option "2030"
+                    - button "Hoje" [ref=e56] [cursor=pointer]
+                    - button "Próximo mês" [ref=e57] [cursor=pointer]: ▶
+                - paragraph [ref=e58]: Selecione uma data no calendário e registre na lateral por tipo.
+              - generic [ref=e59]:
+                - generic [ref=e60]:
+                  - generic [ref=e61]:
+                    - generic [ref=e62]: Seg
+                    - generic [ref=e63]: Ter
+                    - generic [ref=e64]: Qua
+                    - generic [ref=e65]: Qui
+                    - generic [ref=e66]: Sex
+                    - generic [ref=e67]: Sáb
+                    - generic [ref=e68]: Dom
+                  - generic [ref=e69]:
+                    - generic [ref=e72] [cursor=pointer]:
+                      - generic [ref=e73]:
+                        - strong [ref=e74]: "01"
+                        - generic [ref=e75]: Qua
+                      - generic "Carregando clima" [ref=e77]
+                    - generic [ref=e78] [cursor=pointer]:
+                      - generic [ref=e79]:
+                        - strong [ref=e80]: "02"
+                        - generic [ref=e81]: Qui
+                      - generic "Carregando clima" [ref=e83]
+                    - generic [ref=e84] [cursor=pointer]:
+                      - generic [ref=e85]:
+                        - strong [ref=e86]: "03"
+                        - generic [ref=e87]: Sex
+                      - generic "Carregando clima" [ref=e89]
+                    - generic [ref=e90] [cursor=pointer]:
+                      - generic [ref=e91]:
+                        - strong [ref=e92]: "04"
+                        - generic [ref=e93]: Sáb
+                      - generic "Carregando clima" [ref=e95]
+                    - generic [ref=e96] [cursor=pointer]:
+                      - generic [ref=e97]:
+                        - strong [ref=e98]: "05"
+                        - generic [ref=e99]: Dom
+                      - generic "Carregando clima" [ref=e101]
+                    - generic [ref=e102] [cursor=pointer]:
+                      - generic [ref=e103]:
+                        - strong [ref=e104]: "06"
+                        - generic [ref=e105]: Seg
+                      - generic "Carregando clima" [ref=e107]
+                    - generic [ref=e108] [cursor=pointer]:
+                      - generic [ref=e109]:
+                        - strong [ref=e110]: "07"
+                        - generic [ref=e111]: Ter
+                      - generic "Carregando clima" [ref=e113]
+                    - generic [ref=e114] [cursor=pointer]:
+                      - generic [ref=e115]:
+                        - strong [ref=e116]: "08"
+                        - generic [ref=e117]: Qua
+                      - generic "Carregando clima" [ref=e119]
+                    - generic [ref=e120] [cursor=pointer]:
+                      - generic [ref=e121]:
+                        - strong [ref=e122]: "09"
+                        - generic [ref=e123]: Qui
+                      - generic "Carregando clima" [ref=e125]
+                    - generic [ref=e126] [cursor=pointer]:
+                      - generic [ref=e127]:
+                        - strong [ref=e128]: "10"
+                        - generic [ref=e129]: Sex
+                      - generic "Carregando clima" [ref=e131]
+                    - generic [ref=e132] [cursor=pointer]:
+                      - generic [ref=e133]:
+                        - strong [ref=e134]: "11"
+                        - generic [ref=e135]: Sáb
+                      - generic "Carregando clima" [ref=e137]
+                    - generic [ref=e138] [cursor=pointer]:
+                      - generic [ref=e139]:
+                        - strong [ref=e140]: "12"
+                        - generic [ref=e141]: Dom
+                      - generic "Carregando clima" [ref=e143]
+                    - generic [ref=e144] [cursor=pointer]:
+                      - generic [ref=e145]:
+                        - strong [ref=e146]: "13"
+                        - generic [ref=e147]: Seg
+                      - generic "Carregando clima" [ref=e149]
+                    - generic [ref=e150] [cursor=pointer]:
+                      - generic [ref=e151]:
+                        - strong [ref=e152]: "14"
+                        - generic [ref=e153]: Ter
+                      - generic "Carregando clima" [ref=e155]
+                    - generic [ref=e156] [cursor=pointer]:
+                      - generic [ref=e157]:
+                        - strong [ref=e158]: "15"
+                        - generic [ref=e159]: Qua
+                      - generic "Carregando clima" [ref=e161]
+                    - generic [ref=e162] [cursor=pointer]:
+                      - generic [ref=e163]:
+                        - strong [ref=e164]: "16"
+                        - generic [ref=e165]: Qui
+                      - generic "Carregando clima" [ref=e167]
+                    - generic [ref=e168] [cursor=pointer]:
+                      - generic [ref=e169]:
+                        - strong [ref=e170]: "17"
+                        - generic [ref=e171]: Sex
+                      - generic "Carregando clima" [ref=e173]
+                    - generic [ref=e174] [cursor=pointer]:
+                      - generic [ref=e175]:
+                        - strong [ref=e176]: "18"
+                        - generic [ref=e177]: Sáb
+                      - generic "Carregando clima" [ref=e179]
+                    - generic [ref=e180] [cursor=pointer]:
+                      - generic [ref=e181]:
+                        - strong [ref=e182]: "19"
+                        - generic [ref=e183]: Dom
+                      - generic "Carregando clima" [ref=e185]
+                    - generic [ref=e186] [cursor=pointer]:
+                      - generic [ref=e187]:
+                        - strong [ref=e188]: "20"
+                        - generic [ref=e189]: Seg
+                      - generic "Carregando clima" [ref=e191]
+                    - generic [ref=e192] [cursor=pointer]:
+                      - generic [ref=e193]:
+                        - strong [ref=e194]: "21"
+                        - generic [ref=e195]: Ter
+                      - generic "Carregando clima" [ref=e197]
+                    - generic [ref=e198] [cursor=pointer]:
+                      - generic [ref=e199]:
+                        - strong [ref=e200]: "22"
+                        - generic [ref=e201]: Qua
+                      - generic "Carregando clima" [ref=e203]
+                    - generic [ref=e204] [cursor=pointer]:
+                      - generic [ref=e205]:
+                        - strong [ref=e206]: "23"
+                        - generic [ref=e207]: Qui
+                      - generic "Carregando clima" [ref=e209]
+                    - generic [ref=e210] [cursor=pointer]:
+                      - generic [ref=e211]:
+                        - strong [ref=e212]: "24"
+                        - generic [ref=e213]: Sex
+                      - generic "Carregando clima" [ref=e215]
+                    - generic [ref=e216] [cursor=pointer]:
+                      - generic [ref=e217]:
+                        - strong [ref=e218]: "25"
+                        - generic [ref=e219]: Sáb
+                      - generic "Carregando clima" [ref=e221]
+                    - generic [ref=e222] [cursor=pointer]:
+                      - generic [ref=e223]:
+                        - strong [ref=e224]: "26"
+                        - generic [ref=e225]: Dom
+                      - generic "Carregando clima" [ref=e227]
+                    - generic [ref=e228] [cursor=pointer]:
+                      - generic [ref=e229]:
+                        - strong [ref=e230]: "27"
+                        - generic [ref=e231]: Seg
+                      - generic "Carregando clima" [ref=e233]
+                    - generic [ref=e234] [cursor=pointer]:
+                      - generic [ref=e235]:
+                        - strong [ref=e236]: "28"
+                        - generic [ref=e237]: Ter
+                      - generic "Carregando clima" [ref=e239]
+                    - generic [ref=e240] [cursor=pointer]:
+                      - generic [ref=e241]:
+                        - strong [ref=e242]: "29"
+                        - generic [ref=e243]: Qua
+                      - generic "Carregando clima" [ref=e245]
+                    - generic [ref=e246] [cursor=pointer]:
+                      - generic [ref=e247]:
+                        - strong [ref=e248]: "30"
+                        - generic [ref=e249]: Qui
+                      - generic "Carregando clima" [ref=e251]
+                - generic [ref=e252]:
+                  - generic [ref=e253]:
+                    - text: "Data selecionada:"
+                    - strong [ref=e254]: 13/04/2026
+                  - generic [ref=e255]: Consultando clima...
+                  - generic [ref=e256]:
+                    - button "feriado" [ref=e257] [cursor=pointer]
+                    - button "ponte" [ref=e258] [cursor=pointer]
+                    - button "reunião" [ref=e259] [cursor=pointer]
+                    - button "evento" [ref=e260] [cursor=pointer]
+                  - generic [ref=e262]: Sem registros para a data selecionada.
+          - generic [ref=e263]:
+            - generic [ref=e264]:
+              - heading "Dias previstos" [level=3] [ref=e265]
+              - generic [ref=e266]:
+                - generic [ref=e267]: 103/334 dias de aula no ano
+                - generic [ref=e268]: 31%
+              - generic [ref=e271]: ano 2026
+            - generic [ref=e272]:
+              - heading "Aproveitamento das aulas dadas" [level=3] [ref=e273]
+              - generic [ref=e274]:
+                - generic [ref=e275]: Considerando clima, cloro, ocorrências, feriados e pontes
+                - strong [ref=e276]: 0%
+              - generic [ref=e278]: "Cancelamentos elegíveis: 0 | Previstas válidas: 3 | Dadas: 0"
+              - button "Detalhes" [ref=e280] [cursor=pointer]
+            - generic [ref=e281]:
+              - heading "Banco de horas (eventos)" [level=3] [ref=e282]
+              - generic [ref=e284]: Sem eventos com horas no mês.
+```

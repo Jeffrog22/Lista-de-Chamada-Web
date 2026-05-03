@@ -3158,6 +3158,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             turma=selected.turma,
             horario=selected.horario,
             professor=selected.professor,
+            turma_codigo=selected.turmaCodigo,
         )
 
         class_days = _sort_report_days([
@@ -3246,21 +3247,33 @@ def _build_import_student_details_map(
     turma: str,
     horario: str,
     professor: str,
+    turma_codigo: Optional[str] = None,
 ) -> Dict[str, Dict[str, Any]]:
     classes = session.exec(select(models.ImportClass)).all()
     target = None
     turma_norm = _normalize_text(turma)
     horario_norm = _normalize_text(horario)
     professor_norm = _normalize_text(professor)
-    for cls in classes:
-        cls_label = cls.turma_label or cls.codigo or ""
-        if (
-            _normalize_text(cls_label) == turma_norm
-            and _normalize_text(cls.horario or "") == horario_norm
-            and _normalize_text(cls.professor or "") == professor_norm
-        ):
-            target = cls
-            break
+    codigo_norm = _normalize_text(turma_codigo or "")
+
+    # Prefer matching by turma codigo when provided (stable identifier).
+    if codigo_norm:
+        for cls in classes:
+            if _normalize_text(cls.codigo or "") == codigo_norm:
+                target = cls
+                break
+
+    # Fallback to legacy matching by turma label + horario + professor
+    if not target:
+        for cls in classes:
+            cls_label = cls.turma_label or cls.codigo or ""
+            if (
+                _normalize_text(cls_label) == turma_norm
+                and _normalize_text(cls.horario or "") == horario_norm
+                and _normalize_text(cls.professor or "") == professor_norm
+            ):
+                target = cls
+                break
 
     details: Dict[str, Dict[str, Any]] = {}
     if not target:
