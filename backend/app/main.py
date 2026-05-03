@@ -2917,6 +2917,11 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
     if not REPORTLAB_AVAILABLE:
         raise HTTPException(status_code=500, detail="PDF export unavailable: install reportlab")
 
+    def _safe_pdf_text(value: Any) -> str:
+        text = str(value or "")
+        normalized = unicodedata.normalize("NFKD", text)
+        return normalized.encode("latin-1", "ignore").decode("latin-1")
+
     buffer = BytesIO()
     page_width, page_height = landscape(A4)
     pdf = canvas.Canvas(buffer, pagesize=(page_width, page_height))
@@ -2935,45 +2940,45 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
     def _draw_header_block(selected: ReportClass):
         y = page_height - margin_top
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left, y, "Modalidade:")
+        pdf.drawString(margin_left, y, _safe_pdf_text("Modalidade:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 58, y, "Natação")
+        pdf.drawString(margin_left + 58, y, _safe_pdf_text("Natação"))
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left + 250, y, "PREFEITURA MUNICIPAL DE VINHEDO")
+        pdf.drawString(margin_left + 250, y, _safe_pdf_text("PREFEITURA MUNICIPAL DE VINHEDO"))
 
         y -= 14
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left, y, "Local:")
+        pdf.drawString(margin_left, y, _safe_pdf_text("Local:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 58, y, "Piscina Bela Vista")
+        pdf.drawString(margin_left + 58, y, _safe_pdf_text("Piscina Bela Vista"))
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left + 250, y, "SECRETARIA DE ESPORTE E LAZER")
+        pdf.drawString(margin_left + 250, y, _safe_pdf_text("SECRETARIA DE ESPORTE E LAZER"))
 
         y -= 14
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left, y, "Professor:")
+        pdf.drawString(margin_left, y, _safe_pdf_text("Professor:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 58, y, str(selected.professor or ""))
+        pdf.drawString(margin_left + 58, y, _safe_pdf_text(selected.professor or ""))
 
         y -= 14
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left, y, "Turma:")
+        pdf.drawString(margin_left, y, _safe_pdf_text("Turma:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 58, y, str(selected.turma or ""))
+        pdf.drawString(margin_left + 58, y, _safe_pdf_text(selected.turma or ""))
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left + 250, y, "Nível:")
+        pdf.drawString(margin_left + 250, y, _safe_pdf_text("Nível:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 295, y, str(selected.nivel or ""))
+        pdf.drawString(margin_left + 295, y, _safe_pdf_text(selected.nivel or ""))
 
         y -= 14
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left, y, "Horário:")
+        pdf.drawString(margin_left, y, _safe_pdf_text("Horário:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 58, y, _format_horario(selected.horario or ""))
+        pdf.drawString(margin_left + 58, y, _safe_pdf_text(_format_horario(selected.horario or "")))
         pdf.setFont("Helvetica-Bold", 9)
-        pdf.drawString(margin_left + 250, y, "Mês:")
+        pdf.drawString(margin_left + 250, y, _safe_pdf_text("Mês:"))
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin_left + 295, y, _format_month_label(month))
+        pdf.drawString(margin_left + 295, y, _safe_pdf_text(_format_month_label(month)))
 
     def _build_columns(day_chunk: List[str]) -> List[tuple[str, float]]:
         available_for_days = page_width - margin_left - margin_right - sum(fixed_col_widths) - notes_width
@@ -3015,7 +3020,7 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
             x0 = x_positions[col_idx]
             x1 = x_positions[col_idx + 1]
             pdf.rect(x0, y - row_height, x1 - x0, row_height)
-            text = str(label or "")
+            text = _safe_pdf_text(label or "")
             if col_idx in (0, len(columns) - 1):
                 pdf.drawString(x0 + 2, y - 11, text[:28])
             else:
@@ -3041,17 +3046,17 @@ def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str]
 
                 value = ""
                 if label == "Nome":
-                    value = str(row.get("nome") or "")
+                    value = _safe_pdf_text(row.get("nome") or "")
                 elif label == "Whatsapp":
-                    value = str(row.get("whatsapp") or "")
+                    value = _safe_pdf_text(row.get("whatsapp") or "")
                 elif label == "parQ":
-                    value = str(row.get("parq") or "")
+                    value = _safe_pdf_text(row.get("parq") or "")
                 elif label == "Aniversário":
-                    value = str(row.get("data_nascimento") or "")
+                    value = _safe_pdf_text(row.get("data_nascimento") or "")
                 elif label == "Anotações":
-                    value = str(row.get("anotacoes") or "")
+                    value = _safe_pdf_text(row.get("anotacoes") or "")
                 elif label in day_chunk:
-                    value = str((row.get("historico") or {}).get(label, ""))
+                    value = _safe_pdf_text((row.get("historico") or {}).get(label, ""))
 
                 if col_idx in (0, len(columns) - 1):
                     pdf.drawString(x0 + 2, y - 11, value[:42])
