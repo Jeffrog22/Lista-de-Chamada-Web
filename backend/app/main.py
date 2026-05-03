@@ -2748,25 +2748,55 @@ def _resolve_export_targets(payload: ExcelExportPayload, reports: List[ReportCla
     selected: List[ReportClass] = []
     seen_keys = set()
     for req in requested:
-        key = (
-            _normalize_text(req.turma),
-            _normalize_text(req.horario),
-            _normalize_text(req.professor),
-        )
+        turma_key = _normalize_text(req.turma)
+        horario_key = _normalize_text(req.horario)
+        professor_key = _normalize_text(req.professor)
+        key = (turma_key, horario_key, professor_key)
         if key in seen_keys:
             continue
         seen_keys.add(key)
 
-        found = next(
-            (
+        exact_matches = [
+            cls
+            for cls in reports
+            if _normalize_text(cls.turma) == turma_key
+            and _normalize_text(cls.horario) == horario_key
+            and _normalize_text(cls.professor) == professor_key
+        ]
+        if exact_matches:
+            found = exact_matches[0]
+        else:
+            partial_matches = [
                 cls
                 for cls in reports
-                if _normalize_text(cls.turma) == key[0]
-                and _normalize_text(cls.horario) == key[1]
-                and _normalize_text(cls.professor) == key[2]
-            ),
-            None,
-        )
+                if _normalize_text(cls.turma) == turma_key
+                and _normalize_text(cls.horario) == horario_key
+            ]
+            if len(partial_matches) == 1:
+                found = partial_matches[0]
+            elif partial_matches:
+                if professor_key:
+                    found = next(
+                        (
+                            cls
+                            for cls in partial_matches
+                            if professor_key in _normalize_text(cls.professor)
+                            or _normalize_text(cls.professor) in professor_key
+                        ),
+                        partial_matches[0],
+                    )
+                else:
+                    found = partial_matches[0]
+            else:
+                found = next(
+                    (
+                        cls
+                        for cls in reports
+                        if _normalize_text(cls.turma) == turma_key
+                        and (not professor_key or _normalize_text(cls.professor) == professor_key)
+                    ),
+                    None,
+                )
         if found:
             selected.append(found)
 
