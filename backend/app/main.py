@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field, ConfigDict
 import csv
 from io import StringIO, BytesIO
 from copy import copy
-from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Border, Side
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Border, Side, Font
 from openpyxl.utils import get_column_letter
 from app.etl.import_excel import import_from_excel
 from app.auth import get_password_hash, create_access_token, authenticate_user, get_current_user
@@ -267,6 +267,7 @@ class StudentStatisticsOut(BaseModel):
     levels: List[LevelHistoryOut] = []
 
 class ExportClassSelection(BaseModel):
+    turmaCodigo: Optional[str] = None
     turma: str
     horario: str
     professor: str
@@ -2748,24 +2749,36 @@ def _resolve_export_targets(payload: ExcelExportPayload, reports: List[ReportCla
     selected: List[ReportClass] = []
     seen_keys = set()
     for req in requested:
+        code_key = _normalize_text(req.turmaCodigo)
         turma_key = _normalize_text(req.turma)
         horario_key = _normalize_text(req.horario)
         professor_key = _normalize_text(req.professor)
-        key = (turma_key, horario_key, professor_key)
+        key = (code_key, turma_key, horario_key, professor_key)
         if key in seen_keys:
             continue
         seen_keys.add(key)
 
-        exact_matches = [
-            cls
-            for cls in reports
-            if _normalize_text(cls.turma) == turma_key
-            and _normalize_text(cls.horario) == horario_key
-            and _normalize_text(cls.professor) == professor_key
-        ]
-        if exact_matches:
-            found = exact_matches[0]
-        else:
+        found = None
+        if code_key:
+            exact_code_matches = [
+                cls
+                for cls in reports
+                if _normalize_text(cls.turmaCodigo) == code_key
+                or _normalize_text(getattr(cls, "codigo", "")) == code_key
+            ]
+            if exact_code_matches:
+                found = exact_code_matches[0]
+        if found is None:
+            exact_matches = [
+                cls
+                for cls in reports
+                if _normalize_text(cls.turma) == turma_key
+                and _normalize_text(cls.horario) == horario_key
+                and _normalize_text(cls.professor) == professor_key
+            ]
+            if exact_matches:
+                found = exact_matches[0]
+        if found is None:
             partial_matches = [
                 cls
                 for cls in reports
@@ -2825,6 +2838,10 @@ def _build_sheet_title(selected: ReportClass, existing_titles: set[str]) -> str:
     return candidate
 
 def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], session: Session) -> int:
+    header_font = Font(bold=True)
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    left_alignment = Alignment(horizontal="left", vertical="center")
+
     ws["A1"] = "Modalidade:"
     ws["B1"] = "Natação"
     ws["D1"] = "PREFEITURA MUNICIPAL DE VINHEDO"
@@ -2845,6 +2862,12 @@ def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], 
     ws["B5"] = _format_horario(selected.horario or "")
     ws["D5"] = "Mês:"
     ws["E5"] = _format_month_label(month)
+
+    for cell_ref in ("A1", "A2", "A3", "A4", "A5", "D1", "D2", "D4", "D5"):
+        ws[cell_ref].font = header_font
+        ws[cell_ref].alignment = left_alignment
+    for cell_ref in ("B1", "B2", "B3", "B4", "B5", "E4", "E5"):
+        ws[cell_ref].alignment = left_alignment
 
     class_days = _sort_report_days([
         day for aluno in selected.alunos for day in (aluno.historico or {}).keys()
@@ -2867,10 +2890,17 @@ def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], 
     date_columns = list(range(date_col_start, notes_col))
     visible_days = class_days[:len(date_columns)]
 
+    for col in date_columns:
+        ws.column_dimensions[get_column_letter(col)].width = 4.5
+
     ws.cell(row=header_row, column=1, value="Nome")
     ws.cell(row=header_row, column=2, value="Whatsapp")
     ws.cell(row=header_row, column=3, value="parQ")
     ws.cell(row=header_row, column=4, value="Aniversário")
+
+    for col in range(1, 5):
+        ws.cell(row=header_row, column=col).font = header_font
+        ws.cell(row=header_row, column=col).alignment = center_alignment
 
     for idx, col in enumerate(date_columns):
         _copy_cell_style(ws, header_row, date_col_start, header_row, col)
@@ -2880,9 +2910,13 @@ def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], 
             ws.cell(row=header_row, column=col, value=day_value)
         else:
             ws.cell(row=header_row, column=col, value="")
+        ws.cell(row=header_row, column=col).font = header_font
+        ws.cell(row=header_row, column=col).alignment = center_alignment
 
     _copy_cell_style(ws, header_row, date_col_start, header_row, notes_col)
     ws.cell(row=header_row, column=notes_col, value="Anotações")
+    ws.cell(row=header_row, column=notes_col).font = header_font
+    ws.cell(row=header_row, column=notes_col).alignment = center_alignment
 
     if ws.max_column > notes_col:
         ws.delete_cols(notes_col + 1, ws.max_column - notes_col)
@@ -2942,6 +2976,20 @@ def _populate_attendance_sheet(ws, selected: ReportClass, month: Optional[str], 
             ws.cell(row=row, column=col).alignment = Alignment(horizontal=horizontal, vertical="center")
 
     return len(students_sorted)
+
+def _build_excel_export_workbook(selected_reports: List[ReportClass], month: Optional[str], session: Session) -> Workbook:
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+
+    existing_titles: set[str] = set()
+    for selected in selected_reports:
+        ws = workbook.create_sheet()
+        _populate_attendance_sheet(ws=ws, selected=selected, month=month, session=session)
+        sheet_title = _build_sheet_title(selected, existing_titles)
+        ws.title = sheet_title
+        existing_titles.add(sheet_title)
+
+    return workbook
 
 def _build_chamada_pdf(selected_reports: List[ReportClass], month: Optional[str], session: Session) -> bytes:
     if not REPORTLAB_AVAILABLE:
@@ -3811,25 +3859,7 @@ def generate_excel_report_file(payload: ExcelExportPayload, session: Session = D
     reports = get_reports(month=month, session=session)
     selected_reports = _resolve_export_targets(payload, reports)
 
-    template_path = os.getenv(
-        "REPORT_TEMPLATE_PATH",
-        os.path.join(DATA_DIR, "archive", "relatorioChamada.legacy.xlsx"),
-    )
-    if not os.path.exists(template_path):
-        raise HTTPException(status_code=404, detail=f"Template file not found: {template_path}")
-
-    workbook = load_workbook(template_path)
-    template_ws = workbook.active
-    target_sheets = [workbook.copy_worksheet(template_ws) for _ in selected_reports]
-    workbook.remove(template_ws)
-
-    existing_titles: set[str] = set()
-    for idx, selected in enumerate(selected_reports):
-        ws = target_sheets[idx]
-        _populate_attendance_sheet(ws=ws, selected=selected, month=month, session=session)
-        sheet_title = _build_sheet_title(selected, existing_titles)
-        ws.title = sheet_title
-        existing_titles.add(sheet_title)
+    workbook = _build_excel_export_workbook(selected_reports=selected_reports, month=month, session=session)
 
     export_dir = os.path.join(DATA_DIR, "exports")
     os.makedirs(export_dir, exist_ok=True)

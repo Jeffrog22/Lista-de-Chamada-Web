@@ -67,6 +67,7 @@ interface StudentStats {
 }
 
 interface ClassStats {
+  turmaCodigo?: string;
   turma: string;
   horario: string;
   professor: string;
@@ -283,8 +284,8 @@ const normalizeHorarioSelectionKey = (value: string) => {
   return digits;
 };
 
-const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor">) =>
-  `${normalizeText(item.turma)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
+const classSelectionKey = (item: Pick<ClassStats, "turma" | "horario" | "professor" | "turmaCodigo">) =>
+  `${normalizeText(item.turmaCodigo || "")}||${normalizeText(item.turma)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
 
 const bootstrapClassSelectionKey = (item: Pick<BootstrapClassLite, "turmaLabel" | "horario" | "professor">) =>
   `${normalizeText(item.turmaLabel)}||${normalizeHorarioSelectionKey(item.horario)}||${normalizeText(item.professor)}`;
@@ -537,6 +538,7 @@ const normalizeReportsData = (payload: unknown): ClassStats[] => {
     });
 
     return {
+      turmaCodigo: String(record.turmaCodigo || record.turma_codigo || record.codigo || ""),
       turma: String(record.turma || ""),
       horario: String(record.horario || ""),
       professor: String(record.professor || ""),
@@ -3244,7 +3246,7 @@ export const Reports: React.FC = () => {
   const handleGenerateExcel = async () => {
     const selectedClasses = exportClassGrid
       .filter((item) => selectedExportClassKeys.includes(classSelectionKey(item)))
-      .map((item) => ({ turma: item.turma, horario: item.horario, professor: item.professor }));
+      .map((item) => ({ turmaCodigo: item.turmaCodigo || "", turma: item.turma, horario: item.horario, professor: item.professor }));
 
     if (selectedClasses.length === 0) {
       alert("Selecione pelo menos uma turma para exportação.");
@@ -3276,7 +3278,7 @@ export const Reports: React.FC = () => {
   const handleGenerateChamadaPdf = async () => {
     const selectedClasses = exportClassGrid
       .filter((item) => selectedExportClassKeys.includes(classSelectionKey(item)))
-      .map((item) => ({ turma: item.turma, horario: item.horario, professor: item.professor }));
+      .map((item) => ({ turmaCodigo: item.turmaCodigo || "", turma: item.turma, horario: item.horario, professor: item.professor }));
 
     if (selectedClasses.length === 0) {
       alert("Selecione pelo menos uma turma para exportação em PDF.");
