@@ -47,6 +47,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Lista-de-Chamada - API", lifespan=lifespan)
 
+REPORTS_RUNTIME_VERSION = "v.004.00-01m"
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 load_dotenv(os.path.join(BASE_DIR, "backend", ".env"))
@@ -103,7 +105,7 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "reports_runtime_version": REPORTS_RUNTIME_VERSION}
 
 
 def _normalize_unit_name(value: str) -> str:
