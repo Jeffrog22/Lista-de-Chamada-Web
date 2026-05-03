@@ -3762,10 +3762,17 @@ def get_reports(month: Optional[str] = None, session: Session = Depends(get_sess
         class_students: List[ReportStudent] = []
 
         if log_entry:
+            allowed_names = {
+                _normalize_text(student.nome)
+                for student in class_roster
+                if str(student.nome or "").strip()
+            }
             registros = log_entry.get("registros") or []
             for record in registros:
                 nome = str(record.get("aluno_nome") or "").strip()
                 normalized_name = _normalize_text(nome)
+                if allowed_names and normalized_name not in allowed_names:
+                    continue
                 if normalized_name in excluded_names:
                     continue
                 attendance = record.get("attendance") or {}
