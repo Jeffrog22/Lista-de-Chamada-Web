@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { isValidHorarioPartial, maskHorarioInput } from "../utils/time";
-import { getBootstrap, addClass, toCanonicalExclusionRecord, updateClass } from "../api";
+import { getBootstrap, addClass, toCanonicalExclusionRecord, updateClass, deleteClassById } from "../api";
 import "./Classes.css";
 
 interface Class {
@@ -632,16 +632,23 @@ export const Classes: React.FC = () => {
     }
   };
 
-  const handleDelete = (classData: Class) => {
+  const handleDelete = async (classData: Class) => {
     if (confirm("Tem certeza que deseja deletar esta Turma? Certifique-se de que ela esteja vazia antes de excluir; Caso contrário os alunos ficaram perdidos, sem turma e não aparecerão mais nas chamadas")) {
-      setClasses((prev) =>
-        prev.filter(
-          (c) => c.Turma !== classData.Turma || c.Horario !== classData.Horario
-        )
-      );
-      // Notify Attendance component to refresh
-      window.dispatchEvent(new Event("attendanceDataUpdated"));
-      alert("Turma excluída com sucesso!");
+      try {
+        if (!classData.id) {
+          throw new Error("ID da turma não encontrado");
+        }
+        await deleteClassById(classData.id);
+        setClasses((prev) =>
+          prev.filter((c) => c.id !== classData.id)
+        );
+        // Notify Attendance component to refresh
+        window.dispatchEvent(new Event("attendanceDataUpdated"));
+        alert("Turma excluída com sucesso!");
+      } catch (error) {
+        console.error("Erro ao excluir turma:", error);
+        alert("Erro ao excluir turma. Verifique os dados e tente novamente.");
+      }
     }
   };
 

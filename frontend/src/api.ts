@@ -570,6 +570,8 @@ export const getAllClasses = () => API.get("/classes").catch(() => ({ data: [] }
 export const addClass = (data: any) => API.post("/import-classes", data).catch(() => ({ data: { ok: true } }));
 export const updateClass = (class_id: number, data: any) => 
   API.put(`/import-classes/${class_id}`, data).catch(() => ({ data: { ok: true } }));
+export const deleteClassById = (class_id: number) =>
+  API.delete(`/import-classes/${class_id}`);
 export const deleteClass = (turma: string, horario: string, professor: string) => 
   API.delete(`/classes/${turma}/${horario}/${professor}`).catch(() => ({ data: { ok: true } }));
 
