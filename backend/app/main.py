@@ -4705,6 +4705,93 @@ def _normalize_horario_value(raw: str) -> str:
         digits = digits[:4]
     return digits.zfill(4)
 
+def _build_professor_code(professor: str) -> str:
+    """Extract professor code: 2 first letters, normalized"""
+    if not professor:
+        return "xx"
+    normalized = _normalize_text(professor).lower()
+    # Remove non-alphanumeric and keep only letters
+    clean = "".join(c for c in normalized if c.isalpha())
+    if not clean:
+        return "xx"
+    return clean[:2].ljust(2, "x")
+
+def _build_dias_code(dias_semana: str) -> str:
+    """Extract dias code from dias_semana string"""
+    if not dias_semana:
+        return ""
+    
+    normalized = _normalize_text_fold(dias_semana)
+    
+    # Handle specific combinations first (like "Terça e Quinta" → "tq")
+    if "terca" in normalized and "quinta" in normalized:
+        return "tq"
+    if "quarta" in normalized and "sexta" in normalized:
+        return "qs"
+    
+    # Mapping from Portuguese day names to codes
+    dias_map = {
+        "segunda": "s",
+        "terca": "t",
+        "quarta": "q",
+        "quinta": "q",
+        "sexta": "f",
+        "sabado": "a",
+        "domingo": "d",
+    }
+    
+    # Build code from individual days
+    code = ""
+    for day, code_char in dias_map.items():
+        if day in normalized:
+            # Avoid duplicates (quinta comes after quarta in iteration)
+            if code_char not in code:
+                code += code_char
+    
+    return code if code else ""
+
+def _generate_import_class_codigo(
+    session: Session,
+    unit_id: int,
+    professor: str,
+    dias_semana: str,
+    horario: str
+) -> str:
+    """Generate codigo sequentially by horario for same professor+dias_semana"""
+    prof_code = _build_professor_code(professor)
+    dias_code = _build_dias_code(dias_semana)
+    
+    if not prof_code or not dias_code:
+        # Fallback if missing key parts
+        return f"{prof_code}{dias_code}01"
+    
+    base = f"{prof_code}{dias_code}"
+    
+    # Find all existing classes with same unit, professor, and dias
+    stmt = select(models.ImportClass).where(
+        models.ImportClass.unit_id == unit_id,
+        models.ImportClass.professor == professor,
+        models.ImportClass.dias_semana == dias_semana,
+    )
+    existing = session.exec(stmt).all()
+    
+    # Filter to only those with same base code
+    same_base = [
+        cls for cls in existing
+        if str(cls.codigo or "").startswith(base)
+    ]
+    
+    # Sort by horario to ensure sequence
+    same_base_sorted = sorted(
+        same_base,
+        key=lambda x: _normalize_horario_value(x.horario or "")
+    )
+    
+    # Next index is count + 1
+    next_index = len(same_base_sorted) + 1
+    
+    return f"{base}{str(next_index).zfill(2)}"
+
 def get_or_create_import_unit(session: Session, name: str) -> models.ImportUnit:
     stmt = select(models.ImportUnit).where(models.ImportUnit.name == name)
     unit = session.exec(stmt).first()
@@ -5249,12 +5336,18 @@ def create_import_class(
 ):
     """Create a new import class (turma) - default unit_id is 1"""
     unit_id = 1  # Default unit
-    # Generate codigo from turma components
-    codigo = f"{data.professor[:2].lower()}{data.turma_label[:3].lower()}".replace(" ", "")
+    # Generate codigo sequentially by horario for same professor+dias_semana
+    codigo = _generate_import_class_codigo(
+        session,
+        unit_id,
+        data.professor,
+        data.dias_semana or "",
+        data.horario
+    )
     
     new_class = models.ImportClass(
         unit_id=unit_id,
-        codigo=codigo or f"t{session.exec(select(func.count(models.ImportClass.id))).first() or 0}",
+        codigo=codigo,
         turma_label=data.turma_label,
         horario=data.horario,
         professor=data.professor,
