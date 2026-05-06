@@ -2658,7 +2658,10 @@ def fix_import_class_codigos(session: Session = Depends(get_session)):
     # Group by (professor, dias_semana) to assign sequential indices
     groups = {}
     for cls in classes:
-        key = (cls.professor or "", cls.dias_semana or "")
+        key = (
+            _normalize_text_fold(cls.professor or ""),
+            _normalize_text_fold(cls.dias_semana or ""),
+        )
         if key not in groups:
             groups[key] = []
         groups[key].append(cls)
@@ -2667,7 +2670,10 @@ def fix_import_class_codigos(session: Session = Depends(get_session)):
     updated_count = 0
     changes = []
 
-    for (professor, dias_semana), cls_list in groups.items():
+    for (_, _), cls_list in groups.items():
+        cls_list = sorted(cls_list, key=lambda item: _normalize_horario_value(item.horario or ""))
+        professor = cls_list[0].professor or ""
+        dias_semana = cls_list[0].dias_semana or ""
         prof_code = _build_professor_code(professor)
         dias_code = _build_dias_code(dias_semana)
 
@@ -4825,14 +4831,19 @@ def _generate_import_class_codigo(
         return f"{prof_code}{dias_code}01"
     
     base = f"{prof_code}{dias_code}"
+    professor_norm = _normalize_text_fold(professor)
+    dias_norm = _normalize_text_fold(dias_semana)
     
     # Find all existing classes with same unit, professor, and dias
     stmt = select(models.ImportClass).where(
         models.ImportClass.unit_id == unit_id,
-        models.ImportClass.professor == professor,
-        models.ImportClass.dias_semana == dias_semana,
     )
-    existing = session.exec(stmt).all()
+    existing = [
+        cls
+        for cls in session.exec(stmt).all()
+        if _normalize_text_fold(cls.professor or "") == professor_norm
+        and _normalize_text_fold(cls.dias_semana or "") == dias_norm
+    ]
     
     # Filter to only those with same base code
     same_base = [
