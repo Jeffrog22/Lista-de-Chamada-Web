@@ -4,6 +4,16 @@ Scaffold mínimo para transformar o projeto "Lista-de-Chamada" em uma versão we
 
 Siga as instruções em docs/TUTORIAL.md (ou neste README) para rodar localmente.
 
+## Git hooks e versionamento de commit
+
+Este repositório inclui um hook de commit que valida a mensagem de commit antes de aceitar o push localmente.
+
+- A mensagem deve conter no corpo um token de versão entre aspas simples, por exemplo: `'v.005.00-00a'`
+- O padrão aceito é: `'v.###.##-##[suffix]'`
+- Para habilitar os hooks na sua cópia local, execute:
+  - `bash scripts/install-git-hooks.sh` ou
+  - `powershell -ExecutionPolicy Bypass -File .\scripts\install-git-hooks.ps1`
+
 ## Deploy com Supabase (produção)
 
 Para usar banco persistente (Supabase) no backend Render, siga o guia completo em `docs/SUPABASE_RENDER_PASSO_A_PASSO.md`.
