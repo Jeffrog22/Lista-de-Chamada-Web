@@ -16,6 +16,7 @@ const profiles = {
     env: {
       VITE_ENV_NAME: "piloto-sao-matheus",
       VITE_UNIT_NAME: "Sao Matheus",
+      VITE_API_URL: "https://api-sao-matheus.onrender.com",
     },
   },
   vila: {
@@ -23,6 +24,7 @@ const profiles = {
     env: {
       VITE_ENV_NAME: "piloto-vila-joao-xxiii",
       VITE_UNIT_NAME: "Vila Joao XXIII",
+      VITE_API_URL: "https://api-vila-joao-xxiii.onrender.com",
     },
   },
 };
