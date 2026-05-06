@@ -9,14 +9,14 @@ on:
         description: 'Which Pages project to deploy (bela, sao, vila, all)'
         required: false
         default: 'all'
-      branch:
-        description: 'Branch to use for deploy (optional; defaults to current ref)'
-        required: false
 
 jobs:
   build-and-deploy:
     name: Build and deploy Pages per-branch
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
@@ -28,70 +28,69 @@ jobs:
           node-version: '18'
 
       - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
+        run: |
+          cd frontend
+          npm ci
 
-      - name: Deploy Bela (branch: bela)
+      - name: Deploy Bela
         if: github.ref == 'refs/heads/bela'
-        working-directory: ./frontend
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
+          cd frontend
           npm run deploy:pages:bela
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
-      - name: Deploy Sao Matheus (branch: sao)
+      - name: Deploy Sao Matheus
         if: github.ref == 'refs/heads/sao'
-        working-directory: ./frontend
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          ALLOW_NON_BELA_DEPLOY: '1'
         run: |
+          cd frontend
           npm run deploy:pages:sao
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ALLOW_NON_BELA_DEPLOY: '1'
 
-      - name: Deploy Vila (branch: vila)
+      - name: Deploy Vila
         if: github.ref == 'refs/heads/vila'
-        working-directory: ./frontend
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          ALLOW_NON_BELA_DEPLOY: '1'
         run: |
+          cd frontend
           npm run deploy:pages:vila
-
-      - name: Deploy All (branch: master or main)
-        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
-        working-directory: ./frontend
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           ALLOW_NON_BELA_DEPLOY: '1'
+
+      - name: Deploy All
+        if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
         run: |
+          cd frontend
           npm run deploy:pages:all
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ALLOW_NON_BELA_DEPLOY: '1'
 
       - name: Manual dispatch handler
         if: github.event_name == 'workflow_dispatch'
-        working-directory: ./frontend
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          ALLOW_NON_BELA_DEPLOY: '1'
-          PROJECT: ${{ github.event.inputs.project }}
         run: |
-          set -euo pipefail
-          PROJECT=${PROJECT:-all}
+          cd frontend
+          PROJECT="${{ github.event.inputs.project || 'all' }}"
           echo "Requested deploy project: $PROJECT"
           case "$PROJECT" in
             bela)
               npm run deploy:pages:bela
               ;;
             sao)
-              ALLOW_NON_BELA_DEPLOY=1 npm run deploy:pages:sao
+              npm run deploy:pages:sao
               ;;
             vila)
-              ALLOW_NON_BELA_DEPLOY=1 npm run deploy:pages:vila
+              npm run deploy:pages:vila
               ;;
             all)
-              ALLOW_NON_BELA_DEPLOY=1 npm run deploy:pages:all
+              npm run deploy:pages:all
               ;;
             *)
               echo "Unknown project '$PROJECT' - valid options: bela,sao,vila,all"
               exit 1
               ;;
           esac
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ALLOW_NON_BELA_DEPLOY: '1'
