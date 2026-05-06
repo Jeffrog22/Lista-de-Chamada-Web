@@ -1192,6 +1192,7 @@ export const Students: React.FC = () => {
       "attendanceSelection",
       JSON.stringify({
         turma: turmaValue,
+        turmaCodigo: student.turmaCodigo || turmaValue,
         horario: student.horario || "",
         professor: student.professor || "",
       })
