@@ -183,6 +183,21 @@ function getClassGroup(cls: Partial<Class>) {
   return String(cls.Grupo || cls.TurmaCodigo || cls.Atalho || cls.Turma || "").trim();
 }
 
+function buildClassStorageKey(cls: Partial<Class>) {
+  if (cls.id !== undefined && cls.id !== null && String(cls.id).trim() !== "") {
+    return String(cls.id).trim();
+  }
+  return [cls.TurmaCodigo || cls.Grupo || "", cls.Turma || "", cls.Horario || "", cls.Professor || ""].map(String).join("|#|");
+}
+
+function buildStudentClassKey(student: any) {
+  const turmaId = student?.turmaId || student?.classId || student?.class_id || student?.turma_id;
+  if (turmaId !== undefined && turmaId !== null && String(turmaId).trim() !== "") {
+    return String(turmaId).trim();
+  }
+  return [student?.grupo || student?.turmaCodigo || "", student?.turma || student?.turmaLabel || "", student?.horario || "", student?.professor || ""].map(String).join("|#|");
+}
+
 export const Classes: React.FC = () => {
   const editCardRef = useRef<HTMLElement | null>(null);
   const allocateButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -303,21 +318,9 @@ export const Classes: React.FC = () => {
 
         const counts: { [key: string]: number } = {};
         filteredStudents.forEach((s: any) => {
-          // Use id da turma se disponível, senão uma chave composta única
-          const turmaId = s.turmaId || s.classId || s.id;
-          let key = turmaId;
-          if (!key) {
-            // fallback: combinação única de campos principais
-            key = [
-              s.grupo || s.turmaCodigo || "",
-              s.turma || "",
-              s.horario || "",
-              s.professor || ""
-            ].map(String).join("|#|");
-          }
-          if (key) {
-            counts[key] = (counts[key] || 0) + 1;
-          }
+          const key = buildStudentClassKey(s);
+          if (!key) return;
+          counts[key] = (counts[key] || 0) + 1;
         });
         setStudentCounts(counts);
       }
@@ -923,7 +926,7 @@ export const Classes: React.FC = () => {
                   <span
                     style={{
                       ...getLotacaoStyle(
-                        studentCounts[classData.id || [classData.TurmaCodigo, classData.Turma, classData.Horario, classData.Professor].map(String).join("|#|")] || 0,
+                        studentCounts[buildClassStorageKey(classData)] || 0,
                         classData.CapacidadeMaxima || 0
                       ),
                       padding: "4px 10px",
@@ -932,7 +935,7 @@ export const Classes: React.FC = () => {
                       fontSize: "12px",
                     }}
                   >
-                    {studentCounts[classData.id || [classData.TurmaCodigo, classData.Turma, classData.Horario, classData.Professor].map(String).join("|#|")] || 0} / {classData.CapacidadeMaxima || 0}
+                    {studentCounts[buildClassStorageKey(classData)] || 0} / {classData.CapacidadeMaxima || 0}
                   </span>
                 </td>
                 <td style={{ padding: "12px", textAlign: "right", display: "flex", gap: "8px", justifyContent: "flex-end" }}>

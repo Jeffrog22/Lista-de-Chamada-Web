@@ -165,6 +165,25 @@ const normalizeHorarioKey = (value: string) => {
 const buildClassKey = (turmaLabel: string, horario: string, nivel: string, professor: string) =>
   `${normalizeText(turmaLabel)}||${normalizeHorarioKey(horario)}||${normalizeText(nivel)}||${normalizeText(professor)}`;
 
+const buildClassIdentityKey = (item: {
+  turmaCodigo?: string;
+  grupo?: string;
+  codigo?: string;
+  turmaLabel?: string;
+  turma?: string;
+  horario?: string;
+  nivel?: string;
+  professor?: string;
+}) => {
+  const turmaCodigo = String(item?.turmaCodigo || item?.grupo || item?.codigo || '').trim();
+  const turmaLabel = String(item?.turmaLabel || item?.turma || item?.codigo || turmaCodigo || '').trim();
+  const horario = String(item?.horario || '').trim();
+  const nivel = String(item?.nivel || '').trim();
+  const professor = String(item?.professor || '').trim();
+  const identity = buildClassKey(turmaLabel || turmaCodigo, horario, nivel, professor);
+  return turmaCodigo ? `${turmaCodigo}||${identity}` : identity;
+};
+
 const buildHorarioAggregateKey = (horario: string) => normalizeHorarioKey(horario);
 
 const parseWeekdaysFromDiasSemana = (value: string): number[] => {
@@ -420,20 +439,20 @@ export const Vacancies: React.FC = () => {
     const meta: Record<string, TurmaMeta> = {};
     classesSnapshot.forEach((cls) => {
       const turmaCodigo = (cls.turmaCodigo || cls.grupo || cls.codigo || cls.turmaLabel || "").trim();
-      if (!turmaCodigo) return;
-      const key = turmaCodigo;
+      const key = buildClassIdentityKey(cls);
+      if (!key) return;
       const resolvedProfessor =
         cls.professor ||
         classesSnapshot.find(
           (candidate) =>
-            ((candidate.turmaCodigo || candidate.grupo || candidate.codigo || candidate.turmaLabel || "").trim() === key) &&
+            buildClassIdentityKey(candidate) === key &&
             String(candidate.professor || "").trim()
         )?.professor ||
         "-";
 
       meta[key] = {
-        turma: key,
-        turmaCodigo: key,
+        turma: cls.turmaLabel || cls.codigo || turmaCodigo || "",
+        turmaCodigo,
         turmaLabel: cls.turmaLabel || cls.codigo || "",
         horario: cls.horario || "-",
         diasSemana: cls.diasSemana || "",
@@ -548,7 +567,7 @@ export const Vacancies: React.FC = () => {
 
     const counts: Record<string, number> = {};
     activeStudents.forEach((student) => {
-      const key = (student.turmaCodigo || student.grupo || student.turma || "").trim() || buildClassKey(student.turma || "", student.horario || "", student.nivel || "", student.professor || "");
+      const key = buildClassIdentityKey(student);
       if (!key) return;
       counts[key] = (counts[key] || 0) + 1;
     });

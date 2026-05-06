@@ -46,6 +46,7 @@ export const mapBootstrapForStorage = (data: any, calculateAge: (dateString: str
     const cls = classById.get(student.class_id);
     const base = {
       id: String(student.id),
+      classId: student.class_id,
       studentUid: String(student.student_uid || ""),
       grupo: cls?.grupo || cls?.codigo || "",
       nome: student.nome,
