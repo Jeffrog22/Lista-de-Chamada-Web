@@ -827,7 +827,7 @@ export const Attendance: React.FC = () => {
           return false;
         }
 
-        const studentTurma = normalizeText(student?.turma || "");
+        const studentTurma = normalizeText(student?.turmaLabel || student?.turma || "");
         const studentTurmaCodigo = normalizeText(student?.grupo || student?.turmaCodigo || "");
         const studentHorario = normalizeHorarioDigits(student?.horario || "");
         const studentProfessor = normalizeText(student?.professor || "");
@@ -3951,6 +3951,8 @@ export const Attendance: React.FC = () => {
           localStorage.setItem("excludedStudents", JSON.stringify(resolved));
         } catch {
           // mantém cache local sem bloquear fluxo
+        } finally {
+          refreshStorageData();
         }
       }
       setHistory((h) => [JSON.parse(JSON.stringify(attendance)), ...h.slice(0, 9)]);
