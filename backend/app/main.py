@@ -2644,6 +2644,66 @@ def get_maintenance_diagnostics(session: Session = Depends(get_session)):
     )
 
 def _exclusion_matches_class(entry: Dict[str, Any], cls: models.ImportClass) -> bool:
+
+    @app.post("/maintenance/fix-import-class-codigos")
+    def fix_import_class_codigos(session: Session = Depends(get_session)):
+        """Fix all incorrectly generated import_class codigos.
+        Old incorrect logic: prof[:2] + turma_label[:3] resulted in duplicates like 'maqua'
+        New correct logic: prof[:2] + dias_code + sequential_index like 'maqs01', 'maqs02', etc.
+        """
+        # Get all import classes
+        classes_stmt = select(models.ImportClass).order_by(models.ImportClass.professor, models.ImportClass.dias_semana, models.ImportClass.horario)
+        classes = session.exec(classes_stmt).all()
+    
+        if not classes:
+            return {"message": "No classes found", "updated_count": 0}
+    
+        # Group by (professor, dias_semana) to assign sequential indices
+        groups = {}
+        for cls in classes:
+            key = (cls.professor or "", cls.dias_semana or "")
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(cls)
+    
+        # Fix codigos
+        updated_count = 0
+        changes = []
+    
+        for (professor, dias_semana), cls_list in groups.items():
+            prof_code = _build_professor_code(professor)
+            dias_code = _build_dias_code(dias_semana)
+        
+            if not prof_code or not dias_code:
+                continue
+        
+            base = f"{prof_code}{dias_code}"
+        
+            for idx, cls in enumerate(cls_list, 1):
+                new_codigo = f"{base}{str(idx).zfill(2)}"
+            
+                if cls.codigo != new_codigo:
+                    old_codigo = cls.codigo
+                    cls.codigo = new_codigo
+                    changes.append({
+                        "id": cls.id,
+                        "professor": professor,
+                        "dias_semana": dias_semana,
+                        "horario": cls.horario,
+                        "old_codigo": old_codigo,
+                        "new_codigo": new_codigo
+                    })
+                    updated_count += 1
+    
+        if updated_count > 0:
+            session.commit()
+    
+        return {
+            "message": f"Fixed {updated_count} class codigos",
+            "updated_count": updated_count,
+            "changes": changes
+        }
+
     cls_codigo = _normalize_text(cls.codigo or "")
     cls_label = _normalize_text(cls.turma_label or cls.codigo or "")
     cls_horario = _normalize_horario_key(cls.horario or "")
