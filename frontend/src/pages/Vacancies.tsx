@@ -19,6 +19,7 @@ interface ActiveStudentLite {
 
 interface TurmaMeta {
   turma: string;
+  turmaCodigo: string;
   turmaLabel: string;
   horario: string;
   diasSemana?: string;
@@ -31,6 +32,7 @@ interface BootstrapClassLite {
   id: number;
   grupo?: string;
   codigo: string;
+  turmaCodigo: string;
   turmaLabel: string;
   horario: string;
   diasSemana?: string;
@@ -104,6 +106,7 @@ const readLocalVacancySnapshot = () => {
     id: Number(cls?.id || 0),
     grupo: String(cls?.Grupo || cls?.grupo || cls?.TurmaCodigo || cls?.turmaCodigo || cls?.Atalho || cls?.codigo || ""),
     codigo: String(cls?.Atalho || cls?.codigo || cls?.TurmaCodigo || cls?.turmaCodigo || ""),
+    turmaCodigo: String(cls?.TurmaCodigo || cls?.turmaCodigo || cls?.Grupo || cls?.grupo || cls?.Atalho || cls?.codigo || ""),
     turmaLabel: String(cls?.Turma || cls?.turmaLabel || cls?.turma || cls?.codigo || ""),
     horario: String(cls?.Horario || cls?.horario || ""),
     diasSemana: String(cls?.DiasSemana || cls?.dias_semana || cls?.diasSemana || ""),
@@ -372,6 +375,7 @@ export const Vacancies: React.FC = () => {
           id: cls.id,
           grupo: cls.grupo || cls.codigo || "",
           codigo: cls.codigo || "",
+          turmaCodigo: cls.grupo || cls.codigo || "",
           turmaLabel: cls.turma_label || cls.codigo || "",
           horario: cls.horario || "",
           diasSemana: String(cls.dias_semana || ""),
@@ -415,21 +419,22 @@ export const Vacancies: React.FC = () => {
   const turmaMeta = useMemo(() => {
     const meta: Record<string, TurmaMeta> = {};
     classesSnapshot.forEach((cls) => {
-      const turmaLabel = cls.turmaLabel || cls.codigo || "";
-      const key = buildClassKey(turmaLabel, cls.horario || "", cls.nivel || "", cls.professor || "");
-      if (!key) return;
+      const turmaCodigo = (cls.turmaCodigo || cls.grupo || cls.codigo || cls.turmaLabel || "").trim();
+      if (!turmaCodigo) return;
+      const key = turmaCodigo;
       const resolvedProfessor =
         cls.professor ||
         classesSnapshot.find(
           (candidate) =>
-            buildClassKey(candidate.turmaLabel || candidate.codigo || "", candidate.horario || "", candidate.nivel || "", candidate.professor || "") === key &&
+            ((candidate.turmaCodigo || candidate.grupo || candidate.codigo || candidate.turmaLabel || "").trim() === key) &&
             String(candidate.professor || "").trim()
         )?.professor ||
         "-";
 
       meta[key] = {
         turma: key,
-        turmaLabel,
+        turmaCodigo: key,
+        turmaLabel: cls.turmaLabel || cls.codigo || "",
         horario: cls.horario || "-",
         diasSemana: cls.diasSemana || "",
         nivel: cls.nivel || "-",
@@ -478,7 +483,10 @@ export const Vacancies: React.FC = () => {
 
   const turmasFiltradas = useMemo(() => {
     return filteredClasses
-      .map((item) => buildClassKey(item.turmaLabel || item.codigo || "", item.horario || "", item.nivel || "", item.professor || ""))
+      .map((item) => {
+        const turmaCodigo = (item.turmaCodigo || item.grupo || item.codigo || item.turmaLabel || "").trim();
+        return turmaCodigo || buildClassKey(item.turmaLabel || item.codigo || "", item.horario || "", item.nivel || "", item.professor || "");
+      })
       .filter(Boolean)
       .sort((a, b) => {
       const horarioA = turmaMeta[a]?.horario || "";
@@ -540,7 +548,7 @@ export const Vacancies: React.FC = () => {
 
     const counts: Record<string, number> = {};
     activeStudents.forEach((student) => {
-      const key = buildClassKey(student.turma || "", student.horario || "", student.nivel || "", student.professor || "");
+      const key = (student.turmaCodigo || student.grupo || student.turma || "").trim() || buildClassKey(student.turma || "", student.horario || "", student.nivel || "", student.professor || "");
       if (!key) return;
       counts[key] = (counts[key] || 0) + 1;
     });

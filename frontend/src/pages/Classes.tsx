@@ -658,7 +658,8 @@ export const Classes: React.FC = () => {
     localStorage.setItem(
       "attendanceSelection",
       JSON.stringify({
-        turma: classData.Turma || "",
+        turma: targetValue,
+        turmaCodigo: targetValue,
         horario: classData.Horario || "",
         professor: classData.Professor || "",
       })

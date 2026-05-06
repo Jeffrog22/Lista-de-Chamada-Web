@@ -622,6 +622,7 @@ const DashboardCharts: React.FC<DashboardChartsProps> = ({
       'attendanceSelection',
       JSON.stringify({
         turma: target.turma,
+        turmaCodigo: target.turma,
         horario: target.horario || '',
         professor: target.professor || '',
       })

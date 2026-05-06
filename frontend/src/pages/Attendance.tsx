@@ -895,11 +895,12 @@ export const Attendance: React.FC = () => {
   const loadAttendanceSelection = () => {
     try {
       const raw = localStorage.getItem(attendanceSelectionStorageKey);
-      if (!raw) return null as { turma: string; horario: string; professor: string } | null;
+      if (!raw) return null as { turma: string; turmaCodigo?: string; horario: string; professor: string } | null;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return null;
       return {
         turma: String(parsed.turma || ""),
+        turmaCodigo: String(parsed.turmaCodigo || ""),
         horario: String(parsed.horario || ""),
         professor: String(parsed.professor || ""),
       };
@@ -947,7 +948,7 @@ export const Attendance: React.FC = () => {
     diasSemana: [],
   };
   const [selectedTurma, setSelectedTurma] = useState<string>(
-    storedSelection?.turma || getTurmaKey(classOptions[0] || emptyClass) || ""
+    storedSelection?.turmaCodigo || storedSelection?.turma || getTurmaKey(classOptions[0] || emptyClass) || ""
   );
   const [selectedHorario, setSelectedHorario] = useState<string>(
     getCanonicalHorario(storedSelection?.horario || classOptions[0]?.horario || "")
@@ -1128,7 +1129,7 @@ export const Attendance: React.FC = () => {
     if (saved?.turma) {
       const restored = classOptions.find(
         (opt) =>
-          isSameTurma(opt, saved.turma) &&
+          isSameTurma(opt, saved.turmaCodigo || saved.turma) &&
           (!saved.horario || horarioMatches(opt.horario, saved.horario)) &&
           (!saved.professor || opt.professor === saved.professor)
       );
@@ -1162,7 +1163,7 @@ export const Attendance: React.FC = () => {
     // Prefer precise match when horario/professor are available
     const preciseMatch = classOptions.find(
       (opt) =>
-        isSameTurma(opt, target) &&
+        isSameTurma(opt, selection?.turmaCodigo || target) &&
         (!selectionHorario || horarioMatches(opt.horario, selectionHorario)) &&
         (!selectionProfessor || opt.professor === selectionProfessor)
     );
@@ -1170,8 +1171,6 @@ export const Attendance: React.FC = () => {
     const match =
       preciseMatch ||
       classOptions.find((opt) => {
-        if (opt.turmaLabel === target) return true;
-        if (opt.turmaCodigo === target) return true;
         if (isSameTurma(opt, target)) return true;
         return false;
       });
