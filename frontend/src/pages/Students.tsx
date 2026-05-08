@@ -378,6 +378,43 @@ export const Students: React.FC = () => {
 
   const getTurmaDisplayLabel = (student: Student) => student.turmaLabel || student.turma;
 
+  const categoriaRules = [
+    { min: 6, label: "Pré-Mirim" },
+    { min: 9, label: "Mirim I" },
+    { min: 10, label: "Mirim II" },
+    { min: 11, label: "Petiz I" },
+    { min: 12, label: "Petiz II" },
+    { min: 13, label: "Infantil I" },
+    { min: 14, label: "Infantil II" },
+    { min: 15, label: "Juvenil I" },
+    { min: 16, label: "Juvenil II" },
+    { min: 17, label: "Júnior I" },
+    { min: 18, label: "Júnior II/Sênior" },
+    { min: 20, label: "A20+" },
+    { min: 25, label: "B25+" },
+    { min: 30, label: "C30+" },
+    { min: 35, label: "D35+" },
+    { min: 40, label: "E40+" },
+    { min: 45, label: "F45+" },
+    { min: 50, label: "G50+" },
+    { min: 55, label: "H55+" },
+    { min: 60, label: "I60+" },
+    { min: 65, label: "J65+" },
+    { min: 70, label: "K70+" },
+  ];
+
+  const getCategoriaByAge = (age: number) => {
+    if (!Number.isFinite(age)) return "";
+    if (age < 6) return "";
+    let result = "";
+    for (const rule of categoriaRules) {
+      if (age >= rule.min) result = rule.label;
+    }
+    return result;
+  };
+
+  const getCategoriaDisplay = (student: Student) => student.categoria || getCategoriaByAge(student.idade);
+
   const turmaOptions = React.useMemo(() => {
     try {
       const raw = localStorage.getItem("activeClasses");
@@ -393,7 +430,10 @@ export const Students: React.FC = () => {
   }, [students]);
   const categoriaOptions = React.useMemo(() => {
     const set = new Set<string>();
-    students.forEach((s) => s.categoria && set.add(s.categoria));
+    students.forEach((s) => {
+      const categoria = getCategoriaDisplay(s);
+      if (categoria) set.add(categoria);
+    });
     return Array.from(set).sort();
   }, [students]);
   // filters accumulate in header
@@ -652,40 +692,7 @@ export const Students: React.FC = () => {
     return date;
   };
 
-  const categoriaRules = [
-    { min: 6, label: "Pré-Mirim" },
-    { min: 9, label: "Mirim I" },
-    { min: 10, label: "Mirim II" },
-    { min: 11, label: "Petiz I" },
-    { min: 12, label: "Petiz II" },
-    { min: 13, label: "Infantil I" },
-    { min: 14, label: "Infantil II" },
-    { min: 15, label: "Juvenil I" },
-    { min: 16, label: "Juvenil II" },
-    { min: 17, label: "Júnior I" },
-    { min: 18, label: "Júnior II/Sênior" },
-    { min: 20, label: "A20+" },
-    { min: 25, label: "B25+" },
-    { min: 30, label: "C30+" },
-    { min: 35, label: "D35+" },
-    { min: 40, label: "E40+" },
-    { min: 45, label: "F45+" },
-    { min: 50, label: "G50+" },
-    { min: 55, label: "H55+" },
-    { min: 60, label: "I60+" },
-    { min: 65, label: "J65+" },
-    { min: 70, label: "K70+" },
-  ];
 
-  const getCategoriaByAge = (age: number) => {
-    if (!Number.isFinite(age)) return "";
-    if (age < 6) return "";
-    let result = "";
-    for (const rule of categoriaRules) {
-      if (age >= rule.min) result = rule.label;
-    }
-    return result;
-  };
 
   const maskDateInput = (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 8);
@@ -1252,7 +1259,7 @@ export const Students: React.FC = () => {
     const matchesProfessor =
       !filters.professor || s.professor === filters.professor;
     const matchesCategoria =
-      !filters.categoria || normalizeText(s.categoria) === normalizeText(filters.categoria);
+      !filters.categoria || normalizeText(getCategoriaDisplay(s)) === normalizeText(filters.categoria);
     const matchesExcluded = !isStudentExcluded(s, excludedRecords);
     return (
       matchesSearch &&
@@ -1818,7 +1825,7 @@ export const Students: React.FC = () => {
                 </td>
                 <td style={{ padding: "7px 8px" }}>{student.nivel}</td>
                 <td style={{ padding: "7px 6px", textAlign: "center", whiteSpace: "nowrap" }}>{student.idade}</td>
-                <td style={{ padding: "7px 8px" }}>{student.categoria}</td>
+                <td style={{ padding: "7px 8px" }}>{getCategoriaDisplay(student)}</td>
                 <td style={{ padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" }}>
                   {getTurmaDisplayLabel(student) ? (
                     <span

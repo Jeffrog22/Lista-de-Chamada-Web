@@ -13,6 +13,31 @@ const normalizeName = (value: string) =>
 
 const normalizeHorarioDigits = (value: string) => String(value || "").replace(/\D/g, "").slice(0, 4);
 
+const deriveCategoriaFromAge = (age: number) => {
+  if (!Number.isFinite(age) || age < 6) return "";
+  if (age >= 65) return "K70+";
+  if (age >= 60) return "J65+";
+  if (age >= 55) return "I60+";
+  if (age >= 50) return "H55+";
+  if (age >= 45) return "G50+";
+  if (age >= 40) return "F45+";
+  if (age >= 35) return "E40+";
+  if (age >= 30) return "D35+";
+  if (age >= 25) return "C30+";
+  if (age >= 20) return "B25+";
+  if (age >= 18) return "Júnior II/Sênior";
+  if (age >= 17) return "Júnior I";
+  if (age >= 16) return "Juvenil II";
+  if (age >= 15) return "Juvenil I";
+  if (age >= 14) return "Infantil II";
+  if (age >= 13) return "Infantil I";
+  if (age >= 12) return "Petiz II";
+  if (age >= 11) return "Petiz I";
+  if (age >= 10) return "Mirim II";
+  if (age >= 9) return "Mirim I";
+  return "Pré-Mirim";
+};
+
 const FORCED_ASSIGNMENTS = new Map<string, ForcedAssignment>([
   ["lucas quintilho de sousa", { turmaCodigo: "dqs04", horario: "1515", professor: "Daniela" }],
 ]);
@@ -44,6 +69,7 @@ export const mapBootstrapForStorage = (data: any, calculateAge: (dateString: str
 
   const mappedStudents = (data?.students || []).map((student: any) => {
     const cls = classById.get(student.class_id);
+    const age = calculateAge(student.data_nascimento || "");
     const base = {
       id: String(student.id),
       classId: student.class_id,
@@ -51,8 +77,8 @@ export const mapBootstrapForStorage = (data: any, calculateAge: (dateString: str
       grupo: cls?.grupo || cls?.codigo || "",
       nome: student.nome,
       nivel: cls?.nivel || "",
-      idade: calculateAge(student.data_nascimento || ""),
-      categoria: student.categoria || "",
+      idade: age,
+      categoria: student.categoria || deriveCategoriaFromAge(age),
       turma: cls?.turma_label || cls?.codigo || "",
       turmaCodigo: cls?.grupo || cls?.codigo || "",
       turmaLabel: cls?.turma_label || cls?.codigo || "",
