@@ -5489,14 +5489,21 @@ def delete_import_class(
     class_id: int,
     session: Session = Depends(get_session),
 ):
-    """Delete an import class (turma) by ID"""
+    """Delete an import class (turma) by ID and deallocate its students"""
     import_class = session.exec(select(models.ImportClass).where(models.ImportClass.id == class_id)).first()
     if not import_class:
         raise HTTPException(status_code=404, detail="Class not found")
     
+    # Deallocate students: set their class_id to None so they appear as pending allocation
+    students = session.exec(
+        select(models.ImportStudent).where(models.ImportStudent.class_id == class_id)
+    ).all()
+    for student in students:
+        student.class_id = None
+    
     session.delete(import_class)
     session.commit()
-    return {"ok": True, "id": class_id}
+    return {"ok": True, "id": class_id, "deallocatedStudents": len(students)}
 
 @app.get("/attendance", response_model=List[models.Attendance])
 def list_attendance(session: Session = Depends(get_session)):
