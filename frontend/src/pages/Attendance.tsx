@@ -1046,26 +1046,28 @@ export const Attendance: React.FC = () => {
   }, [refreshStorageData]);
 
   useEffect(() => {
-    const triggerExcludedRefresh = () => {
+    const triggerFullRefresh = () => {
+      // Reload both students and excluded students when tab gains focus
+      refreshStorageData();
       refreshExcludedStudents();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        triggerExcludedRefresh();
+        triggerFullRefresh();
       }
     };
 
-    window.addEventListener("focus", triggerExcludedRefresh);
-    window.addEventListener("pageshow", triggerExcludedRefresh);
+    window.addEventListener("focus", triggerFullRefresh);
+    window.addEventListener("pageshow", triggerFullRefresh);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("focus", triggerExcludedRefresh);
-      window.removeEventListener("pageshow", triggerExcludedRefresh);
+      window.removeEventListener("focus", triggerFullRefresh);
+      window.removeEventListener("pageshow", triggerFullRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshExcludedStudents]);
+  }, [refreshStorageData, refreshExcludedStudents]);
 
   useEffect(() => {
     localStorage.setItem(renewalAlertStorageKey, JSON.stringify(dismissedRenewalAlerts));
