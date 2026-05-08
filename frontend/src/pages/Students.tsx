@@ -459,7 +459,34 @@ export const Students: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
+
+    // 1. Load from localStorage immediately (local-first strategy)
+    try {
+      const saved = localStorage.getItem("activeStudents");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setStudents(dedupeStudents(parsed));
+        }
+      }
+
+      const savedClasses = localStorage.getItem("activeClasses");
+      if (savedClasses) {
+        const classes = JSON.parse(savedClasses) as Array<{ Professor?: string }>;
+        const professors = Array.from(
+          new Set(classes.map((cls) => cls.Professor).filter((value): value is string => Boolean(value)))
+        );
+        if (professors.length > 0) {
+          setProfessorOptions(professors);
+        }
+      }
+    } catch {
+      // ignore malformed storage
+    }
+
     setLoading(true);
+
+    // 2. Sync with backend in background
     getBootstrap()
       .then((response) => {
         if (!isMounted) return;
@@ -511,16 +538,7 @@ export const Students: React.FC = () => {
         }
       })
       .catch(() => {
-        try {
-          const saved = localStorage.getItem("activeStudents");
-          if (!saved) return;
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setStudents(dedupeStudents(parsed));
-          }
-        } catch {
-          // ignore malformed storage
-        }
+        // If backend fails, local data already loaded above
       })
       .finally(() => {
         if (isMounted) setLoading(false);

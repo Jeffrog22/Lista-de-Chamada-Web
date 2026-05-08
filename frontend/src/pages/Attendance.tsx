@@ -918,7 +918,11 @@ export const Attendance: React.FC = () => {
   const stored = loadFromStorage();
   const refreshStorageData = useCallback(() => {
     const latest = loadFromStorage();
-    if (!latest) return;
+    // Only update state if data exists; don't reset if storage is temporarily unavailable
+    if (!latest) {
+      console.warn("[Attendance] loadFromStorage returned null, preserving existing state");
+      return;
+    }
     setClassOptions(latest.classOptions);
     setStudentsPerClass(latest.studentsPerClass);
     setActiveStudentsMeta(latest.studentsMeta || []);
@@ -1074,22 +1078,15 @@ export const Attendance: React.FC = () => {
   }, [dismissedRenewalAlerts]);
 
   useEffect(() => {
-    const onStorage = () => {
-      try {
-        const raw = localStorage.getItem("activeStudents");
-        if (!raw) {
-          setActiveStudentsMeta([]);
-          return;
-        }
-        const parsed = JSON.parse(raw);
-        setActiveStudentsMeta(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        setActiveStudentsMeta([]);
+    const onStorage = (event: StorageEvent) => {
+      // Sync when activeStudents or activeClasses change from another tab/window
+      if (event.key === "activeStudents" || event.key === "activeClasses" || event.key === null) {
+        refreshStorageData();
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [refreshStorageData]);
 
   useEffect(() => {
     localStorage.setItem(attendanceRetroModeStorageKey, retroModeEnabled ? "1" : "0");
