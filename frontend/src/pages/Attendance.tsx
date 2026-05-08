@@ -540,6 +540,9 @@ export const Attendance: React.FC = () => {
     const scopedKeys = [
       buildStudentsPerClassScopedKey(params.turmaCodigo || "", params.horario || "", params.professor || ""),
       buildStudentsPerClassScopedKey(params.turmaLabel || "", params.horario || "", params.professor || ""),
+      // fallback: try matching students that don't have professor information
+      buildStudentsPerClassScopedKey(params.turmaCodigo || "", params.horario || "", ""),
+      buildStudentsPerClassScopedKey(params.turmaLabel || "", params.horario || "", ""),
     ].filter(Boolean);
 
     for (const key of scopedKeys) {
@@ -873,6 +876,9 @@ export const Attendance: React.FC = () => {
         const scopedKeys = [
           buildStudentsPerClassScopedKey(turmaCodigo, studentHorario, studentProfessor),
           buildStudentsPerClassScopedKey(turmaLabel, studentHorario, studentProfessor),
+          // also register under keys without professor so entries missing professor are discoverable
+          buildStudentsPerClassScopedKey(turmaCodigo, studentHorario, ""),
+          buildStudentsPerClassScopedKey(turmaLabel, studentHorario, ""),
         ].filter(Boolean);
         const keys = [...scopedKeys].filter(Boolean);
 
