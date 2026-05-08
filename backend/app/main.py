@@ -5151,6 +5151,9 @@ def bootstrap(
     # Avoid duplicates if class_ids was empty (all students already fetched)
     if class_ids:
         students = students + list(unallocated)
+    else:
+        # If no classes exist, ensure unallocated students are still visible
+        students = list(unallocated)
 
     for student in students:
         _, changed = _ensure_student_uid_for_student(student, registry=uid_registry)
@@ -5556,3 +5559,25 @@ def download_file(filename: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=filename)
+
+
+# DEBUG ONLY: List unallocated students (debug endpoint)
+@app.get("/debug/unallocated-students")
+def debug_unallocated_students(session: Session = Depends(get_session)):
+    """Returns students with no class_id (unallocated/pending)"""
+    unallocated = session.exec(
+        select(models.ImportStudent).where(models.ImportStudent.class_id == None)
+    ).all()
+    return {
+        "count": len(unallocated),
+        "students": [
+            {
+                "id": s.id,
+                "nome": s.nome,
+                "class_id": s.class_id,
+                "genero": s.genero,
+                "whatsapp": s.whatsapp,
+            }
+            for s in unallocated
+        ],
+    }
