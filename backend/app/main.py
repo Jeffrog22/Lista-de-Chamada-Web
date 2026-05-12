@@ -5252,7 +5252,10 @@ def update_import_student(student_id: int, payload: ImportStudentUpsertPayload, 
         target_class_id: Optional[int] = target_class.id
     else:
         target_class = None
-        target_class_id = None
+        # Preserve the current allocation when the edit is partial.
+        # This prevents a birth-date change from accidentally moving the student
+        # to the unallocated bucket.
+        target_class_id = previous_class_id
 
     existing_target = get_or_create_import_student(session, target_class_id, nome)
     target_student = student
