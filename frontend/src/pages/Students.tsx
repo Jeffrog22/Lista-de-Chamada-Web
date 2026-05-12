@@ -980,6 +980,12 @@ export const Students: React.FC = () => {
       return true;
     } catch (error) {
       console.error("Falha ao persistir aluno no backend", error);
+      try {
+        const server = (error as any)?.response?.data || (error as any)?.response || (error as any)?.message || error;
+        alert(`Falha ao persistir no backend: ${JSON.stringify(server)}`);
+      } catch {
+        alert("Falha ao persistir no backend. Verifique a conexão e tente 'Atualizar Base'.");
+      }
       return false;
     }
   };
@@ -1018,10 +1024,19 @@ export const Students: React.FC = () => {
       return;
     }
 
-    const turmaCodigo = getTurmaCodigoFromClasses(formData.turma, formData.horario, formData.professor);
-    const turmaLabel = getTurmaLabelFromClasses(formData.turma, formData.horario, formData.professor);
-    const studentId = editingId || `local-${Date.now()}`;
     const previousStudent = editingId ? students.find((s) => s.id === editingId) : null;
+
+    const turmaCodigo = getTurmaCodigoFromClasses(
+      formData.turma || previousStudent?.turma || "",
+      formData.horario || previousStudent?.horario || "",
+      formData.professor || previousStudent?.professor || ""
+    );
+    const turmaLabel = getTurmaLabelFromClasses(
+      formData.turma || previousStudent?.turma || "",
+      formData.horario || previousStudent?.horario || "",
+      formData.professor || previousStudent?.professor || ""
+    );
+    const studentId = editingId || `local-${Date.now()}`;
     const studentData: Student = {
       id: studentId,
       studentUid: previousStudent?.studentUid || "",
@@ -1033,8 +1048,8 @@ export const Students: React.FC = () => {
       turma: turmaLabel,
       turmaCodigo,
       turmaLabel,
-      horario: formData.horario,
-      professor: formData.professor,
+      horario: formData.horario || previousStudent?.horario || "",
+      professor: formData.professor || previousStudent?.professor || "",
       nivel: formData.nivel,
       categoria: autoCategoria || formData.categoria,
       parQ: formData.parQ,
@@ -1112,7 +1127,9 @@ export const Students: React.FC = () => {
         alert("Aluno adicionado com sucesso!");
       }
     } else {
-      alert("Alteracao aplicada localmente, mas houve falha ao persistir no backend. Verifique a conexao e tente Atualizar Base.");
+      alert("⚠️ PENDENTE DE SINCRONIZAÇÃO\n\nAlteração aplicada localmente, mas FALHOU ao persistir no backend.\n\nOpções:\n1. Verifique sua conexão e clique 'Salvar Alterações' novamente\n2. Clique o X para sair (aluno se mantém localmente com alterações)\n3. Use 'Atualizar Base' para sincronizar com o backend");
+      // NÃO fechar o modal: mantém o aluno visível e evita o sumiço
+      return;
     }
 
     // Salvar dados persistentes (sticky)
